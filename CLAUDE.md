@@ -1,0 +1,27 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+Static, dependency-free educational site: interactive visualisations for the **EERI 124 — Electrotechnique 1** course (DC & AC resistive-network analysis, North-West University). No build step, no package manager, no framework. Open `index.html` in a browser, or serve the root with any static server (e.g. `python3 -m http.server`).
+
+## Architecture
+
+- **Home** ([index.html](index.html)) — landing page listing topics grouped into sections (frequency-domain, equivalent circuits, mesh-current, node-voltage). Each topic is a `.card` link into `topics/<slug>/index.html`.
+- **Topic pages** ([topics/](topics/)) — one folder per topic, each a self-contained `index.html`. Currently placeholders (hero + "Visualiser in progress"); the interactive visualisers go here.
+- **CSS** ([css/](css/)) — split by scope, loaded in order:
+  - `tokens.css` — design tokens (`:root` custom properties). **The only file to edit to reskin the whole site.**
+  - `base.css` — shared layout (nav, `.page`, footer).
+  - `home.css` — home-only (grid, cards, section labels).
+  - `topic.css` — topic-only (hero, breadcrumb).
+
+## Conventions
+
+- Home links to topics with **root-relative** paths (`topics/.../index.html`); topic pages link back with `../../` relative paths. Preserve this when adding pages.
+- Every page loads `tokens.css` + `base.css` + its page-specific stylesheet. Reuse tokens rather than hardcoding colours/spacing.
+- Adding a topic = new `topics/<slug>/index.html` (copy an existing one) **and** a `.card` entry in the correct section of `index.html`.
+
+## Repo notes
+
+- `graphify-out/` and `visualizations/` are gitignored (graphify knowledge-graph output).
