@@ -1,0 +1,27 @@
+/* Design tokens — the only file you edit to reskin the whole site. */
+:root {
+  /* palette (carried over from the algorithms playground) */
+  --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --surface: rgba(255, 255, 255, 0.95);
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-deep: #6b21a8;
+  --ink: #333;
+  --ink-soft: #4b5563;
+  --ink-faint: #9ca3af;
+
+  /* text on the coloured background */
+  --on-bg: #fff;
+  --on-bg-soft: rgba(255, 255, 255, 0.75);
+  --on-bg-faint: rgba(255, 255, 255, 0.5);
+  --hairline: rgba(255, 255, 255, 0.15);
+
+  /* shape */
+  --radius: 12px;
+  --radius-sm: 6px;
+  --shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 14px 24px rgba(0, 0, 0, 0.3);
+
+  --font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --content-max: 960px;
+}
