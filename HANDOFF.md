@@ -1,51 +1,91 @@
-# Handoff: site restructure to match study guide sections
+# Handoff: circuit generator (generation + rendering only)
 
-Structure-only change. No solver/builder logic, no JS behavior — just folders, nav, and placeholder content. That's a separate, later effort (see prior chat: circuit builder + technique picker + solver).
+Phase scope for the **Simple resistive circuits** page (`topics/simple-resistive-circuits/`).
+This phase builds ONLY the circuit **generator** and its **rendering**. No solver, no
+questions, no equations, no power — those are explicitly a later phase (see "Out of scope").
 
-## Current structure
+Circuit domain for this page: **independent voltage sources + resistors only**. No current
+sources, no dependent sources (those belong to the mesh/node/thevenin pages later).
 
-`index.html` groups 7 topic pages into 4 home-page sections, one card per page:
+## Why shared code (not buried in the topic page)
 
-- **Frequency-domain analysis** → `freq-parallel`, `freq-serial`
-- **Equivalent circuits & power transfer** → `max-power-thevenin`, `thevenin-nodes`
-- **Mesh-current technique** → `mesh-dependent`, `mesh-supermesh`
-- **Node-voltage technique** → `node-supernode`
+The node-voltage, mesh-current and thevenin-norton pages will all reuse the exact same
+circuit model + renderer + generator. So the engine lives at the repo root, not inside one
+topic folder:
 
-Problem: each *technique* is split across multiple pages (one per PPT the topic was copied from), when the study guide treats each as one technique with variants (dependent sources, supernode/supermesh, etc.) applied to the same kind of circuit. Also "Frequency-domain" is a mislabel — this course (EERI 124, per study guide §3 "Simple resistive circuits") is purely resistive/DC; there's no reactive/frequency content.
+- `js/circuit.js` — single shared file for now: **model + render + generate**.
+  Plain `<script src="../../js/circuit.js">`, exposes one global `Circuit`. **No ES modules**
+  (they break over `file://`, and CLAUDE.md promises the site opens by double-clicking
+  `index.html`). Split into `circuit-model/render/generate.js` only when it gets
+  uncomfortable or when the solver phase lands — not before. `js/` is a new top-level dir.
 
-## Target structure
+## Data model (must not need rework when the solver arrives)
 
-Collapse to 4 topic pages total, one per technique family, named after the study guide's own section language:
+A circuit is a graph. This is exactly what the future nodal-analysis solver will consume, so
+lock the shape now:
 
-| New folder | Replaces | Study guide unit |
-|---|---|---|
-| `topics/simple-resistive-circuits/` | `freq-parallel` + `freq-serial` | §3 Simple resistive circuits |
-| `topics/node-voltage/` | `node-supernode` (rename) | §4 Techniques in circuit analysis |
-| `topics/mesh-current/` | `mesh-dependent` + `mesh-supermesh` | §4 Techniques in circuit analysis |
-| `topics/thevenin-norton/` | `max-power-thevenin` + `thevenin-nodes` | §4 Techniques in circuit analysis |
+```js
+{
+  nodes: [ { id: 'n0', x: 0, y: 0 }, ... ],        // x,y are layout coords (grid units)
+  edges: [
+    { id: 'e0', type: 'R', a: 'n0', b: 'n1', value: 220 },   // resistor, ohms
+    { id: 'e1', type: 'V', a: 'n2', b: 'n0', value: 12  },    // voltage source, volts; b is +
+  ],
+}
+```
 
-Home page (`index.html`) sections become:
+- **Free-coordinate nodes**, not a locked square lattice — the Wheatstone bridge (diamond)
+  and ladder don't sit cleanly on a square grid; templates place nodes at exact coords. The
+  random generator uses a grid *internally* but still emits this same free-coord model.
+- Resistor values: pick from a realistic set (e.g. E12-ish: 100, 220, 330, 470, 680, 1k…).
+  Keep source voltages small and round (5, 9, 12, 15 V).
 
-- **Simple resistive circuits** — 1 card → `simple-resistive-circuits`
-- **Techniques in circuit analysis** — 3 cards → `node-voltage`, `mesh-current`, `thevenin-norton`
+## Pieces to build
 
-Note (don't build yet): study guide §1 Circuit variables and §2 Circuit elements have no page at all currently. Leave them out of nav for now — flagging so nobody assumes the 4-section home page is "done."
+1. **Model helpers** — construct/validate the object above (unique ids, edges reference real
+   nodes). Trivial.
 
-## Per-page placeholder content
+2. **Renderer** — `Circuit.render(circuit, svgEl)`. SVG, drawn from node coords:
+   - resistor = rectangle (or zigzag) on the segment between its two nodes, with a value label
+   - voltage source = circle with +/− (or long/short line), value label
+   - plain wire = line; node = small dot
+   - Reuse `tokens.css` colours (stroke/fill via CSS custom props), don't hardcode.
 
-Each merged page keeps the existing hero/breadcrumb/"visualiser in progress" pattern (see any current `topics/*/index.html`), but add a static (non-interactive) list naming the techniques that page will eventually let you toggle, e.g. on `mesh-current/index.html`:
+3. **Named templates** — each a function `() => circuit` that randomizes R/V values on a fixed
+   topology. Starter set (names/shapes per Nilsson & Riedel — confirm against the textbook):
+   - series (resistors in one loop with a source)
+   - parallel
+   - voltage divider
+   - Wheatstone bridge (the diamond with a bridging resistor)
+   - resistive ladder (R-2R style / generic rungs)
+   - lattice / grid (the 2×2 mesh from the hand-sketch)
 
-> Techniques covered here: basic mesh-current, dependent sources, supermesh.
+4. **Random generator** — `Circuit.random(opts)`:
+   - lay nodes on an m×n grid (e.g. 3×3)
+   - add resistor edges between orthogonally-adjacent grid nodes with probability p
+   - enforce **connected** (union-find; drop isolated nodes) so it's later solvable
+   - place ONE voltage source between two well-separated nodes (e.g. a bottom-left / bottom-right pair)
+   - no zero-ohm edges (avoids a shorted source); randomize remaining R values
+   - emit the free-coord model above
 
-No checkboxes, no JS — just text, so it's obvious to whoever builds the real picker later what belongs on that page.
+5. **Page UI** (`topics/simple-resistive-circuits/index.html`, replacing the placeholder hero):
+   - `<select>`: Random + each named template
+   - **Generate** button → build circuit → `Circuit.render` into an inline `<svg>`
+   - keep the breadcrumb/nav/CSS includes from the current placeholder
 
 ## Mechanical steps
 
-1. `git mv topics/node-supernode topics/node-voltage`
-2. Create `topics/simple-resistive-circuits/index.html`, `topics/mesh-current/index.html`, `topics/thevenin-norton/index.html` — copy the skeleton from an existing topic page (keeps `../../` relative links and CSS includes intact), merge in the placeholder technique list from whichever of the two source pages had it, then `git rm -r` the old folders (`freq-parallel`, `freq-serial`, `mesh-dependent`, `mesh-supermesh`, `max-power-thevenin`, `thevenin-nodes`).
-3. Update `index.html`: rename the 2 section labels, drop the other 2, point all `.card` hrefs at the 4 new folders (root-relative, per existing convention).
-4. Update `CLAUDE.md`'s topic list/architecture note to match the new 4-folder structure.
+1. Create `js/circuit.js` with model + render + generate (sections commented).
+2. Rewrite `topics/simple-resistive-circuits/index.html`: keep nav/breadcrumb, swap the
+   "Visualiser in progress" hero for the dropdown + Generate button + `<svg>` canvas, add the
+   `<script src="../../js/circuit.js">` include.
+3. Leave a runnable check behind: a tiny `js/circuit.test.html` (or a `__main__`-style
+   `console.assert` block) asserting a generated circuit has ≥1 source, all edges reference
+   real nodes, and the random graph is connected.
+4. Update `CLAUDE.md` architecture note: new shared `js/` dir + what `circuit.js` owns.
 
-## Out of scope here
+## Out of scope here (later phases)
 
-Circuit builder, technique checkboxes that do anything, solver/step engine, import/export, templates, random generation — all discussed and deferred to the next phase.
+Solver (nodal/MNA), equivalent-resistance, node-voltage/power questions, shown KCL/KVL/Ohm
+equations, step-by-step derivations, the "choose how to solve" chooser, and reusing the engine
+on the other three topic pages. Generation + rendering only this round.
