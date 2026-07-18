@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Static, dependency-free educational site: interactive visualisations for the **EERI 124 — Electrotechnique 1** course (DC & AC resistive-network analysis, North-West University). No build step, no package manager, no framework. Open `index.html` in a browser, or serve the root with any static server (e.g. `python3 -m http.server`).
+Static, dependency-free educational site: interactive visualisations for the **EERI 124 — Electrotechnique 1** course (DC resistive-network analysis, North-West University). No build step, no package manager, no framework. Open `index.html` in a browser, or serve the root with any static server (e.g. `python3 -m http.server`).
 
 ## Architecture
 
-- **Home** ([index.html](index.html)) — landing page listing topics grouped into sections (frequency-domain, equivalent circuits, mesh-current, node-voltage). Each topic is a `.card` link into `topics/<slug>/index.html`.
+- **Home** ([index.html](index.html)) — landing page listing 4 topic pages grouped into 2 sections named after the study guide: **Simple resistive circuits** (§3) and **Techniques in circuit analysis** (§4). One `.card` link per topic into `topics/<slug>/index.html`. Topic folders: `simple-resistive-circuits`, `node-voltage`, `mesh-current`, `thevenin-norton`. (Study guide §1 Circuit variables and §2 Circuit elements have no page yet.)
 - **Topic pages** ([topics/](topics/)) — one folder per topic, each a self-contained `index.html`. Currently placeholders (hero + "Visualiser in progress"); the interactive visualisers go here.
 - **CSS** ([css/](css/)) — split by scope, loaded in order:
   - `tokens.css` — design tokens (`:root` custom properties). **The only file to edit to reskin the whole site.**
