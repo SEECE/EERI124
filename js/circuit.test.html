@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>circuit.js self-check</title>
+</head>
+
+<body>
+  <pre id="out"></pre>
+  <script src="circuit.js"></script>
+  <script>
+    var out = [];
+    function check(label, fn) {
+      try { fn(); out.push('PASS ' + label); }
+      catch (err) { out.push('FAIL ' + label + ' — ' + err.message); }
+    }
+    function assert(cond, msg) { if (!cond) throw new Error(msg); }
+    function hasSource(c) { return c.edges.some(function (e) { return e.type === 'V'; }); }
+
+    Object.keys(Circuit.templates).forEach(function (name) {
+      check('template ' + name, function () {
+        var c = Circuit.templates[name]();
+        Circuit.validate(c); // ids unique, edges reference real nodes
+        assert(hasSource(c), 'no voltage source');
+        assert(Circuit.isConnected(c), 'not connected');
+      });
+    });
+
+    check('random ×50', function () {
+      for (var i = 0; i < 50; i++) {
+        var c = Circuit.random();
+        Circuit.validate(c);
+        assert(hasSource(c), 'no voltage source');
+        assert(Circuit.isConnected(c), 'not connected');
+        assert(c.edges.every(function (e) { return e.type === 'W' || e.value > 0; }), 'zero-value edge');
+      }
+    });
+
+    check('render smoke', function () {
+      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      Circuit.render(Circuit.templates['Wheatstone bridge'](), svg);
+      assert(svg.childNodes.length > 0, 'empty svg');
+    });
+
+    document.getElementById('out').textContent = out.join('\n');
+    out.forEach(function (l) { console.assert(l.indexOf('PASS') === 0, l); });
+  </script>
+</body>
+
+</html>

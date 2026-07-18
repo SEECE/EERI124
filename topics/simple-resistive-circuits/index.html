@@ -8,6 +8,48 @@
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
   <link rel="stylesheet" href="../../css/topic.css" />
+  <style>
+    .circuit-controls {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+
+    .circuit-controls select,
+    .circuit-controls button {
+      font: inherit;
+      padding: 0.5rem 0.9rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--ink-faint);
+      background: var(--surface);
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .circuit-controls button {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    .circuit-controls button:hover {
+      background: var(--accent-hover);
+    }
+
+    .circuit-canvas {
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 1rem;
+    }
+
+    .circuit-canvas svg {
+      display: block;
+      width: 100%;
+      max-height: 60vh;
+    }
+  </style>
 </head>
 
 <body>
@@ -25,12 +67,44 @@
       <div class="eyebrow">Simple resistive circuits</div>
       <h1>Simple resistive circuits</h1>
       <p>Series and parallel resistive networks: equivalent resistance, current and voltage division.</p>
-      <div class="status">Visualiser in progress</div>
-      <p>Techniques covered here: series circuits, parallel circuits.</p>
+    </section>
+
+    <section>
+      <div class="circuit-controls">
+        <select id="topology"></select>
+        <button id="generate">Generate</button>
+      </div>
+      <div class="circuit-canvas"><svg id="canvas"></svg></div>
     </section>
   </main>
 
   <footer>EERI 124 — Electrotechnique 1</footer>
+
+  <script src="../../js/circuit.js"></script>
+  <script>
+    var select = document.getElementById('topology');
+    var svg = document.getElementById('canvas');
+
+    var opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = 'Random';
+    select.appendChild(opt);
+    Object.keys(Circuit.templates).forEach(function (name) {
+      var o = document.createElement('option');
+      o.value = name;
+      o.textContent = name;
+      select.appendChild(o);
+    });
+
+    function generate() {
+      var name = select.value;
+      var circuit = name ? Circuit.templates[name]() : Circuit.random();
+      Circuit.render(circuit, svg);
+    }
+    document.getElementById('generate').addEventListener('click', generate);
+    select.addEventListener('change', generate);
+    generate();
+  </script>
 </body>
 
 </html>
