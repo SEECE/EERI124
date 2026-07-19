@@ -141,23 +141,34 @@
       edges = edges.filter(function (e) { return find(e[0]) === best; });
       edges.forEach(function (e) { present[e[0]] = true; present[e[1]] = true; });
 
-      // source between the two extreme nodes of the lowest occupied row, routed on a rail below
+      // source on a rail just outside a randomly chosen side, spanning that side's extreme nodes
       var kept = Object.keys(present).map(Number);
-      var maxRow = Math.max.apply(null, kept.map(function (i) { return Math.floor(i / n); }));
-      var bottom = kept.filter(function (i) { return Math.floor(i / n) === maxRow; });
-      var left = Math.min.apply(null, bottom), right = Math.max.apply(null, bottom);
-      if (left === right) continue; // need two separated terminals
+      var side = pick(['bottom', 'top', 'left', 'right']);
+      var horiz = side === 'bottom' || side === 'top'; // rail runs left-right
+      var far = side === 'bottom' || side === 'right'; // rail sits at the high-coordinate end
+      function major(i) { return horiz ? Math.floor(i / n) : i % n; }
+      function minor(i) { return horiz ? i % n : Math.floor(i / n); }
+      var majors = kept.map(major);
+      var rail = far ? Math.max.apply(null, majors) : Math.min.apply(null, majors);
+      var lo = null, hi = null;
+      kept.forEach(function (i) {
+        if (major(i) !== rail) return;
+        if (lo === null || minor(i) < minor(lo)) lo = i;
+        if (hi === null || minor(i) > minor(hi)) hi = i;
+      });
+      if (lo === hi) continue; // need two separated terminals
 
       var idx = {}, coords = [];
       kept.sort(function (a, b) { return a - b; }).forEach(function (i) {
         idx[i] = coords.length;
         coords.push([(i % n) * s, Math.floor(i / n) * s]);
       });
-      var railY = (maxRow + 1) * s;
-      var sa = coords.length; coords.push([(left % n) * s, railY]);
-      var sb = coords.length; coords.push([(right % n) * s, railY]);
+      var railPos = (rail + (far ? 1 : -1)) * s;
+      function railPt(i) { return horiz ? [minor(i) * s, railPos] : [railPos, minor(i) * s]; }
+      var sa = coords.length; coords.push(railPt(lo));
+      var sb = coords.length; coords.push(railPt(hi));
       var specs = edges.map(function (e) { return ['R', idx[e[0]], idx[e[1]]]; });
-      specs.push(['W', idx[left], sa], ['V', sa, sb], ['W', sb, idx[right]]);
+      specs.push(['W', idx[lo], sa], ['V', sa, sb], ['W', sb, idx[hi]]);
       return build(coords, specs);
     }
   }
