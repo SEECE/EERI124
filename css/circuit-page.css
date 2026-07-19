@@ -1,0 +1,88 @@
+/* Shared layout for topic pages with a circuit visualiser: compact topbar, side control
+   panel, main canvas. One file so every topic page (simple-resistive-circuits now, the
+   others once they get a generator) looks identical regardless of its js/generators/*.js. */
+.circuit-page { width: 100%; max-width: 1180px; }
+
+.circuit-topbar {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px clamp(16px, 3vw, 28px);
+  margin-bottom: 20px;
+}
+
+.circuit-topbar .breadcrumb { margin-bottom: 4px; }
+.circuit-topbar h1 { font-size: 19px; color: var(--accent-deep); }
+
+.circuit-layout {
+  display: flex;
+  gap: 20px;
+  align-items: stretch;
+}
+
+.circuit-sidebar {
+  flex: 0 0 240px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.circuit-sidebar .control-group h3 {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-hover);
+  margin-bottom: 8px;
+}
+
+.circuit-sidebar select,
+.circuit-sidebar button {
+  width: 100%;
+  font: inherit;
+  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ink-faint);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.circuit-sidebar button {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.circuit-sidebar button:hover { background: var(--accent-hover); }
+
+.circuit-sidebar .circuit-blurb {
+  font-size: 13px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+  margin-top: auto;
+}
+
+.circuit-canvas {
+  flex: 1;
+  min-width: 0;
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  display: flex;
+}
+
+.circuit-canvas svg {
+  flex: 1;
+  width: 100%;
+  min-height: 60vh;
+}
+
+@media (max-width: 720px) {
+  .circuit-layout { flex-direction: column; }
+  .circuit-sidebar { flex: none; }
+  .circuit-canvas svg { min-height: 45vh; }
+}

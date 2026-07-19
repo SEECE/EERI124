@@ -15,7 +15,11 @@ Static, dependency-free educational site: interactive visualisations for the **E
   - `tokens.css` — design tokens (`:root` custom properties). **The only file to edit to reskin the whole site.**
   - `base.css` — shared layout (nav, `.page`, footer).
   - `home.css` — home-only (grid, cards, section labels).
-  - `topic.css` — topic-only (hero, breadcrumb).
+  - `topic.css` — topic-only (hero, breadcrumb) for placeholder pages.
+  - `circuit-page.css` — shared layout for any topic page with a visualiser: compact
+    topbar, side control panel (`.circuit-sidebar`), main canvas (`.circuit-canvas`).
+    Every visualiser page uses this same structure — only the `js/generators/*.js`
+    loaded and the `Circuit.list()` filter differ per topic.
 
 ## Structure docs — read before writing code
 
