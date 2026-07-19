@@ -116,7 +116,7 @@
   /* ---------- random generator ---------- */
   function random(opts) {
     opts = opts || {};
-    var m = opts.rows || 3, n = opts.cols || 3, p = opts.p || 0.6, s = 1.5;
+    var m = opts.rows || 3, n = opts.cols || 3, p = opts.p || 0.75, s = 1.5;
     for (var attempt = 0; attempt < 30; attempt++) {
       var last = attempt === 29; // ponytail: final attempt keeps every adjacency, guaranteed connected
       var present = {}, edges = [];
@@ -139,7 +139,19 @@
       Object.keys(sizes).forEach(function (k) { if (best === null || sizes[k] > sizes[best]) best = +k; });
       if (best === null || sizes[best] < 4) continue;
       edges = edges.filter(function (e) { return find(e[0]) === best; });
+
+      // prune dangling branches: a degree-1 node carries no current, so it is only clutter
+      for (;;) {
+        var deg = {};
+        edges.forEach(function (e) { deg[e[0]] = (deg[e[0]] || 0) + 1; deg[e[1]] = (deg[e[1]] || 0) + 1; });
+        var trimmed = edges.filter(function (e) { return deg[e[0]] > 1 && deg[e[1]] > 1; });
+        if (trimmed.length === edges.length) break;
+        edges = trimmed;
+      }
+      if (edges.length < 4) continue;
       edges.forEach(function (e) { present[e[0]] = true; present[e[1]] = true; });
+      // meshes = E − N + 1; one lone loop is too trivial to be worth solving
+      if (!last && edges.length - Object.keys(present).length + 1 < 2) continue;
 
       // source on a rail just outside a randomly chosen side, spanning that side's extreme nodes
       var kept = Object.keys(present).map(Number);
