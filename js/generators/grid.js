@@ -9,8 +9,9 @@
     for (r = 0; r < 3; r++) for (col = 0; col < 3; col++) {
       var i = r * 3 + col;
       if (col < 2) edges.push(['R', i, i + 1]);
-      if (r < 2) edges.push([r === 1 && col === 0 ? 'V' : 'R', i + 3, i]); // left-bottom vertical = source
+      if (r < 2) edges.push(['R', i + 3, i]);
     }
+    edges[Math.floor(Math.random() * edges.length)][0] = 'V'; // source on any grid edge
     return C.build(coords, edges);
   }, { tags: ['grid', 'mesh'] });
 
