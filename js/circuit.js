@@ -80,7 +80,11 @@
      opts.flavour === false keeps the topology exactly as written. */
   function build(nodeCoords, edgeSpecs, opts) {
     if (!opts || opts.flavour !== false) edgeSpecs = flavour(edgeSpecs);
-    var nodes = nodeCoords.map(function (p, i) { return { id: 'n' + i, x: p[0], y: p[1] }; });
+    var nodes = nodeCoords.map(function (p, i) {
+      var n = { id: 'n' + i, x: p[0], y: p[1] };
+      if (p[2] !== undefined) n.label = p[2]; // optional, e.g. Wheatstone bridge's measuring nodes
+      return n;
+    });
     var edges = edgeSpecs.map(function (s, i) {
       var e = { id: 'e' + i, type: s[0], a: 'n' + s[1], b: 'n' + s[2] };
       if (s[0] === 'R') e.value = pickR();
@@ -185,6 +189,18 @@
     circuit.nodes.forEach(function (n) {
       var p = byId[n.id];
       el('circle', { cx: p.x, cy: p.y, r: 3.5, fill: 'var(--ink)' }, svg);
+    });
+
+    // optional node labels (e.g. Wheatstone bridge's measuring nodes): offset away
+    // from the circuit's centroid so the label clears the node's own edges
+    var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    circuit.nodes.forEach(function (n) {
+      if (!n.label) return;
+      var p = byId[n.id];
+      var dx = p.x - cx, dy = p.y - cy, len = Math.hypot(dx, dy) || 1;
+      var lx = p.x + (dx / len) * 18, ly = p.y + (dy / len) * 18;
+      el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700 }, svg)
+        .textContent = n.label;
     });
   }
 

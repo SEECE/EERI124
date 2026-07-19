@@ -27,10 +27,14 @@ No ES modules anywhere — the site must open by double-clicking `index.html` ov
 
 ```js
 {
-  nodes: [ { id: 'n0', x: 0, y: 0 }, ... ],                    // x,y in grid units
+  nodes: [ { id: 'n0', x: 0, y: 0, label: 'B' }, ... ],        // x,y in grid units, label optional
   edges: [ { id: 'e0', type: 'R', a: 'n0', b: 'n1', value: 220 }, ... ],
 }
 ```
+
+A node's optional `label` (set via a 3rd element in its `build()` coord, `[x, y, 'B']`) is
+drawn next to it — e.g. the Wheatstone bridge's B/D measuring nodes. Cosmetic only; the
+solver ignores it.
 
 Element type codes:
 
