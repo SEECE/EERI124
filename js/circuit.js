@@ -47,8 +47,35 @@
     return c.nodes.every(function (n) { return seen[n.id]; });
   }
 
+  /* True if any source or resistor has both ends tied together by wires. */
+  function degenerate(specs) {
+    var p = {};
+    function find(x) {
+      if (p[x] === undefined) p[x] = x;
+      while (p[x] !== x) { p[x] = p[p[x]]; x = p[x]; }
+      return x;
+    }
+    specs.forEach(function (s) { if (s[0] === 'W') p[find(s[1])] = find(s[2]); });
+    return specs.some(function (s) { return s[0] !== 'W' && find(s[1]) === find(s[2]); });
+  }
+
+  /* Same topology, different problem: random source polarity and now and then one resistor
+     replaced by a short, so a template rewards reading the circuit over recalling it. */
+  function flavour(specs) {
+    specs = specs.map(function (s) {
+      return s[0] === 'V' && Math.random() < 0.5 ? ['V', s[2], s[1]] : s;
+    });
+    var rs = [];
+    specs.forEach(function (s, i) { if (s[0] === 'R') rs.push(i); });
+    if (rs.length < 4 || Math.random() > 0.3) return specs;
+    var k = pick(rs), t = specs.slice();
+    t[k] = ['W', specs[k][1], specs[k][2]];
+    return degenerate(t) ? specs : t;
+  }
+
   /* Build helper: nodes as [[x,y],...], edges as [type,a,b] (indices), values auto. */
   function build(nodeCoords, edgeSpecs) {
+    edgeSpecs = flavour(edgeSpecs);
     var nodes = nodeCoords.map(function (p, i) { return { id: 'n' + i, x: p[0], y: p[1] }; });
     var edges = edgeSpecs.map(function (s, i) {
       var e = { id: 'e' + i, type: s[0], a: 'n' + s[1], b: 'n' + s[2] };

@@ -17,13 +17,29 @@
     }
     function assert(cond, msg) { if (!cond) throw new Error(msg); }
     function hasSource(c) { return c.edges.some(function (e) { return e.type === 'V'; }); }
+    // no source or resistor may have both ends tied together by wires
+    function shorted(c) {
+      var p = {};
+      function find(x) { while (p[x] !== x) { p[x] = p[p[x]]; x = p[x]; } return x; }
+      c.nodes.forEach(function (n) { p[n.id] = n.id; });
+      c.edges.forEach(function (e) { if (e.type === 'W') p[find(e.a)] = find(e.b); });
+      return c.edges.some(function (e) { return e.type !== 'W' && find(e.a) === find(e.b); });
+    }
+    function dangling(c) {
+      var deg = {};
+      c.edges.forEach(function (e) { deg[e.a] = (deg[e.a] || 0) + 1; deg[e.b] = (deg[e.b] || 0) + 1; });
+      return c.nodes.some(function (n) { return (deg[n.id] || 0) < 2; });
+    }
 
     Object.keys(Circuit.templates).forEach(function (name) {
-      check('template ' + name, function () {
-        var c = Circuit.templates[name]();
-        Circuit.validate(c); // ids unique, edges reference real nodes
-        assert(hasSource(c), 'no voltage source');
-        assert(Circuit.isConnected(c), 'not connected');
+      check('template ' + name + ' ×50', function () {
+        for (var i = 0; i < 50; i++) { // ×50: build() randomises polarity and may short a resistor
+          var c = Circuit.templates[name]();
+          Circuit.validate(c); // ids unique, edges reference real nodes
+          assert(hasSource(c), 'no voltage source');
+          assert(Circuit.isConnected(c), 'not connected');
+          assert(!shorted(c), 'shorted source or resistor');
+        }
       });
     });
 
@@ -34,6 +50,8 @@
         assert(hasSource(c), 'no voltage source');
         assert(Circuit.isConnected(c), 'not connected');
         assert(c.edges.every(function (e) { return e.type === 'W' || e.value > 0; }), 'zero-value edge');
+        assert(!shorted(c), 'shorted source or resistor');
+        assert(!dangling(c), 'dangling node');
       }
     });
 
