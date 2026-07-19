@@ -16,16 +16,19 @@
   }, { tags: ['grid', 'mesh'] });
 
   C.register('Grid (top loop)', function () {
-    // 2×2 grid without the middle top node: the upper half is one wide loop, two below
+    // 2×2 grid without the middle top node: the upper half is one wide loop, two below.
+    // Source sits on a random side of either bottom block, not fixed at bottom-left.
+    var topOnly = [['R', 0, 1], ['R', 0, 2], ['R', 1, 4]];
+    var bottomSides = [[2, 3], [3, 4], [2, 5], [3, 6], [4, 7], [5, 6], [6, 7]];
+    var vAt = Math.floor(Math.random() * bottomSides.length);
+    var edges = topOnly.concat(bottomSides.map(function (e, i) {
+      return [i === vAt ? 'V' : 'R', e[0], e[1]];
+    }));
     return C.build(
       [[0, 0], [3, 0],
        [0, 1.5], [1.5, 1.5], [3, 1.5],
        [0, 3], [1.5, 3], [3, 3]],
-      [['R', 0, 1],
-       ['R', 0, 2], ['R', 1, 4],
-       ['R', 2, 3], ['R', 3, 4],
-       ['V', 5, 2], ['R', 3, 6], ['R', 4, 7],
-       ['R', 5, 6], ['R', 6, 7]]
+      edges
     );
   }, { tags: ['grid', 'mesh'] });
 
