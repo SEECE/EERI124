@@ -111,6 +111,32 @@
       }
       return build(coords, edges);
     },
+    'Grid (top loop)': function () {
+      // 2×2 grid without the middle top node: the upper half is one wide loop, two below
+      return build(
+        [[0, 0], [3, 0],
+         [0, 1.5], [1.5, 1.5], [3, 1.5],
+         [0, 3], [1.5, 3], [3, 3]],
+        [['R', 0, 1],
+         ['R', 0, 2], ['R', 1, 4],
+         ['R', 2, 3], ['R', 3, 4],
+         ['V', 5, 2], ['R', 3, 6], ['R', 4, 7],
+         ['R', 5, 6], ['R', 6, 7]]
+      );
+    },
+    'Grid (bottom loop)': function () {
+      // mirror of the above: two loops on top, one wide one below carrying R–V–R in series
+      return build(
+        [[0, 0], [1.5, 0], [3, 0],
+         [0, 1.5], [1.5, 1.5], [3, 1.5],
+         [0, 3], [1, 3], [2, 3], [3, 3]],
+        [['R', 0, 1], ['R', 1, 2],
+         ['R', 0, 3], ['R', 1, 4], ['R', 2, 5],
+         ['R', 3, 4], ['R', 4, 5],
+         ['R', 6, 3], ['R', 5, 9],
+         ['R', 6, 7], ['V', 7, 8], ['R', 8, 9]]
+      );
+    },
   };
 
   /* ---------- random generator ---------- */
