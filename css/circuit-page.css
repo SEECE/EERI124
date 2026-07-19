@@ -1,14 +1,21 @@
 /* Shared layout for topic pages with a circuit visualiser: compact topbar, side control
    panel, main canvas. One file so every topic page (simple-resistive-circuits now, the
    others once they get a generator) looks identical regardless of its js/generators/*.js. */
-.circuit-page { width: 100%; max-width: 1180px; }
+.circuit-page {
+  width: 100%;
+  max-width: none;
+  /* fill the viewport instead of leaving dead space under the canvas */
+  padding: 20px clamp(12px, 3vw, 32px) 20px;
+  display: flex;
+  flex-direction: column;
+}
 
 .circuit-topbar {
   background: var(--surface);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 14px clamp(16px, 3vw, 28px);
-  margin-bottom: 20px;
+  padding: 12px clamp(16px, 3vw, 28px);
+  margin-bottom: 14px;
 }
 
 .circuit-topbar .breadcrumb { margin-bottom: 4px; }
@@ -16,8 +23,13 @@
 
 .circuit-layout {
   display: flex;
-  gap: 20px;
+  gap: 16px;
   align-items: stretch;
+  /* ponytail: definite height so the svg's 100% resolves instead of falling back to its
+     viewBox aspect ratio (which is huge at full page width). 245px ≈ nav + topbar + page
+     padding + footer; tune this one number if a scrollbar appears. */
+  height: calc(100vh - 250px);
+  min-height: 320px;
 }
 
 .circuit-sidebar {
@@ -68,6 +80,7 @@
 .circuit-canvas {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   background: var(--surface);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -78,11 +91,12 @@
 .circuit-canvas svg {
   flex: 1;
   width: 100%;
-  height: 60vh;
+  height: 100%;
+  min-height: 0;
 }
 
 @media (max-width: 720px) {
-  .circuit-layout { flex-direction: column; }
+  .circuit-layout { flex-direction: column; height: auto; }
   .circuit-sidebar { flex: none; }
-  .circuit-canvas svg { height: 45vh; }
+  .circuit-canvas svg { height: 45vh; min-height: 0; }
 }
