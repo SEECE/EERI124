@@ -7,49 +7,7 @@
   <title>Simple resistive circuits — EERI 124</title>
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
-  <link rel="stylesheet" href="../../css/topic.css" />
-  <style>
-    .circuit-controls {
-      display: flex;
-      gap: 0.75rem;
-      align-items: center;
-      margin-bottom: 1rem;
-    }
-
-    .circuit-controls select,
-    .circuit-controls button {
-      font: inherit;
-      padding: 0.5rem 0.9rem;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--ink-faint);
-      background: var(--surface);
-      color: var(--ink);
-      cursor: pointer;
-    }
-
-    .circuit-controls button {
-      background: var(--accent);
-      border-color: var(--accent);
-      color: #fff;
-    }
-
-    .circuit-controls button:hover {
-      background: var(--accent-hover);
-    }
-
-    .circuit-canvas {
-      background: var(--surface);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      padding: 1rem;
-    }
-
-    .circuit-canvas svg {
-      display: block;
-      width: 100%;
-      max-height: 60vh;
-    }
-  </style>
+  <link rel="stylesheet" href="../../css/circuit-page.css" />
 </head>
 
 <body>
@@ -60,22 +18,26 @@
     </div>
   </nav>
 
-  <main class="page">
-    <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Simple resistive circuits</nav>
-
-    <section class="hero">
-      <div class="eyebrow">Simple resistive circuits</div>
+  <main class="page circuit-page">
+    <header class="circuit-topbar">
+      <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Simple resistive circuits</nav>
       <h1>Simple resistive circuits</h1>
-      <p>Series and parallel resistive networks: equivalent resistance, current and voltage division.</p>
-    </section>
+    </header>
 
-    <section>
-      <div class="circuit-controls">
-        <select id="topology"></select>
-        <button id="generate">Generate</button>
-      </div>
+    <div class="circuit-layout">
+      <aside class="circuit-sidebar">
+        <div class="control-group">
+          <h3>Topology</h3>
+          <select id="topology"></select>
+        </div>
+        <div class="control-group">
+          <button id="generate">Generate</button>
+        </div>
+        <p class="circuit-blurb">Series and parallel resistive networks: equivalent resistance, current and voltage division.</p>
+      </aside>
+
       <div class="circuit-canvas"><svg id="canvas"></svg></div>
-    </section>
+    </div>
   </main>
 
   <footer>EERI 124 — Electrotechnique 1</footer>
