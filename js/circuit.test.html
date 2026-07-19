@@ -9,6 +9,10 @@
 <body>
   <pre id="out"></pre>
   <script src="circuit.js"></script>
+  <script src="generators/random-grid.js"></script>
+  <script src="generators/basic.js"></script>
+  <script src="generators/bridge-ladder.js"></script>
+  <script src="generators/grid.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -31,33 +35,34 @@
       return c.nodes.some(function (n) { return (deg[n.id] || 0) < 2; });
     }
 
-    Object.keys(Circuit.templates).forEach(function (name) {
-      check('template ' + name + ' ×50', function () {
+    var all = Circuit.list();
+    check('registry populated', function () { assert(all.length > 0, 'no generators registered'); });
+
+    all.forEach(function (g) {
+      check('generator ' + g.name + ' ×50', function () {
         for (var i = 0; i < 50; i++) { // ×50: build() randomises polarity and may short a resistor
-          var c = Circuit.templates[name]();
+          var c = g.generate();
           Circuit.validate(c); // ids unique, edges reference real nodes
           assert(hasSource(c), 'no voltage source');
           assert(Circuit.isConnected(c), 'not connected');
+          assert(c.edges.every(function (e) { return e.type === 'W' || e.value > 0; }), 'zero-value edge');
           assert(!shorted(c), 'shorted source or resistor');
+          // a generator must not emit element types it did not declare
+          assert(c.edges.every(function (e) { return g.elements.indexOf(e.type) >= 0; }), 'undeclared element type');
+          if (g.tags.indexOf('random') >= 0) assert(!dangling(c), 'dangling node');
         }
       });
     });
 
-    check('random ×50', function () {
-      for (var i = 0; i < 50; i++) {
-        var c = Circuit.random();
-        Circuit.validate(c);
-        assert(hasSource(c), 'no voltage source');
-        assert(Circuit.isConnected(c), 'not connected');
-        assert(c.edges.every(function (e) { return e.type === 'W' || e.value > 0; }), 'zero-value edge');
-        assert(!shorted(c), 'shorted source or resistor');
-        assert(!dangling(c), 'dangling node');
-      }
+    check('list filters', function () {
+      assert(Circuit.list({ elements: ['R', 'V', 'W'] }).length === all.length, 'R/V/W filter dropped a generator');
+      assert(Circuit.list({ elements: ['R', 'W'] }).length === 0, 'sourceless filter kept a generator');
+      assert(Circuit.list({ tags: ['random'] }).length === 1, 'expected exactly one random generator');
     });
 
     check('render smoke', function () {
       var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      Circuit.render(Circuit.templates['Wheatstone bridge'](), svg);
+      Circuit.render(Circuit.get('Wheatstone bridge').generate(), svg);
       assert(svg.childNodes.length > 0, 'empty svg');
     });
 

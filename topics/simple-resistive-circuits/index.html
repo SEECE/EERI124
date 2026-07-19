@@ -81,25 +81,24 @@
   <footer>EERI 124 — Electrotechnique 1</footer>
 
   <script src="../../js/circuit.js"></script>
+  <script src="../../js/generators/random-grid.js"></script>
+  <script src="../../js/generators/basic.js"></script>
+  <script src="../../js/generators/bridge-ladder.js"></script>
+  <script src="../../js/generators/grid.js"></script>
   <script>
     var select = document.getElementById('topology');
     var svg = document.getElementById('canvas');
 
-    var opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = 'Random';
-    select.appendChild(opt);
-    Object.keys(Circuit.templates).forEach(function (name) {
+    // this topic covers independent voltage sources + resistors only
+    Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
       var o = document.createElement('option');
-      o.value = name;
-      o.textContent = name;
+      o.value = g.name;
+      o.textContent = g.name;
       select.appendChild(o);
     });
 
     function generate() {
-      var name = select.value;
-      var circuit = name ? Circuit.templates[name]() : Circuit.random();
-      Circuit.render(circuit, svg);
+      Circuit.render(Circuit.get(select.value).generate(), svg);
     }
     document.getElementById('generate').addEventListener('click', generate);
     select.addEventListener('change', generate);

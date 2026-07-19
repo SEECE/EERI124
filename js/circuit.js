@@ -1,6 +1,7 @@
-/* Circuit engine — model + render + generate. Shared by all topic pages.
-   Plain script, one global `Circuit`. No ES modules (site must work over file://).
-   ponytail: single file; split into model/render/generate when the solver phase lands. */
+/* Circuit core — model, build helpers, generator registry, renderer.
+   Shared by all topic pages. Plain script, one global `Circuit`.
+   No ES modules (site must work over file://), so generators are separate <script>
+   files that call Circuit.register(). See structure/GENERATORS.md. */
 (function () {
   'use strict';
 
@@ -12,8 +13,11 @@
   function pickV() { return pick(V_VALUES); }
 
   /* ---------- model ----------
-     circuit = { nodes: [{id,x,y}], edges: [{id,type:'R'|'V'|'W',a,b,value?}] }
-     For 'V', b is the + terminal. 'W' is a plain wire (no value). */
+     circuit = { nodes: [{id,x,y}], edges: [{id,type,a,b,value?}] }
+     Element types: 'R' resistor, 'V' independent voltage source (b is +), 'W' plain wire.
+     Later phases add 'I' and the dependent sources — see structure/GENERATORS.md. */
+  var VALUED = { R: 'resistance', V: 'voltage' }; // types that need a positive value
+
   function validate(c) {
     var ids = {};
     c.nodes.forEach(function (n) {
@@ -26,8 +30,7 @@
       eids[e.id] = true;
       if (!ids[e.a] || !ids[e.b]) throw new Error('edge ' + e.id + ' references missing node');
       if (e.a === e.b) throw new Error('edge ' + e.id + ' is a self-loop');
-      if (e.type === 'R' && !(e.value > 0)) throw new Error('edge ' + e.id + ' needs a positive resistance');
-      if (e.type === 'V' && !(e.value > 0)) throw new Error('edge ' + e.id + ' needs a positive voltage');
+      if (VALUED[e.type] && !(e.value > 0)) throw new Error('edge ' + e.id + ' needs a positive ' + VALUED[e.type]);
     });
     return c;
   }
@@ -47,7 +50,7 @@
     return c.nodes.every(function (n) { return seen[n.id]; });
   }
 
-  /* True if any source or resistor has both ends tied together by wires. */
+  /* True if any non-wire element has both ends tied together by wires. */
   function degenerate(specs) {
     var p = {};
     function find(x) {
@@ -73,169 +76,53 @@
     return degenerate(t) ? specs : t;
   }
 
-  /* Build helper: nodes as [[x,y],...], edges as [type,a,b] (indices), values auto. */
-  function build(nodeCoords, edgeSpecs) {
-    edgeSpecs = flavour(edgeSpecs);
+  /* Build helper: nodes as [[x,y],...], edges as [type,a,b] (indices), values auto.
+     opts.flavour === false keeps the topology exactly as written. */
+  function build(nodeCoords, edgeSpecs, opts) {
+    if (!opts || opts.flavour !== false) edgeSpecs = flavour(edgeSpecs);
     var nodes = nodeCoords.map(function (p, i) { return { id: 'n' + i, x: p[0], y: p[1] }; });
     var edges = edgeSpecs.map(function (s, i) {
       var e = { id: 'e' + i, type: s[0], a: 'n' + s[1], b: 'n' + s[2] };
       if (s[0] === 'R') e.value = pickR();
       if (s[0] === 'V') e.value = pickV();
+      if (s[3] !== undefined) e.value = s[3]; // explicit value wins
       return e;
     });
     return validate({ nodes: nodes, edges: edges });
   }
 
-  /* ---------- named templates (topologies per Nilsson & Riedel) ---------- */
-  var templates = {
-    'Series': function () {
-      return build(
-        [[0, 2], [0, 0], [1.5, 0], [3, 0], [3, 2]],
-        [['V', 0, 1], ['R', 1, 2], ['R', 2, 3], ['R', 3, 4], ['W', 4, 0]]
-      );
-    },
-    'Parallel': function () {
-      return build(
-        [[0, 0], [1.5, 0], [3, 0], [4.5, 0],
-         [0, 2], [1.5, 2], [3, 2], [4.5, 2]],
-        [['V', 4, 0],
-         ['W', 0, 1], ['W', 1, 2], ['W', 2, 3],
-         ['R', 1, 5], ['R', 2, 6], ['R', 3, 7],
-         ['W', 4, 5], ['W', 5, 6], ['W', 6, 7]]
-      );
-    },
-    'Voltage divider': function () {
-      return build(
-        [[0, 3], [0, 0], [2.5, 0], [2.5, 1.5], [2.5, 3]],
-        [['V', 0, 1], ['W', 1, 2], ['R', 2, 3], ['R', 3, 4], ['W', 4, 0]]
-      );
-    },
-    'Wheatstone bridge': function () {
-      // diamond: 0=left, 1=top, 2=bottom, 3=right; 4,5 = source rail below
-      return build(
-        [[0, 1.5], [2, 0], [2, 3], [4, 1.5], [0, 4.5], [4, 4.5]],
-        [['R', 0, 1], ['R', 0, 2], ['R', 1, 3], ['R', 2, 3], ['R', 1, 2],
-         ['W', 0, 4], ['V', 4, 5], ['W', 5, 3]]
-      );
-    },
-    'Ladder': function () {
-      return build(
-        [[0, 0], [1.5, 0], [3, 0], [4.5, 0],
-         [0, 2], [1.5, 2], [3, 2], [4.5, 2]],
-        [['V', 4, 0],
-         ['R', 0, 1], ['R', 1, 2], ['R', 2, 3],
-         ['R', 1, 5], ['R', 2, 6], ['R', 3, 7],
-         ['W', 4, 5], ['W', 5, 6], ['W', 6, 7]]
-      );
-    },
-    'Grid (2×2 mesh)': function () {
-      var coords = [], edges = [], s = 1.5;
-      for (var r = 0; r < 3; r++) for (var col = 0; col < 3; col++) coords.push([col * s, r * s]);
-      for (r = 0; r < 3; r++) for (col = 0; col < 3; col++) {
-        var i = r * 3 + col;
-        if (col < 2) edges.push(['R', i, i + 1]);
-        if (r < 2) edges.push([r === 1 && col === 0 ? 'V' : 'R', i + 3, i]); // left-bottom vertical = source
-      }
-      return build(coords, edges);
-    },
-    'Grid (top loop)': function () {
-      // 2×2 grid without the middle top node: the upper half is one wide loop, two below
-      return build(
-        [[0, 0], [3, 0],
-         [0, 1.5], [1.5, 1.5], [3, 1.5],
-         [0, 3], [1.5, 3], [3, 3]],
-        [['R', 0, 1],
-         ['R', 0, 2], ['R', 1, 4],
-         ['R', 2, 3], ['R', 3, 4],
-         ['V', 5, 2], ['R', 3, 6], ['R', 4, 7],
-         ['R', 5, 6], ['R', 6, 7]]
-      );
-    },
-    'Grid (bottom loop)': function () {
-      // mirror of the above: two loops on top, one wide one below carrying R–V–R in series
-      return build(
-        [[0, 0], [1.5, 0], [3, 0],
-         [0, 1.5], [1.5, 1.5], [3, 1.5],
-         [0, 3], [1, 3], [2, 3], [3, 3]],
-        [['R', 0, 1], ['R', 1, 2],
-         ['R', 0, 3], ['R', 1, 4], ['R', 2, 5],
-         ['R', 3, 4], ['R', 4, 5],
-         ['R', 6, 3], ['R', 5, 9],
-         ['R', 6, 7], ['V', 7, 8], ['R', 8, 9]]
-      );
-    },
-  };
+  /* ---------- generator registry ----------
+     Generator files call Circuit.register(name, fn, meta) at load time.
+     meta.elements — element types the generator can emit, so a page can ask for only
+     what its topic covers (e.g. the simple-resistive page takes ['R','V','W']). */
+  var generators = [];
 
-  /* ---------- random generator ---------- */
-  function random(opts) {
-    opts = opts || {};
-    var m = opts.rows || 3, n = opts.cols || 3, p = opts.p || 0.75, s = 1.5;
-    for (var attempt = 0; attempt < 30; attempt++) {
-      var last = attempt === 29; // ponytail: final attempt keeps every adjacency, guaranteed connected
-      var present = {}, edges = [];
-      for (var r = 0; r < m; r++) for (var c = 0; c < n; c++) {
-        var i = r * n + c;
-        if (c < n - 1 && (last || Math.random() < p)) edges.push([i, i + 1]);
-        if (r < m - 1 && (last || Math.random() < p)) edges.push([i, i + n]);
-      }
-      // union-find → keep only the largest component
-      var parent = {};
-      function find(x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; }
-      edges.forEach(function (e) {
-        if (!(e[0] in parent)) parent[e[0]] = e[0];
-        if (!(e[1] in parent)) parent[e[1]] = e[1];
-        parent[find(e[0])] = find(e[1]);
-      });
-      var sizes = {};
-      Object.keys(parent).forEach(function (k) { var r2 = find(+k); sizes[r2] = (sizes[r2] || 0) + 1; });
-      var best = null;
-      Object.keys(sizes).forEach(function (k) { if (best === null || sizes[k] > sizes[best]) best = +k; });
-      if (best === null || sizes[best] < 4) continue;
-      edges = edges.filter(function (e) { return find(e[0]) === best; });
+  function register(name, fn, meta) {
+    meta = meta || {};
+    generators.push({
+      name: name,
+      generate: fn,
+      elements: meta.elements || ['R', 'V', 'W'],
+      tags: meta.tags || [],
+    });
+  }
 
-      // prune dangling branches: a degree-1 node carries no current, so it is only clutter
-      for (;;) {
-        var deg = {};
-        edges.forEach(function (e) { deg[e[0]] = (deg[e[0]] || 0) + 1; deg[e[1]] = (deg[e[1]] || 0) + 1; });
-        var trimmed = edges.filter(function (e) { return deg[e[0]] > 1 && deg[e[1]] > 1; });
-        if (trimmed.length === edges.length) break;
-        edges = trimmed;
-      }
-      if (edges.length < 4) continue;
-      edges.forEach(function (e) { present[e[0]] = true; present[e[1]] = true; });
-      // meshes = E − N + 1; one lone loop is too trivial to be worth solving
-      if (!last && edges.length - Object.keys(present).length + 1 < 2) continue;
+  /* list()                       → every registered generator
+     list({ elements: ['R','V','W'] }) → only those whose elements are all allowed
+     list({ tags: ['random'] })    → only those carrying every listed tag */
+  function list(filter) {
+    filter = filter || {};
+    return generators.filter(function (g) {
+      if (filter.elements && !g.elements.every(function (t) { return filter.elements.indexOf(t) >= 0; })) return false;
+      if (filter.tags && !filter.tags.every(function (t) { return g.tags.indexOf(t) >= 0; })) return false;
+      return true;
+    });
+  }
 
-      // source on a rail just outside a randomly chosen side, spanning that side's extreme nodes
-      var kept = Object.keys(present).map(Number);
-      var side = pick(['bottom', 'top', 'left', 'right']);
-      var horiz = side === 'bottom' || side === 'top'; // rail runs left-right
-      var far = side === 'bottom' || side === 'right'; // rail sits at the high-coordinate end
-      function major(i) { return horiz ? Math.floor(i / n) : i % n; }
-      function minor(i) { return horiz ? i % n : Math.floor(i / n); }
-      var majors = kept.map(major);
-      var rail = far ? Math.max.apply(null, majors) : Math.min.apply(null, majors);
-      var lo = null, hi = null;
-      kept.forEach(function (i) {
-        if (major(i) !== rail) return;
-        if (lo === null || minor(i) < minor(lo)) lo = i;
-        if (hi === null || minor(i) > minor(hi)) hi = i;
-      });
-      if (lo === hi) continue; // need two separated terminals
-
-      var idx = {}, coords = [];
-      kept.sort(function (a, b) { return a - b; }).forEach(function (i) {
-        idx[i] = coords.length;
-        coords.push([(i % n) * s, Math.floor(i / n) * s]);
-      });
-      var railPos = (rail + (far ? 1 : -1)) * s;
-      function railPt(i) { return horiz ? [minor(i) * s, railPos] : [railPos, minor(i) * s]; }
-      var sa = coords.length; coords.push(railPt(lo));
-      var sb = coords.length; coords.push(railPt(hi));
-      var specs = edges.map(function (e) { return ['R', idx[e[0]], idx[e[1]]]; });
-      specs.push(['W', idx[lo], sa], ['V', sa, sb], ['W', sb, idx[hi]]);
-      return build(coords, specs);
-    }
+  function get(name) {
+    var hit = generators.filter(function (g) { return g.name === name; })[0];
+    if (!hit) throw new Error('unknown generator ' + name);
+    return hit;
   }
 
   /* ---------- renderer ---------- */
@@ -302,10 +189,20 @@
   }
 
   window.Circuit = {
+    // model
     validate: validate,
     isConnected: isConnected,
-    templates: templates,
-    random: random,
+    build: build,
+    degenerate: degenerate,
+    // value pickers, for generator files
+    pick: pick,
+    pickR: pickR,
+    pickV: pickV,
+    // registry
+    register: register,
+    list: list,
+    get: get,
+    // view
     render: render,
   };
 })();
