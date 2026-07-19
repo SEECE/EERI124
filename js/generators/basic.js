@@ -26,13 +26,17 @@
   }, { tags: ['series'] });
 
   C.register('Parallel', function () {
+    // source sits on a random one of the 4 vertical branches, not always the leftmost
+    var top = [0, 1, 2, 3], bot = [4, 5, 6, 7];
+    var srcCol = Math.floor(Math.random() * 4);
+    var edges = [];
+    for (var c = 0; c < 4; c++) edges.push([c === srcCol ? 'V' : 'R', top[c], bot[c]]);
+    for (c = 0; c < 3; c++) edges.push(['W', top[c], top[c + 1]]);
+    for (c = 0; c < 3; c++) edges.push(['W', bot[c], bot[c + 1]]);
     return C.build(
       [[0, 0], [1.5, 0], [3, 0], [4.5, 0],
        [0, 2], [1.5, 2], [3, 2], [4.5, 2]],
-      [['V', 4, 0],
-       ['W', 0, 1], ['W', 1, 2], ['W', 2, 3],
-       ['R', 1, 5], ['R', 2, 6], ['R', 3, 7],
-       ['W', 4, 5], ['W', 5, 6], ['W', 6, 7]]
+      edges
     );
   }, { tags: ['parallel'] });
 
