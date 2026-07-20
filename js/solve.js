@@ -143,11 +143,82 @@
     return { generated: gen, dissipated: dis, ok: Math.abs(gen - dis) <= 1e-6 * (gen + dis + 1) };
   }
 
+  /* ---------- planar faces (for mesh / KVL) ----------
+     Uses node x,y as a rotation system, then walks half-edges into faces. Half-edge h:
+     2i = a→b, 2i+1 = b→a for edge i; next(h) turns consistently so each face keeps its
+     interior on one side. Bounded faces are the meshes; the outer face encloses the most area. */
+  function faces(c) {
+    var pos = {}; c.nodes.forEach(function (n) { pos[n.id] = n; });
+    var H = [];
+    c.edges.forEach(function (e, i) {
+      H[2 * i] = { tail: e.a, head: e.b, edge: i };
+      H[2 * i + 1] = { tail: e.b, head: e.a, edge: i };
+    });
+    var out = {}; c.nodes.forEach(function (n) { out[n.id] = []; });
+    H.forEach(function (h, hi) { out[h.tail].push(hi); });
+    function ang(hi) { var h = H[hi], t = pos[h.tail], d = pos[h.head]; return Math.atan2(d.y - t.y, d.x - t.x); }
+    Object.keys(out).forEach(function (v) { out[v].sort(function (a, b) { return ang(a) - ang(b); }); });
+    var rank = {}; Object.keys(out).forEach(function (v) { out[v].forEach(function (hi, k) { rank[hi] = k; }); });
+    function next(hi) { var t = hi ^ 1, v = H[t].tail, lst = out[v]; return lst[(rank[t] + 1) % lst.length]; }
+
+    var seen = {}, faceList = [], faceOf = {};
+    H.forEach(function (_, hi) {
+      if (seen[hi]) return;
+      var walk = [], h = hi, guard = 0;
+      do { seen[h] = true; faceOf[h] = faceList.length; walk.push(h); h = next(h); }
+      while (h !== hi && guard++ < H.length + 2);
+      faceList.push(walk);
+    });
+    function area(walk) {
+      var s = 0;
+      walk.forEach(function (h) { var a = pos[H[h].tail], b = pos[H[h].head]; s += a.x * b.y - b.x * a.y; });
+      return s / 2;
+    }
+    var areas = faceList.map(area), outer = 0;
+    for (var k = 1; k < faceList.length; k++) if (Math.abs(areas[k]) > Math.abs(areas[outer])) outer = k;
+    return { H: H, pos: pos, faceList: faceList, faceOf: faceOf, areas: areas, outer: outer };
+  }
+
+  /* ---------- mesh currents: KVL solve (single voltage source, no current sources) ----------
+     One clockwise current per bounded face; Σ voltage drops around each mesh = 0. Wires drop 0.
+     Returns { F, meshes:[faceIdx], meshOf:{faceIdx->row}, i:[A], edgeCurrent:{edgeId->A (a→b)},
+     order:[faceIdx sorted top→bottom,left→right for i1,i2,…], A, rhs }. */
+  function meshCurrents(c) {
+    var F = faces(c);
+    var meshes = [], meshOf = {};
+    F.faceList.forEach(function (_, idx) { if (idx !== F.outer) { meshOf[idx] = meshes.length; meshes.push(idx); } });
+    var m = meshes.length;
+    var A = [], rhs = [], r;
+    for (r = 0; r < m; r++) { A.push(new Array(m).fill(0)); rhs.push(0); }
+    meshes.forEach(function (f, k) {
+      F.faceList[f].forEach(function (h) {
+        var e = c.edges[F.H[h].edge], g = F.faceOf[h ^ 1];
+        if (e.type === 'R') {
+          A[k][k] += e.value;
+          if (g !== F.outer) A[k][meshOf[g]] -= e.value;
+        } else if (e.type === 'V') {
+          rhs[k] += (F.H[h].tail === e.a) ? e.value : -e.value; // a→b crosses −→+ = a rise
+        }
+      });
+    });
+    var i = m ? linsolve(A, rhs) : [];
+    var edgeCurrent = {};
+    c.edges.forEach(function (e, idx) {
+      var fa = F.faceOf[2 * idx], fb = F.faceOf[2 * idx + 1];
+      edgeCurrent[e.id] = (fa === F.outer ? 0 : i[meshOf[fa]]) - (fb === F.outer ? 0 : i[meshOf[fb]]);
+    });
+    function cen(f) { var w = F.faceList[f], xs = 0, ys = 0; w.forEach(function (h) { var t = F.pos[F.H[h].tail]; xs += t.x; ys += t.y; }); return { x: xs / w.length, y: ys / w.length }; }
+    var order = meshes.slice().sort(function (a, b) { var ca = cen(a), cb = cen(b); return (ca.y - cb.y) || (ca.x - cb.x); });
+    return { F: F, meshes: meshes, meshOf: meshOf, i: i, edgeCurrent: edgeCurrent, order: order, A: A, rhs: rhs };
+  }
+
   window.Solve = {
     linsolve: linsolve,
     electricalNodes: electricalNodes,
     nodeVoltages: nodeVoltages,
     branches: branches,
     powerCheck: powerCheck,
+    faces: faces,
+    meshCurrents: meshCurrents,
   };
 })();

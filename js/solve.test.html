@@ -67,7 +67,7 @@
       assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
     });
 
-    // ---- every registered generator solves and balances power (validate resistor nets) ----
+    // ---- every generator: node-voltage solves, mesh agrees, power balances ----
     Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
       check('solve ' + g.name + ' ×30', function () {
         for (var i = 0; i < 30; i++) {
@@ -77,6 +77,15 @@
           var br = Solve.branches(c, sol);
           assert(br.every(function (r) { return isFinite(r.current) && isFinite(r.power); }), 'non-finite branch');
           assert(Solve.powerCheck(br).ok, 'power imbalance in ' + g.name);
+
+          // mesh (KVL) must find E−V+1 bounded faces and agree with node-voltage per resistor
+          var mc = Solve.meshCurrents(c);
+          assert(mc.meshes.length === c.edges.length - c.nodes.length + 1, 'mesh count ≠ E−V+1');
+          br.forEach(function (r) {
+            if (r.edge.type !== 'R') return;
+            var im = Math.abs(mc.edgeCurrent[r.edge.id]), iv = Math.abs(r.current);
+            assert(Math.abs(im - iv) <= 1e-6 * (iv + 1), 'mesh current ≠ node-voltage current');
+          });
         }
       });
     });
