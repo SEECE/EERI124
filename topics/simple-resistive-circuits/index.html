@@ -7,7 +7,7 @@
   <title>Simple resistive circuits — EERI 124</title>
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
-  <link rel="stylesheet" href="../../css/topic.css" />
+  <link rel="stylesheet" href="../../css/circuit-page.css" />
 </head>
 
 <body>
@@ -18,19 +18,54 @@
     </div>
   </nav>
 
-  <main class="page">
-    <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Simple resistive circuits</nav>
-
-    <section class="hero">
-      <div class="eyebrow">Simple resistive circuits</div>
+  <main class="page circuit-page">
+    <header class="circuit-topbar">
+      <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Simple resistive circuits</nav>
       <h1>Simple resistive circuits</h1>
-      <p>Series and parallel resistive networks: equivalent resistance, current and voltage division.</p>
-      <div class="status">Visualiser in progress</div>
-      <p>Techniques covered here: series circuits, parallel circuits.</p>
-    </section>
+    </header>
+
+    <div class="circuit-layout">
+      <aside class="circuit-sidebar">
+        <div class="control-group">
+          <h3>Topology</h3>
+          <select id="topology"></select>
+        </div>
+        <div class="control-group">
+          <button id="generate">Generate</button>
+        </div>
+        <p class="circuit-blurb">Series and parallel resistive networks: equivalent resistance, current and voltage division.</p>
+      </aside>
+
+      <div class="circuit-canvas"><svg id="canvas"></svg></div>
+    </div>
   </main>
 
   <footer>EERI 124 — Electrotechnique 1</footer>
+
+  <script src="../../js/circuit.js"></script>
+  <script src="../../js/generators/random-grid.js"></script>
+  <script src="../../js/generators/basic.js"></script>
+  <script src="../../js/generators/bridge-ladder.js"></script>
+  <script src="../../js/generators/grid.js"></script>
+  <script>
+    var select = document.getElementById('topology');
+    var svg = document.getElementById('canvas');
+
+    // this topic covers independent voltage sources + resistors only
+    Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
+      var o = document.createElement('option');
+      o.value = g.name;
+      o.textContent = g.name;
+      select.appendChild(o);
+    });
+
+    function generate() {
+      Circuit.render(Circuit.get(select.value).generate(), svg);
+    }
+    document.getElementById('generate').addEventListener('click', generate);
+    select.addEventListener('change', generate);
+    generate();
+  </script>
 </body>
 
 </html>
