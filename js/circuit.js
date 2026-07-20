@@ -152,43 +152,46 @@
     var byId = {};
     circuit.nodes.forEach(function (n) { byId[n.id] = { x: n.x * PX, y: n.y * PX }; });
 
-    function line(x1, y1, x2, y2, stroke) {
-      el('line', { x1: x1, y1: y1, x2: x2, y2: y2, stroke: stroke || 'var(--ink)', 'stroke-width': 2 }, svg);
+    function line(x1, y1, x2, y2, parent) {
+      el('line', { x1: x1, y1: y1, x2: x2, y2: y2, stroke: 'var(--ink)', 'stroke-width': 2 }, parent);
     }
 
+    // Each edge is wrapped in a <g class="edge" data-eid> so a solver step can highlight it
+    // (add a CSS class); presentation attributes below sit under any stylesheet rule.
     circuit.edges.forEach(function (e) {
       var a = byId[e.a], b = byId[e.b];
       var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
       var ux = dx / len, uy = dy / len;
       var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
       var lx = mx - uy * 28, ly = my + ux * 28; // label, perpendicular offset
+      var eg = el('g', { 'class': 'edge edge-' + e.type, 'data-eid': e.id }, svg);
 
-      if (e.type === 'W') { line(a.x, a.y, b.x, b.y); return; }
+      if (e.type === 'W') { line(a.x, a.y, b.x, b.y, eg); return; }
 
       var gap = e.type === 'R' ? 20 : 17;
-      line(a.x, a.y, mx - ux * gap, my - uy * gap);
-      line(mx + ux * gap, my + uy * gap, b.x, b.y);
+      line(a.x, a.y, mx - ux * gap, my - uy * gap, eg);
+      line(mx + ux * gap, my + uy * gap, b.x, b.y, eg);
 
       if (e.type === 'R') {
         var deg = Math.atan2(dy, dx) * 180 / Math.PI;
-        var g = el('g', { transform: 'translate(' + mx + ',' + my + ') rotate(' + deg + ')' }, svg);
+        var g = el('g', { transform: 'translate(' + mx + ',' + my + ') rotate(' + deg + ')' }, eg);
         el('rect', { x: -20, y: -8, width: 40, height: 16, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, rx: 2 }, g);
-        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14 }, svg)
+        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14 }, eg)
           .textContent = fmtR(e.value);
       } else { // V — b is the + terminal
-        el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, svg);
-        var plus = el('text', { x: mx + ux * 7, y: my + uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, svg);
+        el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
+        var plus = el('text', { x: mx + ux * 7, y: my + uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, eg);
         plus.textContent = '+';
-        var minus = el('text', { x: mx - ux * 7, y: my - uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, svg);
+        var minus = el('text', { x: mx - ux * 7, y: my - uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, eg);
         minus.textContent = '−';
-        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14 }, svg)
+        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14 }, eg)
           .textContent = e.value + ' V';
       }
     });
 
     circuit.nodes.forEach(function (n) {
       var p = byId[n.id];
-      el('circle', { cx: p.x, cy: p.y, r: 3.5, fill: 'var(--ink)' }, svg);
+      el('circle', { 'class': 'node', 'data-nid': n.id, cx: p.x, cy: p.y, r: 3.5, fill: 'var(--ink)' }, svg);
     });
 
     // optional node labels (e.g. Wheatstone bridge's measuring nodes): offset away
@@ -201,6 +204,19 @@
       var lx = p.x + (dx / len) * 18, ly = p.y + (dy / len) * 18;
       el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700 }, svg)
         .textContent = n.label;
+    });
+  }
+
+  /* Toggle a 'hl' class on the edges/nodes a solver step wants to emphasise.
+     spec = { edges: [edgeId], nodes: [nodeId] }; anything not listed is un-highlighted. */
+  function highlight(svg, spec) {
+    spec = spec || {};
+    var edges = spec.edges || [], nodes = spec.nodes || [];
+    Array.prototype.forEach.call(svg.querySelectorAll('[data-eid]'), function (g) {
+      g.classList.toggle('hl', edges.indexOf(g.getAttribute('data-eid')) >= 0);
+    });
+    Array.prototype.forEach.call(svg.querySelectorAll('[data-nid]'), function (g) {
+      g.classList.toggle('hl', nodes.indexOf(g.getAttribute('data-nid')) >= 0);
     });
   }
 
@@ -220,5 +236,6 @@
     get: get,
     // view
     render: render,
+    highlight: highlight,
   };
 })();
