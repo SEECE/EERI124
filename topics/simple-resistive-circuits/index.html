@@ -36,6 +36,14 @@
             <option value="req-points">Equivalent resistance — over 2 points</option>
           </select>
         </div>
+        <div class="control-group" id="terminals" style="display:none;">
+          <h3>Terminals</h3>
+          <div class="terminal-row">
+            <select id="termA"></select>
+            <span class="terminal-sep">↔</span>
+            <select id="termB"></select>
+          </div>
+        </div>
         <div class="control-group">
           <h3>Topology</h3>
           <select id="topology"></select>
@@ -73,10 +81,14 @@
   <script src="../../js/solve.js"></script>
   <script src="../../js/techniques/node-voltage.js"></script>
   <script src="../../js/techniques/mesh-current.js"></script>
+  <script src="../../js/techniques/equivalent-resistance.js"></script>
   <script src="../../js/stepper.js"></script>
   <script>
     var topoSel = document.getElementById('topology');
     var techSel = document.getElementById('technique');
+    var termWrap = document.getElementById('terminals');
+    var termA = document.getElementById('termA');
+    var termB = document.getElementById('termB');
     var svg = document.getElementById('canvas');
     var circuit = null;
 
@@ -88,14 +100,6 @@
       topoSel.appendChild(o);
     });
 
-    // technique value -> step builder (circuit -> steps[]); missing = not built yet
-    var BUILDERS = {
-      kcl: window.NodeVoltage,
-      kvl: window.MeshCurrent,
-      'req-source': window.EquivResistance && function (c) { return window.EquivResistance(c, { over: 'source' }); },
-      'req-points': window.EquivResistance && function (c) { return window.EquivResistance(c, { over: 'points' }); },
-    };
-
     var stepper = Stepper({
       svg: svg,
       count: document.getElementById('step-count'),
@@ -106,15 +110,41 @@
       next: document.getElementById('step-next'),
     });
 
+    // fill the terminal pickers (equivalent resistance over 2 points) with the node letters
+    function refreshTerminals() {
+      var ln = Solve.letterNodes(circuit);
+      var letters = ln.groups.map(function (g) { return ln.letter[g]; });
+      [termA, termB].forEach(function (sel) {
+        var keep = sel.value;
+        sel.innerHTML = '';
+        letters.forEach(function (L) {
+          var o = document.createElement('option');
+          o.value = L; o.textContent = L; sel.appendChild(o);
+        });
+        if (letters.indexOf(keep) >= 0) sel.value = keep;
+      });
+      if (termA.value === termB.value && letters.length > 1) termB.value = letters[letters.length - 1];
+    }
+
+    function buildSteps() {
+      switch (techSel.value) {
+        case 'kcl': return NodeVoltage(circuit);
+        case 'kvl': return MeshCurrent(circuit);
+        case 'req-source': return EquivResistance(circuit, { over: 'source' });
+        case 'req-points': return EquivResistance(circuit, { over: 'points', a: termA.value, b: termB.value });
+        default: return [{ n: 0, title: techSel.options[techSel.selectedIndex].text, body: 'Coming soon.' }];
+      }
+    }
+
     function runTechnique() {
       if (!circuit) return;
       circuit.nodes.forEach(function (n) { delete n.label; }); // each technique sets its own labels
-      var build = BUILDERS[techSel.value];
-      var steps = build
-        ? build(circuit)
-        : [{ n: 0, title: techSel.options[techSel.selectedIndex].text, body: 'This technique is coming soon.' }];
-      Circuit.render(circuit, svg);
-      stepper.load(steps);
+      var points = techSel.value === 'req-points';
+      termWrap.style.display = points ? '' : 'none';
+      if (points) refreshTerminals();
+      var steps = buildSteps();
+      Circuit.render(circuit, svg);   // render draws the labels the technique set, then
+      stepper.load(steps);            // step 1 highlights on the rendered svg
     }
 
     function generate() {
@@ -125,6 +155,8 @@
     document.getElementById('generate').addEventListener('click', generate);
     topoSel.addEventListener('change', generate);
     techSel.addEventListener('change', runTechnique); // re-analyse the same circuit
+    termA.addEventListener('change', runTechnique);
+    termB.addEventListener('change', runTechnique);
     generate();
   </script>
 </body>

@@ -60,6 +60,23 @@
     return { of: of, groups: Object.keys(members), members: members };
   }
 
+  /* ---------- letter the electrical nodes a, b, c … (stable order) ----------
+     Shared naming so KCL and equivalent-resistance refer to the same node by the same letter.
+     Returns { of, members, groups:[ordered], letter:{group->'a'}, rep:{group->representative nodeId} }. */
+  function letterNodes(c) {
+    var en = electricalNodes(c);
+    var order = en.groups.slice().sort(function (a, b) {
+      function mn(g) { return Math.min.apply(null, en.members[g].map(function (id) { return +id.slice(1); })); }
+      return mn(a) - mn(b);
+    });
+    var letter = {}, rep = {}, ALPH = 'abcdefghijklmnopqrstuvwxyz';
+    order.forEach(function (g, i) {
+      letter[g] = ALPH[i] || ('n' + i);
+      rep[g] = en.members[g].slice().sort(function (a, b) { return +a.slice(1) - +b.slice(1); })[0];
+    });
+    return { of: en.of, members: en.members, groups: order, letter: letter, rep: rep };
+  }
+
   /* ---------- node voltages: KCL solve for a single voltage source ----------
      Reference (0 V) at the source's − terminal (edge.a), so the + terminal (edge.b) is a
      known node at +value and no supernode arises — the PPT's step-5/7 "extra steps" are
@@ -215,6 +232,7 @@
   window.Solve = {
     linsolve: linsolve,
     electricalNodes: electricalNodes,
+    letterNodes: letterNodes,
     nodeVoltages: nodeVoltages,
     branches: branches,
     powerCheck: powerCheck,

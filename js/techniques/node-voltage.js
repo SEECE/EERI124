@@ -19,23 +19,17 @@
   function vsub(letter) { return 'v<sub>' + letter + '</sub>'; }
 
   window.NodeVoltage = function (circuit) {
-    var en = S.electricalNodes(circuit);
+    var ln = S.letterNodes(circuit);
+    var en = ln;                 // { of, members, groups } — same shape electricalNodes returned
     var sol = S.nodeVoltages(circuit);
     var br = S.branches(circuit, sol);
     var pc = S.powerCheck(br);
     var Vsrc = sol.source.value;
 
-    // letter each electrical node, ordered by its lowest physical-node index (stable)
-    var order = en.groups.slice().sort(function (a, b) {
-      function mn(g) { return Math.min.apply(null, en.members[g].map(function (id) { return +id.slice(1); })); }
-      return mn(a) - mn(b);
-    });
-    var letter = {}, ALPH = 'abcdefghijklmnop';
-    order.forEach(function (g, i) { letter[g] = ALPH[i]; });
-    // draw each letter once, on the group's lowest-index node
+    var order = ln.groups, letter = ln.letter;
+    // draw each letter once, on the group's representative node
     order.forEach(function (g) {
-      var rep = en.members[g].slice().sort(function (a, b) { return +a.slice(1) - +b.slice(1); })[0];
-      circuit.nodes.forEach(function (n) { if (n.id === rep) n.label = letter[g]; });
+      circuit.nodes.forEach(function (n) { if (n.id === ln.rep[g]) n.label = letter[g]; });
     });
 
     var refL = letter[sol.ref], knownL = letter[sol.known];

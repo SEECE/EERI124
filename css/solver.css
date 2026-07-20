@@ -71,6 +71,11 @@
 .step-nav button:hover:not(:disabled) { background: var(--accent-hover); }
 .step-nav button:disabled { opacity: 0.4; cursor: default; }
 
+/* terminal pickers for equivalent resistance over 2 points */
+.terminal-row { display: flex; align-items: center; gap: 8px; }
+.terminal-row select { flex: 1; }
+.terminal-sep { color: var(--ink-faint); }
+
 /* small static technique tag in the sidebar */
 .technique-tag {
   font-size: 13px;
