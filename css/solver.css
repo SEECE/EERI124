@@ -52,8 +52,11 @@
 .eq-line { padding: 3px 0; white-space: nowrap; }
 .eq-line sub { font-size: 0.78em; }
 
+/* step counter + Prev/Next now live in the left control panel (left = control) */
+.step-control .step-count { margin-bottom: 10px; }
+.step-count-label { color: var(--ink-faint); }
+
 .step-nav {
-  margin-top: auto;
   display: flex;
   gap: 10px;
   padding-top: 4px;

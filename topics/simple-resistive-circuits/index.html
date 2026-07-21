@@ -51,22 +51,23 @@
         <div class="control-group">
           <button id="generate">Generate</button>
         </div>
-        <p class="circuit-blurb">A resistive network with one voltage source. Pick a technique and step
-          through it. KCL and KVL follow the study-guide method exactly — completeness steps that need
-          current or dependent sources read “Nothing to do”.</p>
+        <div class="control-group step-control">
+          <h3>Steps</h3>
+          <div class="step-count" id="step-count"></div>
+          <div class="step-nav">
+            <button id="step-prev">◀ Prev</button>
+            <button id="step-next">Next ▶</button>
+          </div>
+        </div>
       </aside>
 
       <div class="circuit-canvas"><svg id="canvas"></svg></div>
 
       <aside class="step-panel">
-        <div class="step-count" id="step-count"></div>
+        <div class="step-count step-count-label">Inspector</div>
         <h3 class="step-title" id="step-title"></h3>
         <div class="step-body" id="step-body"></div>
         <div class="step-eq" id="step-eq"></div>
-        <div class="step-nav">
-          <button id="step-prev">◀ Prev</button>
-          <button id="step-next">Next ▶</button>
-        </div>
       </aside>
     </div>
   </main>
