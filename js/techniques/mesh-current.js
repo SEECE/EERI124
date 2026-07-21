@@ -19,8 +19,7 @@
     var mc = S.meshCurrents(circuit);
     var F = mc.F;
     var m = mc.meshes.length;
-    var src = circuit.edges.filter(function (e) { return e.type === 'V'; })[0];
-    var Vsrc = src.value, srcId = src.id;
+    var srcs = circuit.edges.filter(function (e) { return e.type === 'V'; });
 
     // name each bounded face i1, i2 … in reading order; value from the solved row
     var name = {}, plainName = {}, value = {};
@@ -47,7 +46,7 @@
           if (g === F.outer) terms.push(name[f] + '·' + e.value);
           else terms.push('(' + name[f] + '−' + name[g] + ')·' + e.value);
         } else if (e.type === 'V') {
-          srcDrop += (F.H[h].tail === e.a) ? -Vsrc : Vsrc;  // a→b is −→+ = a rise (−drop)
+          srcDrop += (F.H[h].tail === e.a) ? -e.value : e.value;  // a→b is −→+ = a rise (−drop)
         }
       });
       var s = terms.join(' + ');
@@ -55,12 +54,13 @@
       return s + ' = 0';
     }
 
-    // power from mesh currents (independent of the node-voltage path)
+    // power from mesh currents (independent of the node-voltage path). Each source delivers
+    // V·I out of its + terminal; summed over all sources this equals Σi²R (energy balance).
     var diss = 0;
     Redges.forEach(function (e) { diss += Math.pow(mc.edgeCurrent[e.id], 2) * e.value; });
-    var Isrc = Math.abs(mc.edgeCurrent[srcId]);
-    var gen = Isrc * Vsrc;
-    var pcOk = Math.abs(gen - diss) <= 1e-6 * (gen + diss + 1);
+    var gen = 0;
+    srcs.forEach(function (e) { gen += e.value * mc.edgeCurrent[e.id]; }); // a→b current out of + terminal (b)
+    var pcOk = Math.abs(gen - diss) <= 1e-6 * (Math.abs(gen) + diss + 1);
 
     var steps = [];
 
@@ -116,22 +116,23 @@
       hl: {},
     });
 
+    var srcIds = srcs.map(function (e) { return e.id; });
     var curLines = Redges.map(function (e) {
       return 'i(' + si(e.value, 'Ω') + ') = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A');
     });
-    curLines.push('i(source) = ' + si(Isrc, 'A'));
+    srcs.forEach(function (e) { curLines.push('i(' + si(e.value, 'V') + ' source) = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A')); });
     steps.push({
       n: 9, title: 'Branch currents from mesh currents',
       body: 'A resistor between two meshes carries the difference of their currents; a boundary resistor carries its single mesh current.',
       eq: curLines,
-      hl: { edges: [srcId] },
+      hl: { edges: srcIds },
     });
 
     steps.push({
       n: 10, title: 'Power check',
-      body: 'Currents through the resistors give the dissipated power; it must equal the power delivered by the source.',
+      body: 'Currents through the resistors give the dissipated power; it must equal the power delivered by the source' + (srcs.length === 1 ? '' : 's') + '.',
       eq: ['ΣP<sub>diss</sub> = ' + si(diss, 'W'), 'ΣP<sub>gen</sub> = ' + si(gen, 'W') + ' ' + (pcOk ? '✓' : '✗')],
-      hl: { edges: [srcId] },
+      hl: { edges: srcIds },
     });
 
     return steps;
