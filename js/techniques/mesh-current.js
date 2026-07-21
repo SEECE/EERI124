@@ -12,10 +12,7 @@
   'use strict';
 
   var SUB = '₀₁₂₃₄₅₆₇₈₉';
-  function fmt(x) {
-    if (Math.abs(x) < 1e-9) return '0';
-    return String(Math.round(x * 1000) / 1000);
-  }
+  var si = S.si;
   function isub(n) { return 'i<sub>' + n + '</sub>'; }
 
   window.MeshCurrent = function (circuit) {
@@ -115,14 +112,14 @@
     steps.push({
       n: 8, title: 'Solve the equations',
       body: 'Solve the ' + m + ' equation' + (m === 1 ? '' : 's') + ' for the ' + m + ' mesh current' + (m === 1 ? '' : 's') + '.',
-      eq: mc.order.map(function (f) { return name[f] + ' = ' + fmt(value[f]) + ' A'; }),
+      eq: mc.order.map(function (f) { return name[f] + ' = ' + si(value[f], 'A'); }),
       hl: {},
     });
 
     var curLines = Redges.map(function (e) {
-      return 'i(' + e.value + ' Ω) = ' + fmt(Math.abs(mc.edgeCurrent[e.id])) + ' A';
+      return 'i(' + si(e.value, 'Ω') + ') = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A');
     });
-    curLines.push('i(source) = ' + fmt(Isrc) + ' A');
+    curLines.push('i(source) = ' + si(Isrc, 'A'));
     steps.push({
       n: 9, title: 'Branch currents from mesh currents',
       body: 'A resistor between two meshes carries the difference of their currents; a boundary resistor carries its single mesh current.',
@@ -133,7 +130,7 @@
     steps.push({
       n: 10, title: 'Power check',
       body: 'Currents through the resistors give the dissipated power; it must equal the power delivered by the source.',
-      eq: ['ΣP<sub>diss</sub> = ' + fmt(diss) + ' W', 'ΣP<sub>gen</sub> = ' + fmt(gen) + ' W ' + (pcOk ? '✓' : '✗')],
+      eq: ['ΣP<sub>diss</sub> = ' + si(diss, 'W'), 'ΣP<sub>gen</sub> = ' + si(gen, 'W') + ' ' + (pcOk ? '✓' : '✗')],
       hl: { edges: [srcId] },
     });
 

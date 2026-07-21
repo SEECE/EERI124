@@ -97,7 +97,7 @@
       });
     } else if (stuck) {
       var extra = over === 'source' && Req > 0
-        ? ' With the source back in, I = ' + fmt(Vsrc / Req) + ' A and P = ' + fmt(Vsrc * Vsrc / Req) + ' W.'
+        ? ' With the source back in, I = ' + S.si(Vsrc / Req, 'A') + ' and P = ' + S.si(Vsrc * Vsrc / Req, 'W') + '.'
         : '';
       push({
         title: 'Result — needs a Y-Δ transform',
@@ -109,8 +109,8 @@
     } else {
       var eq = ['R<sub>eq</sub> = ' + fmtR(Req)];
       if (over === 'source') {
-        eq.push('I = V / R<sub>eq</sub> = ' + Vsrc + ' / ' + fmt(Req) + ' = ' + fmt(Vsrc / Req) + ' A');
-        eq.push('P = V·I = ' + fmt(Vsrc * Vsrc / Req) + ' W');
+        eq.push('I = V / R<sub>eq</sub> = ' + Vsrc + ' / ' + fmt(Req) + ' = ' + S.si(Vsrc / Req, 'A'));
+        eq.push('P = V·I = ' + S.si(Vsrc * Vsrc / Req, 'W'));
       }
       push({
         title: 'Result',
