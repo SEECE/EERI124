@@ -250,6 +250,40 @@
       el('text', { 'class': 'polarity-mark', x: x + 11, y: y - 11, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 17, 'font-weight': 700 }, svg)
         .textContent = signs[nid];
     });
+
+    // clockwise mesh loop-arrows (KVL). loops:[{nodes:[ids], label}] — centroid + radius
+    // are read from the rendered node circles so this stays in the svg's user space.
+    Array.prototype.forEach.call(svg.querySelectorAll('.mesh-loop'), function (m) {
+      m.parentNode.removeChild(m);
+    });
+    (spec.loops || []).forEach(function (loop) {
+      var pts = (loop.nodes || []).map(function (nid) {
+        var c = svg.querySelector('[data-nid="' + nid + '"]');
+        return c ? { x: +c.getAttribute('cx'), y: +c.getAttribute('cy') } : null;
+      }).filter(Boolean);
+      if (pts.length < 3) return;
+      var cx = 0, cy = 0;
+      pts.forEach(function (p) { cx += p.x; cy += p.y; });
+      cx /= pts.length; cy /= pts.length;
+      var r = Infinity;
+      pts.forEach(function (p) { r = Math.min(r, Math.hypot(p.x - cx, p.y - cy)); });
+      r *= 0.55;
+      var g = el('g', { 'class': 'mesh-loop' }, svg);
+      // ~320° arc, gap at the top, swept clockwise (SVG sweep-flag 1 with y down)
+      var sa = -70 * Math.PI / 180, ea = 250 * Math.PI / 180;
+      var sx = cx + r * Math.cos(sa), sy = cy + r * Math.sin(sa);
+      var ex = cx + r * Math.cos(ea), ey = cy + r * Math.sin(ea);
+      el('path', { d: 'M ' + sx + ' ' + sy + ' A ' + r + ' ' + r + ' 0 1 1 ' + ex + ' ' + ey, fill: 'none', stroke: 'var(--accent-hover)', 'stroke-width': 2 }, g);
+      // arrowhead at the arc end, pointing along the clockwise tangent (ea + 90°)
+      var fwd = ea + Math.PI / 2, ah = 8;
+      var c1 = fwd + Math.PI + 0.4, c2 = fwd + Math.PI - 0.4;
+      el('polygon', { points:
+        ex + ',' + ey + ' ' +
+        (ex + ah * Math.cos(c1)) + ',' + (ey + ah * Math.sin(c1)) + ' ' +
+        (ex + ah * Math.cos(c2)) + ',' + (ey + ah * Math.sin(c2)),
+        fill: 'var(--accent-hover)' }, g);
+      if (loop.label) el('text', { x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 15, 'font-weight': 700 }, g).textContent = loop.label;
+    });
   }
 
   window.Circuit = {

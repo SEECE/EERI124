@@ -6,11 +6,12 @@
    5 (supermesh) and 7 (constraints) only fire with current/dependent sources, so here they
    render "Nothing to do" — shown, never skipped.
 
-   Mesh loops aren't drawn as arrows yet; the currents i1, i2 … are named in the equations.
-   ponytail: add centroid loop-arrows later if the visual needs it. */
+   Step 2 draws a clockwise loop-arrow at each mesh centroid (Circuit.highlight loops:);
+   the currents i1, i2 … are also named in the equations. */
 (function (S) {
   'use strict';
 
+  var SUB = '₀₁₂₃₄₅₆₇₈₉';
   function fmt(x) {
     if (Math.abs(x) < 1e-9) return '0';
     return String(Math.round(x * 1000) / 1000);
@@ -25,11 +26,15 @@
     var Vsrc = src.value, srcId = src.id;
 
     // name each bounded face i1, i2 … in reading order; value from the solved row
-    var name = {}, value = {};
+    var name = {}, plainName = {}, value = {};
     mc.order.forEach(function (f, idx) {
       name[f] = isub(idx + 1);
+      plainName[f] = 'i' + (SUB[idx + 1] || (idx + 1)); // for the svg loop label (no <sub>)
       value[f] = mc.i[mc.meshOf[f]];
     });
+    // node ids bounding a face — F.H[h].tail is a node id (see kvl below)
+    function faceNodeIds(f) { return F.faceList[f].map(function (h) { return F.H[h].tail; }); }
+    var loops = mc.order.map(function (f) { return { nodes: faceNodeIds(f), label: plainName[f] }; });
 
     var Redges = circuit.edges.filter(function (e) { return e.type === 'R'; });
     var nonWireIds = circuit.edges.filter(function (e) { return e.type !== 'W'; }).map(function (e) { return e.id; });
@@ -73,7 +78,7 @@
       n: 2, title: 'Draw mesh currents (clockwise) & label',
       body: 'Assign a clockwise current to each mesh: ' + mc.order.map(function (f) { return name[f]; }).join(', ') +
         '. Every branch current will be built from these.',
-      hl: { edges: nonWireIds },
+      hl: { edges: nonWireIds, loops: loops },
     });
 
     steps.push({
