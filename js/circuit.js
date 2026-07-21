@@ -228,15 +228,27 @@
   }
 
   /* Toggle a 'hl' class on the edges/nodes a solver step wants to emphasise.
-     spec = { edges: [edgeId], nodes: [nodeId] }; anything not listed is un-highlighted. */
+     spec = { edges:[edgeId], nodes:[nodeId], signs:{nodeId:'+'|'−'} }; anything not
+     listed is un-highlighted. `signs` draws polarity marks beside nodes (the KCL
+     step-4 + at each node, − at the reference), redrawn from scratch each step. */
   function highlight(svg, spec) {
     spec = spec || {};
-    var edges = spec.edges || [], nodes = spec.nodes || [];
+    var edges = spec.edges || [], nodes = spec.nodes || [], signs = spec.signs || {};
     Array.prototype.forEach.call(svg.querySelectorAll('[data-eid]'), function (g) {
       g.classList.toggle('hl', edges.indexOf(g.getAttribute('data-eid')) >= 0);
     });
     Array.prototype.forEach.call(svg.querySelectorAll('[data-nid]'), function (g) {
       g.classList.toggle('hl', nodes.indexOf(g.getAttribute('data-nid')) >= 0);
+    });
+    Array.prototype.forEach.call(svg.querySelectorAll('.polarity-mark'), function (m) {
+      m.parentNode.removeChild(m);
+    });
+    Object.keys(signs).forEach(function (nid) {
+      var c = svg.querySelector('[data-nid="' + nid + '"]');
+      if (!c) return;
+      var x = +c.getAttribute('cx'), y = +c.getAttribute('cy');
+      el('text', { 'class': 'polarity-mark', x: x + 11, y: y - 11, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 17, 'font-weight': 700 }, svg)
+        .textContent = signs[nid];
     });
   }
 

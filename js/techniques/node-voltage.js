@@ -42,6 +42,7 @@
     var allNodes = circuit.nodes.map(function (n) { return n.id; });
     var unNodeIds = circuit.nodes.filter(function (n) { return unknown.indexOf(en.of[n.id]) >= 0; }).map(function (n) { return n.id; });
     var knownNodeIds = circuit.nodes.filter(function (n) { return en.of[n.id] === sol.known; }).map(function (n) { return n.id; });
+    var refNodeIds = circuit.nodes.filter(function (n) { return en.of[n.id] === sol.ref; }).map(function (n) { return n.id; });
     function resistorsAt(g) { // resistor edge ids touching group g
       return circuit.edges.filter(function (e) {
         return e.type === 'R' && (en.of[e.a] === g || en.of[e.b] === g);
@@ -90,12 +91,15 @@
       hl: { nodes: knownNodeIds, edges: [srcId] },
     });
 
+    var polSigns = {};
+    unNodeIds.forEach(function (id) { polSigns[id] = '+'; });
+    refNodeIds.forEach(function (id) { polSigns[id] = '−'; });
     steps.push({
       n: 4, title: 'Indicate polarities at the nodes',
       body: m
         ? 'Each unknown node voltage is measured + at the node, − at the reference. Unknowns: ' + unL.join(', ') + '.'
         : 'Every node voltage is already fixed by the source — there are no unknowns to mark.',
-      hl: { nodes: unNodeIds },
+      hl: { nodes: unNodeIds, signs: polSigns },
     });
 
     steps.push({
