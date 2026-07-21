@@ -103,6 +103,10 @@
 .circuit-canvas svg .edge.hl circle { stroke: var(--accent-hover); stroke-width: 3; }
 .circuit-canvas svg .node.hl { fill: var(--accent-hover); stroke: var(--accent); stroke-width: 3; r: 5.5px; }
 
+/* node letters stay hidden until the step that names them reveals them (highlight labels:) */
+.circuit-canvas svg .node-label { opacity: 0; }
+.circuit-canvas svg .node-label.show { opacity: 1; }
+
 @media (max-width: 720px) {
   .step-panel { flex: none; overflow-y: visible; }
 }

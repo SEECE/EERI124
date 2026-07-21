@@ -122,6 +122,10 @@
       });
     }
 
+    // the goal step already names the terminal letters, so reveal all letters throughout
+    var labelledIds = circuit.nodes.filter(function (n) { return n.label; }).map(function (n) { return n.id; });
+    steps.forEach(function (s) { s.hl = s.hl || {}; s.hl.labels = labelledIds; });
+
     steps.req = Req; steps.mode = over; steps.stuck = stuck; steps.terminals = [nm(portA), nm(portB)];
     return steps;
 

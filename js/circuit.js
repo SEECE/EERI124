@@ -222,33 +222,28 @@
         dir = mid;
       }
       var lx = p.x + Math.cos(dir) * 20, ly = p.y + Math.sin(dir) * 20;
-      el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700 }, svg)
+      // hidden by default; a solver step reveals it via highlight({ labels: [nodeId] })
+      // so letters appear when the method names them, not from the start
+      el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700 }, svg)
         .textContent = n.label;
     });
   }
 
   /* Toggle a 'hl' class on the edges/nodes a solver step wants to emphasise.
-     spec = { edges:[edgeId], nodes:[nodeId], signs:{nodeId:'+'|'−'} }; anything not
-     listed is un-highlighted. `signs` draws polarity marks beside nodes (the KCL
-     step-4 + at each node, − at the reference), redrawn from scratch each step. */
+     spec = { edges:[edgeId], nodes:[nodeId], labels:[nodeId], loops:[...] }; anything not
+     listed is un-highlighted. `labels` reveals the node letters (hidden at render) for the
+     step that introduces them onward. */
   function highlight(svg, spec) {
     spec = spec || {};
-    var edges = spec.edges || [], nodes = spec.nodes || [], signs = spec.signs || {};
+    var edges = spec.edges || [], nodes = spec.nodes || [], labels = spec.labels || [];
     Array.prototype.forEach.call(svg.querySelectorAll('[data-eid]'), function (g) {
       g.classList.toggle('hl', edges.indexOf(g.getAttribute('data-eid')) >= 0);
     });
     Array.prototype.forEach.call(svg.querySelectorAll('[data-nid]'), function (g) {
       g.classList.toggle('hl', nodes.indexOf(g.getAttribute('data-nid')) >= 0);
     });
-    Array.prototype.forEach.call(svg.querySelectorAll('.polarity-mark'), function (m) {
-      m.parentNode.removeChild(m);
-    });
-    Object.keys(signs).forEach(function (nid) {
-      var c = svg.querySelector('[data-nid="' + nid + '"]');
-      if (!c) return;
-      var x = +c.getAttribute('cx'), y = +c.getAttribute('cy');
-      el('text', { 'class': 'polarity-mark', x: x + 11, y: y - 11, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 17, 'font-weight': 700 }, svg)
-        .textContent = signs[nid];
+    Array.prototype.forEach.call(svg.querySelectorAll('.node-label'), function (t) {
+      t.classList.toggle('show', labels.indexOf(t.getAttribute('data-nlabel')) >= 0);
     });
 
     // clockwise mesh loop-arrows (KVL). loops:[{nodes:[ids], label}] — centroid + radius
