@@ -64,6 +64,36 @@
 .step-control .step-count { margin-bottom: 10px; }
 .step-count-label { color: var(--ink-faint); }
 
+/* substep row: a second, lighter Prev/Next that walks the current step's detail views */
+.step-subcount {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 12px 0 4px;
+  min-height: 14px;
+}
+.step-subnav button {
+  background: transparent;
+  color: var(--accent-deep);
+  border-color: var(--accent);
+  font-size: 13px;
+  padding: 0.4rem 0.5rem;
+}
+.step-subnav button:hover:not(:disabled) { background: rgba(139, 92, 246, 0.10); }
+
+/* two-column "known vs still-unknown" block used by the equation-assembly step */
+.eq-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
+.eq-cols h5 {
+  font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-faint); margin: 0 0 4px;
+}
+.eq-cols .col-known h5 { color: var(--accent-deep); }
+.eq-cols ul { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.eq-cols li { padding: 2px 0; overflow-wrap: anywhere; }
+.eq-cols .col-missing li { color: var(--ink-faint); }
+@media (max-width: 420px) { .eq-cols { grid-template-columns: 1fr; } }
+
 .step-nav {
   display: flex;
   gap: 10px;

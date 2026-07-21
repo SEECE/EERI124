@@ -58,6 +58,11 @@
             <button id="step-prev">◀ Prev</button>
             <button id="step-next">Next ▶</button>
           </div>
+          <div class="step-subcount" id="step-subcount"></div>
+          <div class="step-nav step-subnav">
+            <button id="sub-prev">◂ Back</button>
+            <button id="sub-next">Detail ▸</button>
+          </div>
         </div>
       </aside>
 
@@ -105,11 +110,14 @@
     var stepper = Stepper({
       svg: svg,
       count: document.getElementById('step-count'),
+      subcount: document.getElementById('step-subcount'),
       title: document.getElementById('step-title'),
       body: document.getElementById('step-body'),
       eq: document.getElementById('step-eq'),
       prev: document.getElementById('step-prev'),
       next: document.getElementById('step-next'),
+      subPrev: document.getElementById('sub-prev'),
+      subNext: document.getElementById('sub-next'),
     });
 
     // fill the terminal pickers (equivalent resistance over 2 points) with the node letters
