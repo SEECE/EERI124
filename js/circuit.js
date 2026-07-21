@@ -194,14 +194,34 @@
       el('circle', { 'class': 'node', 'data-nid': n.id, cx: p.x, cy: p.y, r: 3.5, fill: 'var(--ink)' }, svg);
     });
 
-    // optional node labels (e.g. Wheatstone bridge's measuring nodes): offset away
-    // from the circuit's centroid so the label clears the node's own edges
+    // optional node labels (letters/measuring points): drop each into the widest angular
+    // gap between the edges meeting at the node, so the letter clears the wires/resistors
+    // instead of landing on top of them. Fall back to the centroid direction if isolated.
     var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    var incident = {};
+    circuit.nodes.forEach(function (n) { incident[n.id] = []; });
+    circuit.edges.forEach(function (e) {
+      var a = byId[e.a], b = byId[e.b];
+      incident[e.a].push(Math.atan2(b.y - a.y, b.x - a.x));
+      incident[e.b].push(Math.atan2(a.y - b.y, a.x - b.x));
+    });
     circuit.nodes.forEach(function (n) {
       if (!n.label) return;
       var p = byId[n.id];
-      var dx = p.x - cx, dy = p.y - cy, len = Math.hypot(dx, dy) || 1;
-      var lx = p.x + (dx / len) * 18, ly = p.y + (dy / len) * 18;
+      var angs = incident[n.id].slice().sort(function (x, y) { return x - y; });
+      var dir;
+      if (!angs.length) {
+        dir = Math.atan2(p.y - cy, p.x - cx);
+      } else {
+        var best = -1, mid = 0;
+        for (var k = 0; k < angs.length; k++) {
+          var lo = angs[k];
+          var hi = k === angs.length - 1 ? angs[0] + 2 * Math.PI : angs[k + 1];
+          if (hi - lo > best) { best = hi - lo; mid = lo + (hi - lo) / 2; }
+        }
+        dir = mid;
+      }
+      var lx = p.x + Math.cos(dir) * 20, ly = p.y + Math.sin(dir) * 20;
       el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700 }, svg)
         .textContent = n.label;
     });
