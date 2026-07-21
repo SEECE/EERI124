@@ -47,9 +47,17 @@
   font-family: 'Cascadia Code', ui-monospace, 'SFMono-Regular', Consolas, monospace;
   font-size: 13px;
   color: var(--ink);
-  overflow-x: auto;
 }
-.eq-line { padding: 3px 0; white-space: nowrap; }
+/* wrap long equations instead of scrolling them sideways — for big circuits every
+   term stays visible. Hanging indent keeps continuation lines clear of the label. */
+.eq-line {
+  padding: 4px 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding-left: 1.4em;
+  text-indent: -1.4em;
+}
+.eq-line + .eq-line { border-top: 1px solid rgba(139, 92, 246, 0.14); }
 .eq-line sub { font-size: 0.78em; }
 
 /* step counter + Prev/Next now live in the left control panel (left = control) */
