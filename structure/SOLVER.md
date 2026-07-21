@@ -8,21 +8,26 @@ side is [GENERATORS.md](GENERATORS.md); this is the analysis side that consumes 
 ## Where solving lives
 
 All solving is on **`topics/simple-resistive-circuits/`** (study-guide §3). It teaches resistor
-networks with one voltage source, and there a student can apply **KCL**, **KVL**, and
-**equivalent resistance**. A **Technique** dropdown in the left panel chooses between them.
+networks with **one or more independent voltage sources**, and there a student can apply **KCL**,
+**KVL**, and **equivalent resistance**. A **Technique** dropdown in the left panel chooses between
+them.
 
-The §4 pages (`node-voltage`, `mesh-current`, `thevenin-norton`) **stay placeholders** for now.
-Their PowerPoints are about supernodes / supermesh and dependent sources — the "extra steps" not
-yet built. "Techniques later to be global": when current and dependent sources arrive, the
-techniques extend onto those pages. Do not populate §4 until then.
+**Multiple sources live here now.** The engine moved to modified nodal analysis (see below), so
+two- and three-source templates (`js/generators/multi-source.js`) and multi-source random grids
+are solved in full — including the **supernode** case (a source between two non-reference nodes).
+This deliberately overrides the earlier "§4 owns supernodes" plan: supernodes for *independent
+voltage sources* are taught on §3. The §4 pages (`node-voltage`, `mesh-current`,
+`thevenin-norton`) **stay placeholders** until **current and dependent sources** arrive — those
+(supermesh, dependent-source constraints, the PPTs' step-7) are still the "extra steps" not yet
+built. Do not populate §4 until then.
 
 ## Layers
 
 | Layer | Files | Owns |
 |---|---|---|
-| **Engine** | `js/solve.js` | `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (KCL), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
-| **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
-| **Stepper** | `js/stepper.js` | generic Prev/Next walk-through; renders one step, highlights the circuit via `Circuit.highlight`. |
+| **Engine** | `js/solve.js` | `si` (SI/engineering value formatting), `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (**MNA**, any number of sources), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
+| **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine for step 6), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
+| **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps**; renders one view, highlights the circuit via `Circuit.highlight`. |
 | **Page** | `topics/simple-resistive-circuits/index.html` | loads the above, maps the dropdown to a builder, renders the circuit + drives the stepper. |
 
 No ES modules (site opens over `file://`) — plain `<script>` globals, same as `circuit.js`.
@@ -33,27 +38,46 @@ A technique returns an array of steps:
 
 ```js
 { n: 6, title: 'Node-voltage equations', body: '…html…',
-  eq: ['…html line…'], todo: false, hl: { edges: ['e2'], nodes: ['n1'] } }
+  eq: ['…html line…'], todo: false, hl: { edges: ['e2'], nodes: ['n1'] },
+  subs: [ { title: 'node b', body: '…html…', eq: ['…'], hl: {…} }, … ] }
 ```
 
 - `todo: true` → a muted **"Nothing to do"** badge.
 - `hl` → highlighted elements. The renderer wraps each edge in `<g class="edge" data-eid>` and tags
   each node circle `data-nid`; `Circuit.highlight(svg, hl)` toggles a `.hl` class (styled in
   `css/solver.css`, which beats the renderer's presentation attributes).
+- `subs` (optional) → **substeps**. Entering a step shows its overview (sub 0); `subPrev`/`subNext`
+  drill through the substeps, `next` skips the whole step. A substep's `body`/`eq`/`hl` override the
+  step's for that view (any omitted field falls back). Used by KCL for per-node / per-source /
+  per-equation drill-downs. The stepper reveals node letters via `hl.labels` on both the step and
+  each substep, so a technique adds `labels` to both.
+- **Format displayed quantities with `Solve.si(value, unit)`** — engineering notation with an SI
+  prefix (`0.11 A → "110 mA"`, `2200 Ω → "2.2 kΩ"`), but a value that reads cleanly in the base unit
+  (≤1 decimal, under 1000) stays there (`0.1 A`). Never hand-format currents / voltages / powers.
 
 ## Stay true to the PowerPoints
 
 The two PPTs in the repo root give the **exact** step order — node-voltage **9 steps**, mesh
-**10 steps**. Steps that only fire for current/dependent sources (known-current step 3, supernode
-/ supermesh step 5, constraint step 7) are **shown, never skipped**: for our single-voltage-source
-resistor nets they render **"Nothing to do"**. Choosing the **reference at the source's − terminal**
-guarantees no supernode, which is what makes those steps empty.
+**10 steps**. Steps that only fire for special cases are **shown, never skipped**. For KCL the
+**supernode step 5** now carries **real content** when a source floats between two non-reference
+nodes (it says "Nothing to do" only when every source is pinned by the reference — the usual
+single-source and ref-chained case). Steps that still need current/dependent sources (mesh
+known-current step 3, supermesh step 5, constraint step 7) remain **"Nothing to do"** here.
 
 ## KCL — node-voltage
 
-`electricalNodes` contracts wire (`W`) edges into electrical nodes; reference = the source's −
-terminal (0 V), its + terminal is a known node at +V; KCL (Σ currents leaving = 0) at each unknown
-node builds a conductance system solved by `linsolve`. `branches` + `powerCheck` finish.
+`electricalNodes` contracts wire (`W`) edges into electrical nodes; `nodeVoltages` runs **modified
+nodal analysis** — unknowns are the non-reference node voltages **plus one branch current per
+voltage source**, so any number of sources (and supernodes) solve with no special-casing. Reference
+= the **first** source's − terminal (0 V). `branches` reads each source current from the MNA
+solution; `powerCheck` finishes.
+
+The `node-voltage` technique owns the **equation-assembly engine** behind step 6: it propagates
+source-fixed voltages out from the reference, then reveals each unknown node's KCL equation only
+once it becomes a **single-unknown** equation (a two-panel known/unknown display tracks the state);
+genuinely floating sources are grouped as **supernode units**, and a mutually-coupled core that
+never reduces to single-unknown equations is shown as one simultaneous block. This ordering is
+pedagogy — the displayed values always come from `nodeVoltages`.
 
 ## KVL — mesh-current
 
