@@ -75,6 +75,24 @@
       assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
     });
 
+    // ---- two sources in series (MNA): n2 = 10 + 4 = 14 V, loop I = 14/200 = 0.07 A ----
+    check('two sources in series', function () {
+      var c = C(3, [['V', 0, 1, 10], ['V', 1, 2, 4], ['R', 2, 0, 200]]);
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 1), 10) && near(v(sol, 2), 14), 'node voltages ' + v(sol, 1) + ',' + v(sol, 2));
+      var br = Solve.branches(c, sol);
+      assert(near(Math.abs(br.filter(function (r) { return r.edge.type === 'R'; })[0].current), 0.07), 'loop current');
+      assert(Solve.powerCheck(br).ok, 'power imbalance');
+    });
+
+    // ---- two sources bridging two non-reference nodes (a supernode): both fixed, power balances ----
+    check('supernode (two grounded sources)', function () {
+      var c = C(3, [['V', 0, 1, 12], ['V', 0, 2, 6], ['R', 1, 2, 100], ['R', 2, 0, 300]]);
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 1), 12) && near(v(sol, 2), 6), 'node voltages ' + v(sol, 1) + ',' + v(sol, 2));
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    });
+
     // ---- every generator: node-voltage solves, mesh agrees, power balances ----
     Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
       check('solve ' + g.name + ' ×30', function () {

@@ -101,44 +101,53 @@
     return { of: en.of, members: en.members, groups: order, letter: letter, rep: rep };
   }
 
-  /* ---------- node voltages: KCL solve for a single voltage source ----------
-     Reference (0 V) at the source's − terminal (edge.a), so the + terminal (edge.b) is a
-     known node at +value and no supernode arises — the PPT's step-5/7 "extra steps" are
-     empty for our circuits. Unknown node voltages come from Σ(branch currents)=0 per node.
-     Returns { of, v: {groupId -> volts}, ref, known, source }. */
+  /* ---------- node voltages: modified nodal analysis (any number of voltage sources) ----------
+     Reference (0 V) at the FIRST source's − terminal (edge.a). Unknowns are the non-reference
+     node voltages plus one branch current per voltage source; the block system is
+
+         [ G  B ] [ v ]   [ 0  ]        G = resistor conductances (KCL, Σ leaving = 0)
+         [ Bᵀ 0 ] [ j ] = [ Vs ]        B = source-node incidence,  j = source currents (a→b)
+
+     which handles two nodes bridged by a source (a "supernode") with no special-casing — the
+     PPT's supernode step is real content when it fires, not "Nothing to do". With one source at
+     the reference it reduces to the old grounded-source solve.
+     Returns { of, v:{group->volts}, ref, known, source, sources:[edge], iSrc:{edgeId->A a→b} }. */
   function nodeVoltages(c) {
     var en = electricalNodes(c);
     var sources = c.edges.filter(function (e) { return e.type === 'V'; });
     if (sources.length === 0) throw new Error('no voltage source');
-    // ponytail: single independent source. Two+ sources need the supernode/constraint
-    // steps (the PPTs' "extra steps"), deferred — solve the first; the rest would need MNA.
-    var src = sources[0];
-    var ref = en.of[src.a], known = en.of[src.b], Vsrc = src.value;
-    if (ref === known) throw new Error('source shorted by wires');
+    var ref = en.of[sources[0].a];
+    sources.forEach(function (s) { if (en.of[s.a] === en.of[s.b]) throw new Error('source shorted by wires'); });
 
-    var unknown = en.groups.filter(function (g) { return g !== ref && g !== known; });
-    var idx = {};
-    unknown.forEach(function (g, i) { idx[g] = i; });
-    var m = unknown.length;
+    var free = en.groups.filter(function (g) { return g !== ref; });
+    var vidx = {}; free.forEach(function (g, i) { vidx[g] = i; });
+    var nV = free.length, nS = sources.length, D = nV + nS;
 
-    var v = {};
-    v[ref] = 0; v[known] = Vsrc;
+    var A = [], rhs = [], i;
+    for (i = 0; i < D; i++) { A.push(new Array(D).fill(0)); rhs.push(0); }
 
-    if (m > 0) {
-      var G = [], b = [], i;
-      for (i = 0; i < m; i++) { G.push(new Array(m).fill(0)); b.push(0); }
-      function fixed(g) { return g === ref ? 0 : g === known ? Vsrc : null; } // known voltage or null
-      c.edges.forEach(function (e) {
-        if (e.type !== 'R') return;
-        var p = en.of[e.a], q = en.of[e.b], g = 1 / e.value;
-        var pf = fixed(p), qf = fixed(q), pi = idx[p], qi = idx[q];
-        if (pf === null) { G[pi][pi] += g; if (qf === null) G[pi][qi] -= g; else b[pi] += g * qf; }
-        if (qf === null) { G[qi][qi] += g; if (pf === null) G[qi][pi] -= g; else b[qi] += g * pf; }
-      });
-      var x = linsolve(G, b);
-      unknown.forEach(function (g, i) { v[g] = x[i]; });
-    }
-    return { of: en.of, v: v, ref: ref, known: known, source: src };
+    // resistor conductance stamp — current leaving a non-reference node through each resistor
+    c.edges.forEach(function (e) {
+      if (e.type !== 'R') return;
+      var p = en.of[e.a], q = en.of[e.b], g = 1 / e.value;
+      if (p !== ref) { A[vidx[p]][vidx[p]] += g; if (q !== ref) A[vidx[p]][vidx[q]] -= g; }
+      if (q !== ref) { A[vidx[q]][vidx[q]] += g; if (p !== ref) A[vidx[q]][vidx[p]] -= g; }
+    });
+    // source stamp — j = current a→b (− to +); incidence into KCL rows + the v_b − v_a = Vs row
+    sources.forEach(function (s, k) {
+      var a = en.of[s.a], b = en.of[s.b], jc = nV + k;
+      if (a !== ref) { A[vidx[a]][jc] += 1; A[jc][vidx[a]] -= 1; }
+      if (b !== ref) { A[vidx[b]][jc] -= 1; A[jc][vidx[b]] += 1; }
+      rhs[jc] = s.value;
+    });
+
+    var x = linsolve(A, rhs);
+    var v = {}; v[ref] = 0;
+    free.forEach(function (g) { v[g] = x[vidx[g]]; });
+    var iSrc = {};
+    sources.forEach(function (s, k) { iSrc[s.id] = x[nV + k]; });
+
+    return { of: en.of, v: v, ref: ref, known: en.of[sources[0].b], source: sources[0], sources: sources, iSrc: iSrc };
   }
 
   /* ---------- branch currents + power ----------
@@ -147,32 +156,18 @@
      (dissipating) and the source negative (generating).
      Returns [{ edge, current, drop, power }] aligned with c.edges. */
   function branches(c, sol) {
-    var v = sol.v, of = sol.of, src = sol.source;
-    var out = c.edges.map(function (e) {
+    var v = sol.v, of = sol.of, iSrc = sol.iSrc || {};
+    return c.edges.map(function (e) {
       var va = v[of[e.a]], vb = v[of[e.b]];
       if (e.type === 'R') {
         var i = (va - vb) / e.value;
         return { edge: e, current: i, drop: va - vb, power: (va - vb) * i };
       }
       if (e.type === 'W') return { edge: e, current: 0, drop: 0, power: 0 };
-      return { edge: e, current: 0, drop: va - vb, power: 0 }; // V — filled in below
+      // V — MNA branch current a→b; power absorbed (va−vb)·I, negative ⇒ generating
+      var I = iSrc[e.id] || 0;
+      return { edge: e, current: I, drop: vb - va, power: (va - vb) * I };
     });
-    // source current a→b = current pushed out of the + terminal = Σ resistor currents leaving it
-    var plus = of[src.b], I = 0;
-    c.edges.forEach(function (e) {
-      if (e.type !== 'R') return;
-      var a = of[e.a], b = of[e.b];
-      if (a === plus) I += (v[a] - v[b]) / e.value;
-      else if (b === plus) I += (v[b] - v[a]) / e.value;
-    });
-    out.forEach(function (r) {
-      if (r.edge !== src) return;
-      var va = v[of[src.a]], vb = v[of[src.b]];
-      r.current = I;                 // a→b through the source
-      r.drop = vb - va;              // terminal voltage (+value), for display
-      r.power = (va - vb) * I;       // absorbed < 0 ⇒ generating
-    });
-    return out;
   }
 
   /* ---------- power check: generated ≈ dissipated ---------- */
