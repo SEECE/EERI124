@@ -125,27 +125,6 @@
         return '(' + vsub(L(g)) + ' − ' + (P.fixed[o] ? round(V(o)) : vsub(L(o))) + ')/' + e.value;
       }).join(' + ') + ' = 0';
     }
-    // fully-substituted numeric line for the solve step (every neighbour as its value)
-    function kclNumeric(g) {
-      return resAt(g).map(function (e) {
-        return '(' + vsub(L(g)) + ' − ' + round(V(other(e, g))) + ')/' + e.value;
-      }).join(' + ') + ' = 0';
-    }
-
-    // status table for the equation-assembly step: for each still-unknown node, how many
-    // of its resistor neighbours are themselves still unknown — a node is solvable the
-    // moment that count hits zero (its own voltage is the only unknown left in its KCL sum).
-    function neighborTable(remaining, solvedSet) {
-      var rows = remaining.map(function (g) {
-        var neighbours = resAt(g).map(function (e) { return other(e, g); });
-        var unknown = neighbours.filter(function (o) { return !solvedSet[o]; });
-        var ready = unknown.length === 0;
-        return '<tr' + (ready ? ' class="row-ready"' : '') + '><td>' + L(g) + '</td><td>' + neighbours.length +
-          '</td><td>' + (neighbours.length - unknown.length) + '</td><td>' + unknown.length + '</td><td>' +
-          (ready ? 'solve now' : 'waiting on ' + unknown.map(L).join(', ')) + '</td></tr>';
-      }).join('');
-      return '<div class="kcl-status-wrap"><table class="kcl-status"><thead><tr><th>Node</th><th>Neighbours</th><th>Known</th><th>Unknown</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
-    }
 
     // ---------- assemble steps ----------
     var nR = circuit.edges.filter(function (e) { return e.type === 'R'; }).length;
@@ -275,10 +254,6 @@
         subs: subs,
       });
     })();
-    function supernodeConstraint(u) {
-      var e = srcAt(u.groups[0]).filter(function (e) { return u.groups.indexOf(other(e, u.groups[0])) >= 0; })[0];
-      return e ? vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + si(e.value, 'V') : '';
-    }
 
     // Step 7 — constraints (dependent sources only)
     steps.push({
