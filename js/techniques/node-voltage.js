@@ -19,11 +19,6 @@
 
   var si = S.si;
   function vsub(letter) { return 'v<sub>' + letter + '</sub>'; }
-  function cols(known, missing) {
-    function ul(items) { return '<ul>' + (items.length ? items.map(function (t) { return '<li>' + t + '</li>'; }).join('') : '<li>—</li>') + '</ul>'; }
-    return '<div class="eq-cols"><div class="col-known"><h5>Known voltages</h5>' + ul(known) +
-      '</div><div class="col-missing"><h5>Still unknown</h5>' + ul(missing) + '</div></div>';
-  }
 
   window.NodeVoltage = function (circuit) {
     var ln = S.letterNodes(circuit);
@@ -130,6 +125,21 @@
       }).join(' + ') + ' = 0';
     }
 
+    // status table for the equation-assembly step: for each still-unknown node, how many
+    // of its resistor neighbours are themselves still unknown — a node is solvable the
+    // moment that count hits zero (its own voltage is the only unknown left in its KCL sum).
+    function neighborTable(remaining, solvedSet) {
+      var rows = remaining.map(function (g) {
+        var neighbours = resAt(g).map(function (e) { return other(e, g); });
+        var unknown = neighbours.filter(function (o) { return !solvedSet[o]; });
+        var ready = unknown.length === 0;
+        return '<tr' + (ready ? ' class="row-ready"' : '') + '><td>' + L(g) + '</td><td>' + neighbours.length +
+          '</td><td>' + (neighbours.length - unknown.length) + '</td><td>' + unknown.length + '</td><td>' +
+          (ready ? 'solve now' : 'waiting on ' + unknown.map(L).join(', ')) + '</td></tr>';
+      }).join('');
+      return '<table class="kcl-status"><thead><tr><th>Node</th><th>Neighbours</th><th>Known</th><th>Unknown</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+
     // ---------- assemble steps ----------
     var nR = circuit.edges.filter(function (e) { return e.type === 'R'; }).length;
     var nSrc = sources.length;
@@ -212,39 +222,45 @@
       hl: supers.length ? { edges: supers.map(function (e) { return e.id; }), nodes: supers.reduce(function (a, e) { return a.concat(nodeIdsOf(of[e.a])).concat(nodeIdsOf(of[e.b])); }, []) } : {},
     });
 
-    // Step 6 — assemble the equations, revealing them as they open up (two-panel engine)
+    // Step 6 — assemble the equations, revealing them as they open up. A status table
+    // (not just known/missing lists) shows, per remaining node, how many of its resistor
+    // neighbours are still unknown — 0 unknown neighbours is exactly the rule for "this
+    // node's equation is now single-unknown and can be solved".
     (function () {
-      var knownNow = order.filter(function (g) { return P.fixed[g]; }).map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); });
-      var missingNow = P.unknown.map(function (g) { return vsub(L(g)); });
+      var solvedNow = {}; order.forEach(function (g) { if (P.fixed[g]) solvedNow[g] = true; });
+      var remaining = P.unknown.slice();
       var subs = [];
       P.open.forEach(function (u) {
         var eqs = u.groups.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); });
         if (u.supernode) eqs.push('constraint:  ' + supernodeConstraint(u));
+        var table = neighborTable(remaining, solvedNow);
         u.groups.forEach(function (g) {
-          var q = missingNow.indexOf(vsub(L(g))); if (q >= 0) missingNow.splice(q, 1);
-          knownNow.push(vsub(L(g)) + ' = ' + si(V(g), 'V'));
+          solvedNow[g] = true;
+          remaining.splice(remaining.indexOf(g), 1);
         });
         subs.push({
           title: (u.supernode ? 'supernode ' : 'node ') + u.groups.map(L).join('+'),
-          body: (u.supernode ? 'This supernode’s combined KCL' : 'Every neighbour of node ' + L(u.groups[0]) + ' is now known, so its KCL equation') +
-            ' has a single unknown — it opens up and gives ' + u.groups.map(function (g) { return vsub(L(g)); }).join(', ') + '.' + cols(knownNow.slice(), missingNow.slice()),
+          body: (u.supernode ? 'This supernode’s combined KCL' : 'Node ' + L(u.groups[0]) + ' has 0 unknown neighbours, so its KCL equation') +
+            ' has a single unknown — it opens up and gives ' + u.groups.map(function (g) { return vsub(L(g)); }).join(', ') + '.' + table,
           eq: eqs,
           hl: { nodes: u.groups.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []), edges: u.groups.reduce(function (a, g) { return a.concat(resAt(g).map(function (e) { return e.id; })); }, []) },
         });
       });
       if (P.coupled.length) {
         var eqs2 = P.coupled.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); });
-        P.coupled.forEach(function (g) { var q = missingNow.indexOf(vsub(L(g))); if (q >= 0) missingNow.splice(q, 1); knownNow.push(vsub(L(g)) + ' = ' + si(V(g), 'V')); });
+        var table2 = neighborTable(remaining, solvedNow);
+        P.coupled.forEach(function (g) { solvedNow[g] = true; });
         subs.push({
           title: 'coupled: ' + P.coupled.map(L).join(', '),
-          body: 'These nodes each still reference an unknown neighbour, so no single equation opens on its own — solve them as one simultaneous system.' + cols(knownNow.slice(), missingNow.slice()),
+          body: 'None of these nodes ever reaches 0 unknown neighbours on its own — each still references another unknown in the group, so no single equation opens by itself. Solve them together as one simultaneous system.' + table2,
           eq: eqs2,
           hl: { nodes: P.coupled.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
         });
       }
       steps.push({
         n: 6, title: 'Node-voltage equations  (Σ currents leaving = 0)',
-        body: m ? 'Write one KCL equation per unknown node. Some can be solved at once; each solved node opens up the next. The panels track which voltages are known versus still unknown — step through as they fill in.' + cols(order.filter(function (g) { return P.fixed[g]; }).map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }), P.unknown.map(function (g) { return vsub(L(g)); }))
+        body: m ? 'Write one KCL equation per unknown node. A node is ready to solve once every one of its resistor neighbours is known — the table tracks that count as it changes. Step through as each node opens up.' +
+          neighborTable(P.unknown, (function () { var s = {}; order.forEach(function (g) { if (P.fixed[g]) s[g] = true; }); return s; })())
           : 'No unknown nodes: every node voltage is fixed by the sources, so there is nothing to write.',
         eq: P.unknown.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }),
         hl: { nodes: P.unknown.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },

@@ -82,17 +82,12 @@
 }
 .step-subnav button:hover:not(:disabled) { background: rgba(139, 92, 246, 0.10); }
 
-/* two-column "known vs still-unknown" block used by the equation-assembly step */
-.eq-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 4px; }
-.eq-cols h5 {
-  font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--ink-faint); margin: 0 0 4px;
-}
-.eq-cols .col-known h5 { color: var(--accent-deep); }
-.eq-cols ul { list-style: none; margin: 0; padding: 0; font-size: 13px; }
-.eq-cols li { padding: 2px 0; overflow-wrap: anywhere; }
-.eq-cols .col-missing li { color: var(--ink-faint); }
-@media (max-width: 420px) { .eq-cols { grid-template-columns: 1fr; } }
+/* per-node status table used by the equation-assembly step: how many resistor
+   neighbours of each remaining node are still unknown (0 ⇒ ready to solve) */
+.kcl-status { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
+.kcl-status th, .kcl-status td { padding: 4px 6px; text-align: left; border-bottom: 1px solid rgba(139, 92, 246, 0.14); }
+.kcl-status th { color: var(--ink-faint); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.03em; }
+.kcl-status tr.row-ready td { color: var(--accent-deep); font-weight: 600; }
 
 .step-nav {
   display: flex;
