@@ -8,7 +8,9 @@
 
    Two button rows (o.prev/o.next walk whole steps; o.subPrev/o.subNext walk the substeps
    of the current step). Entering a step lands on its overview (sub 0); the sub row is
-   disabled when a step has no substeps. Main Next always jumps the whole step. */
+   disabled when a step has no substeps. Main Next always jumps the whole step. The sub
+   row rolls over into the neighbouring step at either end, so a student can walk the
+   entire technique using only Prev/Next on the detail row. */
 (function () {
   'use strict';
 
@@ -50,17 +52,29 @@
       if (o.svg && window.Circuit) window.Circuit.highlight(o.svg, v.hl || {});
       if (o.prev) o.prev.disabled = i <= 0;
       if (o.next) o.next.disabled = i >= steps.length - 1;
-      if (o.subPrev) o.subPrev.disabled = sub <= 0;
-      if (o.subNext) o.subNext.disabled = sub >= n;
+      if (o.subPrev) o.subPrev.disabled = i <= 0 && sub <= 0;
+      if (o.subNext) o.subNext.disabled = i >= steps.length - 1 && sub >= n;
     }
 
     function go(k) { i = Math.max(0, Math.min(steps.length - 1, k)); sub = 0; render(); }
     function goSub(k) { sub = Math.max(0, Math.min(subsOf(steps[i]).length, k)); render(); }
 
+    // sub Prev/Next roll over into the neighbouring main step, so the detail
+    // buttons alone can walk the whole technique from start to finish.
+    function subNext() {
+      var n = subsOf(steps[i]).length;
+      if (sub < n) { goSub(sub + 1); return; }
+      if (i < steps.length - 1) { i++; sub = 0; render(); }
+    }
+    function subPrev() {
+      if (sub > 0) { goSub(sub - 1); return; }
+      if (i > 0) { i--; sub = subsOf(steps[i]).length; render(); }
+    }
+
     if (o.prev) o.prev.addEventListener('click', function () { go(i - 1); });
     if (o.next) o.next.addEventListener('click', function () { go(i + 1); });
-    if (o.subPrev) o.subPrev.addEventListener('click', function () { goSub(sub - 1); });
-    if (o.subNext) o.subNext.addEventListener('click', function () { goSub(sub + 1); });
+    if (o.subPrev) o.subPrev.addEventListener('click', subPrev);
+    if (o.subNext) o.subNext.addEventListener('click', subNext);
 
     return {
       load: function (s) { steps = s || []; i = 0; sub = 0; render(); },
