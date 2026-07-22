@@ -403,60 +403,79 @@
             hl: cHl,
           });
 
+          // Derive EVERY coupled node's own cleared equation first — same clear-the-fractions
+          // moves as an open node (solveOpenNode above), except a still-coupled neighbour stays
+          // a letter instead of being plugged in as a number. Each ends at the ratio-form line
+          // fmtExpr(expr[g]) already stored in expr — nothing here is recomputed, just narrated.
+          P.coupled.forEach(function (g) {
+            var vg = vsub(L(g));
+            var terms = resAt(g).map(function (e) {
+              var o = other(e, g);
+              return { R: e.value, o: o, known: !cset[o] };
+            });
+            var M = prod(terms.map(function (t) { return t.R; }));
+            terms.forEach(function (t) { t.ce = M / t.R; t.Vo = t.known ? round(V(t.o)) : null; });
+            var Csum = terms.reduce(function (a, t) { return a + t.ce; }, 0);
+            function otherTxt(t) { return t.known ? t.Vo : vsub(L(t.o)); }
+            var lineWrite = terms.map(function (t) { return '(' + vg + ' − ' + otherTxt(t) + ')/' + t.R; }).join(' + ') + ' = 0';
+            var lineClear = terms.map(function (t) { return t.ce + '·(' + vg + ' − ' + otherTxt(t) + ')'; }).join(' + ') + ' = 0';
+            var lineMult = terms.map(function (t) { return t.ce + '·' + vg; }).join(' + ') +
+              terms.map(function (t) {
+                if (t.known) { if (t.Vo === 0) return ''; return (t.Vo > 0 ? ' − ' : ' + ') + round(t.ce * Math.abs(t.Vo)); }
+                return ' − ' + t.ce + '·' + vsub(L(t.o));
+              }).join('') + ' = 0';
+            var Ksum = terms.reduce(function (a, t) { return a + (t.known ? t.ce * t.Vo : 0); }, 0);
+            var rhsUnknown = terms.filter(function (t) { return !t.known; }).map(function (t) { return ' + ' + t.ce + '·' + vsub(L(t.o)); }).join('');
+            var lineCollect = Csum + '·' + vg + ' = ' + round(Ksum) + rhsUnknown;
+
+            var chainG = [];
+            function stepG(title, body, line) { chainG.push(line); solveSubs.push({ title: 'node ' + L(g) + ' — ' + title, body: body, eq: chainG.slice(), hl: unitHl({ groups: [g] }) }); }
+            solveSubs.push({
+              title: 'node ' + L(g) + ' — still coupled',
+              body: 'Node <b>' + L(g) + '</b> has a neighbour that is also still unknown, so it can’t be found on its own yet — but its equation still clears the same way as any other node.',
+              hl: unitHl({ groups: [g] }),
+            });
+            stepG('write the equation', 'Node ' + L(g) + '’s equation from step 6, known neighbours filled in as numbers, coupled ones left as letters.', lineWrite);
+            stepG('clear the fractions', 'Multiply every term by all the resistances (' + terms.map(function (t) { return t.R; }).join(' × ') + '); each division cancels.', lineClear);
+            stepG('multiply out', 'Multiply each bracket out.', lineMult);
+            stepG('collect ' + vg, 'Collect the ' + vg + ' terms on the left and everything else on the right.', lineCollect);
+            stepG('divide', 'Divide both sides by ' + Csum + ' — ' + vg + ' is now written in volts plus a ratio of its still-unknown neighbour(s).', vg + ' = ' + fmtExpr(expr[g]));
+          });
+
+          // Now substitute those expressions into one another until one node falls out as a
+          // number. Each substitution is shown as: the line before, the line right after the
+          // swap (still possibly containing the target's own letter, if the swap looped back
+          // on it), then — when it does loop back — a collect-and-divide step, same algebra as
+          // any single-unknown node, just with a letter on the right instead of zero.
           var pool = P.coupled.slice(), stored = [];
           while (pool.length > 1) {
             var p = pool[0];
-            // full derivation for node p — same clear-the-fractions moves as an open node
-            // (solveOpenNode above), except a still-coupled neighbour stays a letter instead
-            // of being plugged in as a number. Ends at the same ratio-form line fmtExpr(expr[p])
-            // already used below, so nothing after this is recomputed — just shown working out.
-            (function () {
-              var vp = vsub(L(p));
-              var terms = resAt(p).map(function (e) {
-                var o = other(e, p);
-                return { R: e.value, o: o, known: !cset[o] };
-              });
-              var M = prod(terms.map(function (t) { return t.R; }));
-              terms.forEach(function (t) { t.ce = M / t.R; t.Vo = t.known ? round(V(t.o)) : null; });
-              var Csum = terms.reduce(function (a, t) { return a + t.ce; }, 0);
-              function otherTxt(t) { return t.known ? t.Vo : vsub(L(t.o)); }
-              var lineWrite = terms.map(function (t) { return '(' + vp + ' − ' + otherTxt(t) + ')/' + t.R; }).join(' + ') + ' = 0';
-              var lineClear = terms.map(function (t) { return t.ce + '·(' + vp + ' − ' + otherTxt(t) + ')'; }).join(' + ') + ' = 0';
-              var lineMult = terms.map(function (t) { return t.ce + '·' + vp; }).join(' + ') +
-                terms.map(function (t) {
-                  if (t.known) { if (t.Vo === 0) return ''; return (t.Vo > 0 ? ' − ' : ' + ') + round(t.ce * Math.abs(t.Vo)); }
-                  return ' − ' + t.ce + '·' + vsub(L(t.o));
-                }).join('') + ' = 0';
-              var Ksum = terms.reduce(function (a, t) { return a + (t.known ? t.ce * t.Vo : 0); }, 0);
-              var rhsUnknown = terms.filter(function (t) { return !t.known; }).map(function (t) { return ' + ' + t.ce + '·' + vsub(L(t.o)); }).join('');
-              var lineCollect = Csum + '·' + vp + ' = ' + round(Ksum) + rhsUnknown;
-
-              var chainP = [];
-              function stepP(title, body, line) { chainP.push(line); solveSubs.push({ title: 'node ' + L(p) + ' — ' + title, body: body, eq: chainP.slice(), hl: unitHl({ groups: [p] }) }); }
-              solveSubs.push({
-                title: 'node ' + L(p) + ' — still coupled',
-                body: 'Node <b>' + L(p) + '</b> has a neighbour that is also still unknown, so it can’t be found on its own yet — but its equation still clears the same way as any other node.',
-                hl: unitHl({ groups: [p] }),
-              });
-              stepP('write the equation', 'Node ' + L(p) + '’s equation from step 6, known neighbours filled in as numbers, coupled ones left as letters.', lineWrite);
-              stepP('clear the fractions', 'Multiply every term by all the resistances (' + terms.map(function (t) { return t.R; }).join(' × ') + '); each division cancels.', lineClear);
-              stepP('multiply out', 'Multiply each bracket out.', lineMult);
-              stepP('collect ' + vp, 'Collect the ' + vp + ' terms on the left and everything else on the right.', lineCollect);
-              stepP('divide', 'Divide both sides by ' + Csum + ' — ' + vp + ' is now written in volts plus a ratio of its still-unknown neighbour(s).', vsub(L(p)) + ' = ' + fmtExpr(expr[p]));
-            })();
             resolveSelf(expr[p], p); cleanT(expr[p]);
             pool.slice(1).forEach(function (q) {
               if (!(p in expr[q].t)) return;
+              var beforeLine = fmtExpr(expr[q]);
               var coef = expr[q].t[p]; delete expr[q].t[p];
               expr[q].c += coef * expr[p].c;
               Object.keys(expr[p].t).forEach(function (n) { expr[q].t[n] = (expr[q].t[n] || 0) + coef * expr[p].t[n]; });
-              resolveSelf(expr[q], q); cleanT(expr[q]);
+              var selfTerm = q in expr[q].t;
+              var afterLine = fmtExpr(expr[q]);
               solveSubs.push({
-                title: 'put ' + vsub(L(p)) + ' into ' + vsub(L(q)),
-                body: 'Node <b>' + L(q) + '</b>’s expression used ' + vsub(L(p)) + '. Substitute what we just wrote for ' + vsub(L(p)) + (q in expr[q].t ? ' — ' + vsub(L(q)) + ' turns up on both sides, so collect it and divide' : '') + '. One fewer unknown on the right.',
-                eq: [vsub(L(q)) + ' = ' + fmtExpr(expr[q])],
+                title: 'substitute ' + vsub(L(p)) + ' into ' + vsub(L(q)),
+                body: 'Node <b>' + L(q) + '</b>’s equation used ' + vsub(L(p)) + '. Replace it with ' + vsub(L(p)) + ' = ' + fmtExpr(expr[p]) + ' and multiply out.',
+                eq: [vsub(L(q)) + ' = ' + beforeLine, vsub(L(q)) + ' = ' + afterLine],
                 hl: unitHl({ groups: [q] }),
               });
+              if (selfTerm) {
+                resolveSelf(expr[q], q); cleanT(expr[q]);
+                solveSubs.push({
+                  title: vsub(L(q)) + ' — collect and divide',
+                  body: vsub(L(q)) + ' turned up on both sides after that substitution — collect it on the left, then divide, exactly like clearing any single-unknown equation.',
+                  eq: [vsub(L(q)) + ' = ' + afterLine, vsub(L(q)) + ' = ' + fmtExpr(expr[q])],
+                  hl: unitHl({ groups: [q] }),
+                });
+              } else {
+                cleanT(expr[q]);
+              }
             });
             stored.push(p); pool.shift();
             solveSubs.push({
