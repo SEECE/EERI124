@@ -90,6 +90,16 @@
 .kcl-status th { color: var(--ink-faint); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.03em; }
 .kcl-status tr.row-ready td { color: var(--accent-deep); font-weight: 600; }
 
+/* MNA matrix (step 8): A·x = b laid out as a grid, one row per equation. Scrolls
+   sideways inside .kcl-status-wrap when a big circuit makes it wide. */
+.mna { border-collapse: collapse; font-size: 12.5px; font-family: 'Cascadia Code', ui-monospace, Consolas, monospace; margin-top: 8px; }
+.mna th, .mna td { padding: 3px 7px; text-align: center; white-space: nowrap; }
+.mna thead th { color: var(--ink-faint); font-weight: 600; border-bottom: 1px solid rgba(139, 92, 246, 0.25); }
+.mna tbody th { color: var(--ink-soft); text-align: right; font-weight: 600; padding-right: 10px; }
+.mna td { color: var(--ink); }
+.mna tr.mna-active td, .mna tr.mna-active th { background: rgba(139, 92, 246, 0.12); color: var(--accent-deep); }
+.mna .mna-eq { color: var(--ink-faint); padding: 3px 10px; }
+
 .step-nav {
   display: flex;
   gap: 10px;
