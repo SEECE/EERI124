@@ -305,7 +305,9 @@
       var solvedNow = {}; order.forEach(function (g) { if (P.fixed[g]) solvedNow[g] = true; });
       var remaining = P.unknown.slice();
 
-      // ---- one single-unknown node, cleared-fractions walk (all neighbours known) ----
+      // ---- one single-unknown node, cleared-fractions walk (all neighbours known). Each substep
+      // STACKS its new line under the previous ones, so the equation is seen evolving from the
+      // original fraction form down into the easy form — not one line replacing the last. ----
       function solveOpenNode(g, hl, tableBefore) {
         var vg = vsub(L(g));
         var terms = resAt(g).map(function (e) { return { R: e.value, Vo: round(V(other(e, g))) }; });
@@ -315,48 +317,29 @@
         var Ksum = terms.reduce(function (a, t) { return a + t.ce * t.Vo; }, 0);
         var Rlist = terms.map(function (t) { return t.R; }).join(' × ');
 
+        // the derivation lines, in order
+        var lineWrite = terms.map(function (t) { return '(' + vg + ' − ' + t.Vo + ')/' + t.R; }).join(' + ') + ' = 0';
+        var lineClear = terms.map(function (t) { return t.ce + '·(' + vg + ' − ' + t.Vo + ')'; }).join(' + ') + ' = 0';
+        var lineMult = terms.map(function (t) { return t.ce + '·' + vg; }).join(' + ') +
+          terms.map(function (t) { if (t.Vo === 0) return ''; var k = round(t.ce * Math.abs(t.Vo)); return (t.Vo > 0 ? ' − ' : ' + ') + k; }).join('') + ' = 0';
+        var lineCollect = Csum + '·' + vg + ' = ' + round(Ksum);
+        var lineDivide = vg + ' = ' + round(Ksum) + ' / ' + Csum;
+        var lineAnswer = vg + ' = ' + si(V(g), 'V');
+
+        var chain = [];                                                  // accumulates as we go
+        function step(title, body, newLine) { chain.push(newLine); solveSubs.push({ title: 'node ' + L(g) + ' — ' + title, body: body, eq: chain.slice(), hl: hl }); }
+
         solveSubs.push({
           title: 'node ' + L(g) + ' — ready',
-          body: 'Node <b>' + L(g) + '</b>’s neighbours are all known now, so ' + vg + ' is the only unknown in its equation — it solves in one shot. It stays highlighted until we have its voltage.' + tableBefore,
+          body: 'Node <b>' + L(g) + '</b>’s neighbours are all known now, so ' + vg + ' is the only unknown in its equation — it solves in one shot. It stays highlighted, and each move stacks under the last so you can watch the equation simplify.' + tableBefore,
           hl: hl,
         });
-        solveSubs.push({
-          title: 'node ' + L(g) + ' — write the equation',
-          body: 'Node ' + L(g) + '’s equation from step 6, with each known neighbour voltage filled in.',
-          eq: [terms.map(function (t) { return '(' + vg + ' − ' + t.Vo + ')/' + t.R; }).join(' + ') + ' = 0'],
-          hl: hl,
-        });
-        solveSubs.push({
-          title: 'node ' + L(g) + ' — clear the fractions',
-          body: 'The divisions make this awkward. Multiply every term by all the resistances (' + Rlist + '); each division cancels, leaving whole-number coefficients — pure Ohm’s-law algebra, no fractions.',
-          eq: [terms.map(function (t) { return t.ce + '·(' + vg + ' − ' + t.Vo + ')'; }).join(' + ') + ' = 0'],
-          hl: hl,
-        });
-        solveSubs.push({
-          title: 'node ' + L(g) + ' — multiply out',
-          body: 'Multiply each bracket out.',
-          eq: [terms.map(function (t) { return t.ce + '·' + vg; }).join(' + ') +
-            terms.map(function (t) { if (t.Vo === 0) return ''; var k = round(t.ce * Math.abs(t.Vo)); return (t.Vo > 0 ? ' − ' : ' + ') + k; }).join('') + ' = 0'],
-          hl: hl,
-        });
-        solveSubs.push({
-          title: 'node ' + L(g) + ' — collect ' + vg,
-          body: 'Add the ' + vg + ' terms together, and move the plain number to the right-hand side.',
-          eq: [Csum + '·' + vg + ' = ' + round(Ksum)],
-          hl: hl,
-        });
-        solveSubs.push({
-          title: 'node ' + L(g) + ' — divide',
-          body: 'Divide both sides by the number in front of ' + vg + '.',
-          eq: [vg + ' = ' + round(Ksum) + ' / ' + Csum],
-          hl: hl,
-        });
-        solveSubs.push({
-          title: 'node ' + L(g) + ' — answer',
-          body: 'That is node ' + L(g) + '’s voltage — now a known value. Watch its neighbours’ unknown counts drop in the next table.',
-          eq: [vg + ' = ' + si(V(g), 'V')],
-          hl: hl,
-        });
+        step('write the equation', 'Node ' + L(g) + '’s equation from step 6, with each known neighbour voltage filled in.', lineWrite);
+        step('clear the fractions', 'The divisions make this awkward. Multiply every term by all the resistances (' + Rlist + '); each division cancels, leaving whole-number coefficients — pure Ohm’s-law algebra, no fractions.', lineClear);
+        step('multiply out', 'Multiply each bracket out.', lineMult);
+        step('collect ' + vg, 'Add the ' + vg + ' terms together, and move the plain number to the right-hand side.', lineCollect);
+        step('divide', 'Divide both sides by the number in front of ' + vg + '.', lineDivide);
+        step('answer', 'That is node ' + L(g) + '’s voltage — now a known value. Watch its neighbours’ unknown counts drop in the next table.', lineAnswer);
       }
 
       P.open.forEach(function (u) {
