@@ -79,27 +79,30 @@ split into known/unknown — 0 unknown is exactly "solve now"), groups genuinely
 as **supernode units**, and flags a mutually-coupled core that never reduces to single-unknown
 equations as one simultaneous block. This drives two separate steps:
 
-- **Step 6 sets up the equations only** — symbolic KCL forms (source-fixed neighbours as numbers,
-  still-unknown neighbours as letters) plus the readiness table. **No arithmetic, no answers** —
-  showing the solved values here confused first-time students.
-- **Step 8 hand-works the solve**, replaying the reveal order:
-  - **Single-unknown nodes** (`P.open`): a run of substeps with **one algebraic move each** —
-    *write the KCL sum → split each fraction → move knowns to the right → factor out v → total the
-    left → total the right → divide → answer* — so a first-timer never faces a wall of equations in
-    one view. The node stays highlighted across its whole run; the neighbour table is re-shown
-    before each node so unknown counts visibly fall as earlier nodes close.
-  - **A coupled core** (`P.coupled`, e.g. a symmetric grid) is solved for real. If it is
-    **purely resistor-coupled**, step 8 walks **substitution elimination**: express one node from
-    its own equation, substitute into each other equation (one equation per view), shrink a
-    "system unknowns" table each round, solve the last single unknown, then back-substitute up.
-    The elimination arithmetic is built in the technique (node-admittance rows, coef in S / rhs in
-    A) and is verified to reproduce `nodeVoltages` — displayed answers still come from it.
-  - If a **floating voltage source sits inside the coupled block** (a supernode — the source-branch
-    current a resistor-only substitution can't see), step 8 does **not** fake the walk: it lays out
-    the KCL equations plus the source constraint, hands off to a matrix/calculator solve, and
-    reveals each answer on its own view.
+The whole solve is **Ohm's law only — grade-12 algebra, no conductance / no siemens** (students
+at this stage know only V = IR). Everything is worked by *clearing fractions*, never by summing
+1/R conductances.
 
-  Enough nodes → 40+ substeps, deliberately.
+- **Step 6 builds the equations** — **one substep per unknown node**: names the node's resistor
+  neighbours and writes its "currents leaving = 0" equation (source-fixed neighbour as its number,
+  still-unknown neighbour as a letter). A floating source between two unknown nodes adds one extra
+  *constraint* substep. No arithmetic here — seeing every equation at once is intimidating, so each
+  node gets its own build view.
+- **Step 8 solves**, ordered so a node whose neighbours are **all known** goes first (it solves in
+  one shot, then feeds the next — never start at a 4-unknown node):
+  - **One-shot node** (`P.open`): *write the equation (knowns filled in) → clear the fractions
+    (multiply through by the resistances) → multiply out → collect v → divide → answer*, one move
+    per view. The node stays highlighted; the neighbour table is re-shown before each so counts
+    visibly fall. Coefficients after clearing are whole numbers (each is the product of the *other*
+    resistances) — no siemens.
+  - **Coupled core** (`P.coupled`, ≤4 unknowns, e.g. a grid or bridge): from each node's cleared
+    equation write `v = volts + ratio·v_neighbour` (a voltage-divider-style ratio, dimensionless),
+    then **substitute those expressions into one another** — self-terms collect and divide out —
+    until one node falls out as a number, then back-substitute. Ratios/volts only, no siemens. The
+    arithmetic is verified to reproduce `nodeVoltages`.
+  - **Floating source inside the coupled block** (a supernode — its source-branch current a
+    resistor-only substitution can't see): don't fake it. Lay out the KCL equations plus the source
+    constraint, hand off to a matrix/calculator solve, reveal each answer on its own view.
 
 This ordering is pedagogy — the displayed values always come from `nodeVoltages`.
 
