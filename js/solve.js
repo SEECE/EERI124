@@ -147,7 +147,10 @@
     var iSrc = {};
     sources.forEach(function (s, k) { iSrc[s.id] = x[nV + k]; });
 
-    return { of: en.of, v: v, ref: ref, known: en.of[sources[0].b], source: sources[0], sources: sources, iSrc: iSrc };
+    // A, rhs, free, vidx, x are the assembled MNA system, exposed so a technique can *show*
+    // the matrix build + linear-algebra solve without re-stamping it (see SOLVER.md, step 8).
+    return { of: en.of, v: v, ref: ref, known: en.of[sources[0].b], source: sources[0], sources: sources, iSrc: iSrc,
+      A: A, rhs: rhs, free: free, vidx: vidx, nV: nV, x: x };
   }
 
   /* ---------- branch currents + power ----------
