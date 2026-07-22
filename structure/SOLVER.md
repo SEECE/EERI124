@@ -25,8 +25,8 @@ built. Do not populate §4 until then.
 
 | Layer | Files | Owns |
 |---|---|---|
-| **Engine** | `js/solve.js` | `si` (SI/engineering value formatting), `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (**MNA**, any number of sources — now also **returns the assembled system** `A`/`rhs`/`free`/`vidx`/`nV`/`x` so a technique can show the matrix without re-stamping it), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
-| **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — sets up equations in step 6, then in step 8 **builds the MNA matrix `A·x = b` and solves it by linear algebra**), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
+| **Engine** | `js/solve.js` | `si` (SI/engineering value formatting), `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (**MNA**, any number of sources), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
+| **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — sets up equations in step 6, hand-works the solve in step 8), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
 | **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view, highlights the circuit via `Circuit.highlight`. |
 | **Page** | `topics/simple-resistive-circuits/index.html` | loads the above, maps the dropdown to a builder, renders the circuit + drives the stepper. |
 
@@ -79,30 +79,32 @@ split into known/unknown — 0 unknown is exactly "solve now"), groups genuinely
 as **supernode units**, and flags a mutually-coupled core that never reduces to single-unknown
 equations as one simultaneous block. This drives two separate steps:
 
-**Step 6 stays Ohm's-law algebra** (V = IR, clearing fractions); **step 8 is the matrix**. Step 6
-sets up *what the equations are*; step 8 is *how you actually solve a real one* — and by-hand
-substitution does not scale past ~3 unknowns, so it builds the linear-algebra system instead. Step 8
-uses conductances (G = 1/R, siemens) because that is what the matrix is; that deliberately overrides
-the old "no siemens in step 8" rule.
+The whole solve is **Ohm's law only — grade-12 algebra, no conductance / no siemens** (students
+at this stage know only V = IR). Everything is worked by *clearing fractions*, never by summing
+1/R conductances.
 
 - **Step 6 builds the equations** — **one substep per unknown node**: names the node's resistor
   neighbours and writes its "currents leaving = 0" equation (source-fixed neighbour as its number,
   still-unknown neighbour as a letter). A floating source between two unknown nodes adds one extra
   *constraint* substep. No arithmetic here — seeing every equation at once is intimidating, so each
   node gets its own build view.
-- **Step 8 builds and solves the MNA matrix `A·x = b`.** This is the systematic method that scales
-  to ten nodes where hand-substitution collapses. It **reuses the matrix `nodeVoltages` already
-  assembled** (`sol.A`/`sol.rhs`/`sol.free`/`sol.vidx`/`sol.nV`) — the technique only *narrates* how
-  each entry lands, it never re-stamps. Substeps: **the unknown vector x** (every non-reference node
-  voltage + one branch current per source — the current is the "modified" in MNA); **one KCL row per
-  node** (diagonal = Σ conductances, off-diagonal = −G, ±1 in a touching source's current column,
-  RHS 0), each shown with the row highlighted in a live matrix grid (`.mna` table, rendered into the
-  substep body); **one constraint row per source** (`v_b − v_a = Vs` → ±1 and Vs on the RHS);
-  **assembled A·x = b**; **solve** by Gaussian elimination / `numpy.linalg.solve` — the whole vector
-  at once, no substitution chains; then a **node-voltage recap**. Cell units are honest: conductances
-  (siemens) live only in a KCL row's voltage column, everything else is ±1 incidence. There is no
-  more one-shot/coupled/supernode special-casing in step 8 — the matrix is uniform, which is the
-  entire point. `nodeVoltages` still gives the authoritative answers; step 8 only shows the machine.
+- **Step 8 solves**, ordered so a node whose neighbours are **all known** goes first (it solves in
+  one shot, then feeds the next — never start at a 4-unknown node):
+  - **One-shot node** (`P.open`): *write the equation (knowns filled in) → clear the fractions
+    (multiply through by the resistances) → multiply out → collect v → divide → answer*, one move
+    per view. The node stays highlighted; the neighbour table is re-shown before each so counts
+    visibly fall. Coefficients after clearing are whole numbers (each is the product of the *other*
+    resistances) — no siemens.
+  - **Coupled core** (`P.coupled`, ≤4 unknowns, e.g. a grid or bridge): from each node's cleared
+    equation write `v = volts + ratio·v_neighbour` (a voltage-divider-style ratio, dimensionless),
+    then **substitute those expressions into one another** — self-terms collect and divide out —
+    until one node falls out as a number, then back-substitute. Ratios/volts only, no siemens. The
+    arithmetic is verified to reproduce `nodeVoltages`.
+  - **Floating source inside the coupled block** (a supernode — its source-branch current a
+    resistor-only substitution can't see): don't fake it. Lay out the KCL equations plus the source
+    constraint, hand off to a matrix/calculator solve, reveal each answer on its own view.
+
+This ordering is pedagogy — the displayed values always come from `nodeVoltages`.
 
 ## KVL — mesh-current
 
