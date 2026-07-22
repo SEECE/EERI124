@@ -72,13 +72,22 @@ voltage source**, so any number of sources (and supernodes) solve with no specia
 = the **first** source's − terminal (0 V). `branches` reads each source current from the MNA
 solution; `powerCheck` finishes.
 
-The `node-voltage` technique owns the **equation-assembly engine** behind step 6: it propagates
-source-fixed voltages out from the reference, then reveals each unknown node's KCL equation only
-once it becomes a **single-unknown** equation (a per-node status table tracks each node's resistor
-neighbours split into known/unknown — 0 unknown is exactly "solve now"); genuinely floating sources
-are grouped as **supernode units**, and a mutually-coupled core that never reduces to
-single-unknown equations is shown as one simultaneous block. This ordering is pedagogy — the
-displayed values always come from `nodeVoltages`.
+The `node-voltage` technique owns the **equation-assembly engine** (`plan()`): it propagates
+source-fixed voltages out from the reference, works out the order unknown nodes become
+**single-unknown** equations (a per-node status table tracks each node's resistor neighbours
+split into known/unknown — 0 unknown is exactly "solve now"), groups genuinely floating sources
+as **supernode units**, and flags a mutually-coupled core that never reduces to single-unknown
+equations as one simultaneous block. This drives two separate steps:
+
+- **Step 6 sets up the equations only** — symbolic KCL forms (source-fixed neighbours as numbers,
+  still-unknown neighbours as letters) plus the readiness table. **No arithmetic, no answers** —
+  showing the solved values here confused first-time students.
+- **Step 8 hand-works the solve**, replaying the reveal order: for each single-unknown node it
+  emits *ready → substitute → collect terms → solve* substeps (like step 9's per-element split),
+  re-showing the neighbour table before each solve so the unknown counts visibly fall as earlier
+  nodes close, node by node until the table empties.
+
+This ordering is pedagogy — the displayed values always come from `nodeVoltages`.
 
 ## KVL — mesh-current
 

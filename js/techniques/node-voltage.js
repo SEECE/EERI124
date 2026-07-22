@@ -8,9 +8,12 @@
    non-reference nodes, "Nothing to do" otherwise. Step 7 (constraints) fires only for
    dependent sources — none here.
 
-   The equation-assembly engine (step 6) propagates from the reference: source-connected
+   The equation-assembly engine (plan()) propagates from the reference: source-connected
    nodes are fixed first, then KCL equations "open up" one at a time as each becomes a
    single-unknown equation; a mutually-coupled core is shown as one simultaneous block.
+   Step 6 only SETS UP those equations (symbolic forms + a readiness table, no numbers);
+   step 8 then hand-works the arithmetic one node at a time (substitute → collect → solve),
+   re-showing the table before each solve so students watch the unknown counts fall.
 
    Side effect: labels one representative node per electrical node (a, b, c …) so
    Circuit.render draws the letters the steps refer to. */
@@ -222,105 +225,48 @@
       hl: supers.length ? { edges: supers.map(function (e) { return e.id; }), nodes: supers.reduce(function (a, e) { return a.concat(nodeIdsOf(of[e.a])).concat(nodeIdsOf(of[e.b])); }, []) } : {},
     });
 
-    // Step 6 — assemble the equations, revealing them as they open up. A status table
-    // (not just known/missing lists) shows, per remaining node, how many of its resistor
-    // neighbours are still unknown — 0 unknown neighbours is exactly the rule for "this
-    // node's equation is now single-unknown and can be solved". Every node then gets its
-    // own hand-worked run: write the KCL sum, collect terms into conductance form, divide
-    // out the answer — one arithmetic line at a time, not a jump straight to the result.
+    // Step 6 — SET UP the equations only (the forms). One KCL equation per unknown node,
+    // shown symbolically: a source-fixed neighbour appears as its number, a still-unknown
+    // neighbour stays as its letter. The overview table shows which equations are already
+    // single-unknown (ready to solve) and which stay coupled — but NO numbers are crunched
+    // and NO answers are revealed here. All the arithmetic (substitute → collect → divide,
+    // one node at a time, watching the table change) lives in step 8, so a first-time
+    // student sees "what the equations are" cleanly before "how to solve them".
     function unitHl(u) { return { nodes: u.groups.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []), edges: u.groups.reduce(function (a, g) { return a.concat(resAt(g).map(function (e) { return e.id; })); }, []) }; }
     (function () {
-      var solvedNow = {}; order.forEach(function (g) { if (P.fixed[g]) solvedNow[g] = true; });
-      var remaining = P.unknown.slice();
       var subs = [];
-
       P.open.forEach(function (u) {
-        var table = neighborTable(remaining, solvedNow);
         var hl = unitHl(u);
-
         if (!u.supernode) {
-          var g = u.groups[0];
-          var terms = resAt(g).map(function (e) { return { R: e.value, Vo: V(other(e, g)) }; });
-          var Gsum = terms.reduce(function (a, t) { return a + 1 / t.R; }, 0);
-          var Isum = terms.reduce(function (a, t) { return a + t.Vo / t.R; }, 0);
-
+          var g = u.groups[0], rs = resAt(g);
           subs.push({
-            title: 'node ' + L(g) + ' — ready',
-            body: 'Node ' + L(g) + ' has 0 unknown neighbours, so its KCL equation is now single-unknown.' + table,
-            hl: hl,
-          });
-          subs.push({
-            title: 'node ' + L(g) + ' — write KCL',
-            body: 'Sum the currents leaving node ' + L(g) + ' through its ' + terms.length + ' resistor' + (terms.length === 1 ? '' : 's') +
-              '; by Ohm’s law each term is (v − v<sub>neighbour</sub>)/R, and every neighbour voltage is already known.',
-            eq: [terms.map(function (t) { return '(' + vsub(L(g)) + ' − ' + si(t.Vo, 'V') + ')/' + t.R; }).join(' + ') + ' = 0'],
-            hl: hl,
-          });
-          subs.push({
-            title: 'node ' + L(g) + ' — collect terms',
-            body: 'Expand each fraction and gather every ' + vsub(L(g)) + ' term on the left; the neighbour terms become a single current sum on the right.',
-            eq: [
-              vsub(L(g)) + '·(' + terms.map(function (t) { return '1/' + t.R; }).join(' + ') + ') = ' + terms.map(function (t) { return si(t.Vo, 'V') + '/' + t.R; }).join(' + '),
-              si(Gsum, 'S') + '·' + vsub(L(g)) + ' = ' + si(Isum, 'A'),
-            ],
-            hl: hl,
-          });
-          subs.push({
-            title: 'node ' + L(g) + ' — solve',
-            body: 'Divide by the summed conductance to isolate ' + vsub(L(g)) + '.',
-            eq: [vsub(L(g)) + ' = ' + si(Isum, 'A') + ' / ' + si(Gsum, 'S'), vsub(L(g)) + ' = ' + si(V(g), 'V')],
+            title: 'node ' + L(g),
+            body: 'At node <b>' + L(g) + '</b>, assume every current leaves the node and add up the ' + rs.length + ' resistor branch' + (rs.length === 1 ? '' : 'es') +
+              '. By Ohm’s law each is (v − v<sub>neighbour</sub>)/R; a neighbour already fixed by a source shows as its number, one still unknown stays as its letter. Set the sum to zero.',
+            eq: ['Node ' + L(g) + ':  ' + kclEq(g)],
             hl: hl,
           });
         } else {
-          var eqs = u.groups.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }).concat(['constraint:  ' + supernodeConstraint(u)]);
           subs.push({
-            title: 'supernode ' + u.groups.map(L).join('+') + ' — ready',
-            body: 'Every node outside this supernode is known, so its enclosure KCL plus the source constraint is now solvable.' + table,
-            hl: hl,
-          });
-          subs.push({
-            title: 'supernode ' + u.groups.map(L).join('+') + ' — write KCL + constraint',
-            body: 'Enclose both nodes: the source between them carries current internally and cancels out of the enclosure’s KCL sum, so write one combined equation for the pair plus the source’s own voltage constraint.',
-            eq: eqs,
-            hl: hl,
-          });
-          subs.push({
-            title: 'supernode ' + u.groups.map(L).join('+') + ' — solve',
-            body: 'Substitute the constraint into the combined KCL (one unknown left), solve it, then recover the second node from the constraint.',
-            eq: u.groups.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
+            title: 'supernode ' + u.groups.map(L).join('+'),
+            body: 'Enclose both nodes: the source between them carries current internally and cancels out of the enclosure’s KCL sum. Write one combined KCL for the pair, then add the source’s own voltage as a constraint.',
+            eq: u.groups.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }).concat(['constraint:  ' + supernodeConstraint(u)]),
             hl: hl,
           });
         }
-
-        u.groups.forEach(function (g) { solvedNow[g] = true; remaining.splice(remaining.indexOf(g), 1); });
       });
-
       if (P.coupled.length) {
-        var table2 = neighborTable(remaining, solvedNow);
-        var cHl = { nodes: P.coupled.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) };
         subs.push({
-          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — ready',
-          body: 'None of these nodes ever reaches 0 unknown neighbours on its own — each still references another unknown in the group.' + table2,
-          hl: cHl,
-        });
-        subs.push({
-          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — write KCL',
-          body: 'Write one KCL equation per node in the group; together they form a small simultaneous system (no single one opens by itself).',
+          title: 'coupled ' + P.coupled.map(L).join(', '),
+          body: 'None of these nodes reaches 0 unknown neighbours on its own — each KCL sum still references another unknown in the group. Write one equation per node; together they form a simultaneous system, solved in step 8.',
           eq: P.coupled.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }),
-          hl: cHl,
+          hl: { nodes: P.coupled.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
         });
-        subs.push({
-          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — solve',
-          body: 'Solve the system simultaneously (elimination or substitution) — see Step 8 for the numeric substitution.',
-          eq: P.coupled.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
-          hl: cHl,
-        });
-        P.coupled.forEach(function (g) { solvedNow[g] = true; });
       }
 
       steps.push({
         n: 6, title: 'Node-voltage equations  (Σ currents leaving = 0)',
-        body: m ? 'Write one KCL equation per unknown node. A node is ready to solve once every one of its resistor neighbours is known — the table tracks that count as it changes. Step through each node’s equation, term collection and solve in turn.' +
+        body: m ? 'Write one KCL equation per unknown node — assume all currents leave, set the sum to zero. The table shows which equations already have a single unknown (ready to solve first) and which stay coupled. This step only <b>sets up</b> the equations; the arithmetic is worked out one node at a time in step 8.' +
           neighborTable(P.unknown, (function () { var s = {}; order.forEach(function (g) { if (P.fixed[g]) s[g] = true; }); return s; })())
           : 'No unknown nodes: every node voltage is fixed by the sources, so there is nothing to write.',
         eq: P.unknown.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }),
@@ -340,21 +286,107 @@
       hl: {},
     });
 
-    // Step 8 — solve, one substep per unit with the numbers plugged in
-    var solveSubs = P.open.concat(P.coupled.length ? [{ groups: P.coupled, supernode: false, coupledBlock: true }] : []).map(function (u) {
-      var body = u.coupledBlock
-        ? 'Solve the coupled equations simultaneously, giving ' + u.groups.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }).join(', ') + '.'
-        : 'Substitute the known neighbour voltages into node ' + L(u.groups[0]) + '’s equation and solve for ' + u.groups.map(function (g) { return vsub(L(g)); }).join(', ') + '.';
-      return {
-        title: (u.supernode ? 'supernode ' : u.coupledBlock ? 'block ' : 'node ') + u.groups.map(L).join('+'),
-        body: body,
-        eq: u.groups.map(function (g) { return kclNumeric(g); }).concat(u.groups.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); })),
-        hl: { nodes: u.groups.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
-      };
-    });
+    // Step 8 — SOLVE the equations set up in step 6, hand-worked one node at a time. This is
+    // the math tutorial: replay the reveal order from plan(), and for each single-unknown node
+    // emit four substeps (ready → substitute → collect → solve), re-showing the neighbour table
+    // BEFORE each solve so a student watches the unknown counts fall as earlier nodes close.
+    // No new solver engine — plan() gives the order, nodeVoltages() gives the authoritative
+    // answers; this only narrates the arithmetic that produces them.
+    var solveSubs = [];
+    if (m) (function () {
+      var solvedNow = {}; order.forEach(function (g) { if (P.fixed[g]) solvedNow[g] = true; });
+      var remaining = P.unknown.slice();
+
+      P.open.forEach(function (u) {
+        var hl = unitHl(u), tableBefore = neighborTable(remaining, solvedNow);
+        if (!u.supernode) {
+          var g = u.groups[0];
+          var terms = resAt(g).map(function (e) { return { R: e.value, Vo: V(other(e, g)) }; });
+          var Gsum = terms.reduce(function (a, t) { return a + 1 / t.R; }, 0);
+          var Isum = terms.reduce(function (a, t) { return a + t.Vo / t.R; }, 0);
+          solveSubs.push({
+            title: 'node ' + L(g) + ' — ready',
+            body: 'Look at the table: node <b>' + L(g) + '</b> has 0 unknown neighbours, so ' + vsub(L(g)) +
+              ' is the only unknown left in its KCL sum. Solve it next.' + tableBefore,
+            hl: hl,
+          });
+          solveSubs.push({
+            title: 'node ' + L(g) + ' — substitute',
+            body: 'Take node ' + L(g) + '’s equation from step 6 and drop in each known neighbour voltage.',
+            eq: [terms.map(function (t) { return '(' + vsub(L(g)) + ' − ' + si(t.Vo, 'V') + ')/' + t.R; }).join(' + ') + ' = 0'],
+            hl: hl,
+          });
+          solveSubs.push({
+            title: 'node ' + L(g) + ' — collect terms',
+            body: 'Split each fraction, gather every ' + vsub(L(g)) + ' term on the left and move the neighbour currents to the right; the ' + vsub(L(g)) + ' coefficients add into one conductance.',
+            eq: [
+              vsub(L(g)) + '·(' + terms.map(function (t) { return '1/' + t.R; }).join(' + ') + ') = ' + terms.map(function (t) { return si(t.Vo, 'V') + '/' + t.R; }).join(' + '),
+              si(Gsum, 'S') + '·' + vsub(L(g)) + ' = ' + si(Isum, 'A'),
+            ],
+            hl: hl,
+          });
+          solveSubs.push({
+            title: 'node ' + L(g) + ' — solve',
+            body: 'Divide both sides by the total conductance to isolate ' + vsub(L(g)) + '. Node ' + L(g) +
+              ' is now known — its neighbours’ unknown counts drop in the next table.',
+            eq: [vsub(L(g)) + ' = ' + si(Isum, 'A') + ' / ' + si(Gsum, 'S'), vsub(L(g)) + ' = ' + si(V(g), 'V')],
+            hl: hl,
+          });
+        } else {
+          solveSubs.push({
+            title: 'supernode ' + u.groups.map(L).join('+') + ' — ready',
+            body: 'Every node outside this supernode is known, so its enclosure KCL plus the source constraint leaves just the two enclosed unknowns.' + tableBefore,
+            hl: hl,
+          });
+          solveSubs.push({
+            title: 'supernode ' + u.groups.map(L).join('+') + ' — substitute',
+            body: 'Write the enclosure KCL with the known neighbour voltages in, alongside the source’s voltage constraint.',
+            eq: u.groups.map(function (g) { return kclNumeric(g); }).concat(['constraint:  ' + supernodeConstraint(u)]),
+            hl: hl,
+          });
+          solveSubs.push({
+            title: 'supernode ' + u.groups.map(L).join('+') + ' — solve',
+            body: 'Use the constraint to replace one voltage, solve the single remaining unknown, then back-substitute for the other.',
+            eq: u.groups.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
+            hl: hl,
+          });
+        }
+        u.groups.forEach(function (g) { solvedNow[g] = true; remaining.splice(remaining.indexOf(g), 1); });
+      });
+
+      if (P.coupled.length) {
+        var cHl = { nodes: P.coupled.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) };
+        solveSubs.push({
+          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — ready',
+          body: 'These nodes never reach 0 unknown neighbours — each equation still holds another unknown, so they solve together as a system.' + neighborTable(remaining, solvedNow),
+          hl: cHl,
+        });
+        solveSubs.push({
+          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — substitute',
+          body: 'Write each node’s KCL with the known outside voltages in; the inside unknowns stay as letters.',
+          eq: P.coupled.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }),
+          hl: cHl,
+        });
+        solveSubs.push({
+          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — solve',
+          body: 'Solve the simultaneous set by elimination or substitution.',
+          eq: P.coupled.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
+          hl: cHl,
+        });
+        P.coupled.forEach(function (g) { solvedNow[g] = true; });
+      }
+
+      solveSubs.push({
+        title: 'all nodes solved',
+        body: 'Every unknown node voltage is now filled in — no rows left in the table. Full set:',
+        eq: P.unknown.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
+        hl: { nodes: circuit.nodes.map(function (n) { return n.id; }) },
+      });
+    })();
     steps.push({
       n: 8, title: 'Solve the equations',
-      body: m ? 'Solve the ' + m + ' equation' + (m === 1 ? '' : 's') + ' for the unknown node voltage' + (m === 1 ? '' : 's') + '. Step through each node’s calculation.'
+      body: m ? 'Now crunch the ' + m + ' equation' + (m === 1 ? '' : 's') + ' from step 6. Solve the single-unknown node' + (m === 1 ? '' : 's') +
+        ' first; each answer fills into its neighbours, opening the next equation — step through node by node and watch the table empty out.'
         : 'Nothing to solve — the node voltages are read straight off the sources.',
       eq: order.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
       hl: { nodes: circuit.nodes.map(function (n) { return n.id; }) },
