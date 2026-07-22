@@ -6,7 +6,10 @@
 
   function randomGrid(opts) {
     opts = opts || {};
-    var m = opts.rows || 3, n = opts.cols || 3, p = opts.p || 0.75, s = 1.5;
+    // 2×3 (not 3×3): a 3×3 mesh leaves too many mutually-coupled interior nodes for hand
+    // node-voltage — its coupled block ran to 6–7 unknowns. 2×3 keeps it ≤4 (the by-hand
+    // design limit, same as a bridge or the fixed grids) while still giving 2–4 loops.
+    var m = opts.rows || 2, n = opts.cols || 3, p = opts.p || 0.75, s = 1.5;
     for (var attempt = 0; attempt < 30; attempt++) {
       var last = attempt === 29; // ponytail: final attempt keeps every adjacency, guaranteed connected
       var present = {}, edges = [];
@@ -40,8 +43,12 @@
       }
       if (edges.length < 4) continue;
       edges.forEach(function (e) { present[e[0]] = true; present[e[1]] = true; });
-      // meshes = E − N + 1; one lone loop is too trivial to be worth solving
-      if (!last && edges.length - Object.keys(present).length + 1 < 2) continue;
+      // meshes = E − N + 1. Keep it in [2, 3]: one lone loop is too trivial, but more than
+      // three mutually-coupled loops make the by-hand node-voltage substitution explode (and
+      // the mesh system too big). Series reduction later trims nodes, not loop count, so the
+      // loop budget is the real hand-solvability knob.
+      var meshes = edges.length - Object.keys(present).length + 1;
+      if (!last && (meshes < 2 || meshes > 3)) continue;
 
       var kept = Object.keys(present).map(Number);
       var idx = {}, coords = [];
