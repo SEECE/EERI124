@@ -82,10 +82,13 @@ equations as one simultaneous block. This drives two separate steps:
 - **Step 6 sets up the equations only** — symbolic KCL forms (source-fixed neighbours as numbers,
   still-unknown neighbours as letters) plus the readiness table. **No arithmetic, no answers** —
   showing the solved values here confused first-time students.
-- **Step 8 hand-works the solve**, replaying the reveal order: for each single-unknown node it
-  emits *ready → substitute → collect terms → solve* substeps (like step 9's per-element split),
-  re-showing the neighbour table before each solve so the unknown counts visibly fall as earlier
-  nodes close, node by node until the table empties.
+- **Step 8 hand-works the solve**, replaying the reveal order. For each single-unknown node it
+  emits a run of substeps with **one algebraic move each** — *write the KCL sum → split each
+  fraction → move knowns to the right → factor out v → total the left → total the right → divide
+  → answer* — so a first-timer never faces a wall of equations in one view. The node stays
+  highlighted across its whole run; the neighbour table is re-shown before each node so the
+  unknown counts visibly fall as earlier nodes close, node by node until the table empties.
+  Enough nodes → 40+ substeps, deliberately.
 
 This ordering is pedagogy — the displayed values always come from `nodeVoltages`.
 

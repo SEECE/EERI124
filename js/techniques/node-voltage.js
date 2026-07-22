@@ -288,8 +288,11 @@
 
     // Step 8 — SOLVE the equations set up in step 6, hand-worked one node at a time. This is
     // the math tutorial: replay the reveal order from plan(), and for each single-unknown node
-    // emit four substeps (ready → substitute → collect → solve), re-showing the neighbour table
-    // BEFORE each solve so a student watches the unknown counts fall as earlier nodes close.
+    // emit a run of substeps — ONE algebraic move each (write the sum → split fractions → move
+    // knowns across → factor out v → total each side → divide → answer) so a first-timer never
+    // faces a wall of equations in a single view; the node stays highlighted across its whole
+    // run. The neighbour table is re-shown before each node so students watch the unknown
+    // counts fall as earlier nodes close. Enough nodes → 40+ substeps, by design.
     // No new solver engine — plan() gives the order, nodeVoltages() gives the authoritative
     // answers; this only narrates the arithmetic that produces them.
     var solveSubs = [];
@@ -300,36 +303,72 @@
       P.open.forEach(function (u) {
         var hl = unitHl(u), tableBefore = neighborTable(remaining, solvedNow);
         if (!u.supernode) {
-          var g = u.groups[0];
+          var g = u.groups[0], vg = vsub(L(g));
           var terms = resAt(g).map(function (e) { return { R: e.value, Vo: V(other(e, g)) }; });
           var Gsum = terms.reduce(function (a, t) { return a + 1 / t.R; }, 0);
           var Isum = terms.reduce(function (a, t) { return a + t.Vo / t.R; }, 0);
+          var one = terms.length === 1;
+          // running-equation fragments — one algebraic move per substep, never a wall of lines
+          var kclSum = terms.map(function (t) { return '(' + vg + ' − ' + si(t.Vo, 'V') + ')/' + t.R; }).join(' + ');
+          var splitL = terms.map(function (t) { return vg + '/' + t.R + ' − ' + si(t.Vo, 'V') + '/' + t.R; }).join(' + ');
+          var vgOverR = terms.map(function (t) { return vg + '/' + t.R; }).join(' + ');
+          var voOverR = terms.map(function (t) { return si(t.Vo, 'V') + '/' + t.R; }).join(' + ');
+          var oneOverR = terms.map(function (t) { return '1/' + t.R; }).join(' + ');
+
           solveSubs.push({
             title: 'node ' + L(g) + ' — ready',
-            body: 'Look at the table: node <b>' + L(g) + '</b> has 0 unknown neighbours, so ' + vsub(L(g)) +
-              ' is the only unknown left in its KCL sum. Solve it next.' + tableBefore,
+            body: 'Look at the table: node <b>' + L(g) + '</b> has 0 unknown neighbours, so ' + vg +
+              ' is the only unknown left in its KCL sum. We solve this one node now, and it stays highlighted until we have its voltage.' + tableBefore,
             hl: hl,
           });
           solveSubs.push({
-            title: 'node ' + L(g) + ' — substitute',
-            body: 'Take node ' + L(g) + '’s equation from step 6 and drop in each known neighbour voltage.',
-            eq: [terms.map(function (t) { return '(' + vsub(L(g)) + ' − ' + si(t.Vo, 'V') + ')/' + t.R; }).join(' + ') + ' = 0'],
+            title: 'node ' + L(g) + ' — write the KCL sum',
+            body: 'Start from node ' + L(g) + '’s equation (step 6) and drop in the known neighbour voltage' + (one ? '' : 's') +
+              '. Every current leaving node ' + L(g) + ', added up, is zero.',
+            eq: [kclSum + ' = 0'],
             hl: hl,
           });
           solveSubs.push({
-            title: 'node ' + L(g) + ' — collect terms',
-            body: 'Split each fraction, gather every ' + vsub(L(g)) + ' term on the left and move the neighbour currents to the right; the ' + vsub(L(g)) + ' coefficients add into one conductance.',
-            eq: [
-              vsub(L(g)) + '·(' + terms.map(function (t) { return '1/' + t.R; }).join(' + ') + ') = ' + terms.map(function (t) { return si(t.Vo, 'V') + '/' + t.R; }).join(' + '),
-              si(Gsum, 'S') + '·' + vsub(L(g)) + ' = ' + si(Isum, 'A'),
-            ],
+            title: 'node ' + L(g) + ' — split each fraction',
+            body: 'Break every (' + vg + ' − v)/R into two pieces, ' + vg + '/R − v/R, so the ' + vg +
+              ' part is separate from the known-voltage part.',
+            eq: [splitL + ' = 0'],
             hl: hl,
           });
           solveSubs.push({
-            title: 'node ' + L(g) + ' — solve',
-            body: 'Divide both sides by the total conductance to isolate ' + vsub(L(g)) + '. Node ' + L(g) +
-              ' is now known — its neighbours’ unknown counts drop in the next table.',
-            eq: [vsub(L(g)) + ' = ' + si(Isum, 'A') + ' / ' + si(Gsum, 'S'), vsub(L(g)) + ' = ' + si(V(g), 'V')],
+            title: 'node ' + L(g) + ' — move knowns to the right',
+            body: 'Send every known-voltage term to the right-hand side. Each one crosses the = sign, so its sign flips: what was −v/R becomes +v/R on the right.',
+            eq: [vgOverR + ' = ' + voOverR],
+            hl: hl,
+          });
+          if (!one) solveSubs.push({
+            title: 'node ' + L(g) + ' — factor out ' + vg,
+            body: vg + ' multiplies every term on the left, so pull it outside a bracket. The bracket is just a sum of 1/R conductances.',
+            eq: [vg + '·(' + oneOverR + ') = ' + voOverR],
+            hl: hl,
+          });
+          solveSubs.push({
+            title: 'node ' + L(g) + ' — add up the left',
+            body: 'Add the conductances multiplying ' + vg + ' into a single number.',
+            eq: [oneOverR + ' = ' + si(Gsum, 'S'), si(Gsum, 'S') + '·' + vg + ' = ' + voOverR],
+            hl: hl,
+          });
+          solveSubs.push({
+            title: 'node ' + L(g) + ' — add up the right',
+            body: 'Add the known currents on the right into a single number. Now the whole equation is (number)·' + vg + ' = (number).',
+            eq: [voOverR + ' = ' + si(Isum, 'A'), si(Gsum, 'S') + '·' + vg + ' = ' + si(Isum, 'A')],
+            hl: hl,
+          });
+          solveSubs.push({
+            title: 'node ' + L(g) + ' — divide to isolate ' + vg,
+            body: 'Divide both sides by the conductance in front of ' + vg + ' — that leaves ' + vg + ' alone.',
+            eq: [vg + ' = ' + si(Isum, 'A') + ' / ' + si(Gsum, 'S')],
+            hl: hl,
+          });
+          solveSubs.push({
+            title: 'node ' + L(g) + ' — answer',
+            body: 'That is node ' + L(g) + '’s voltage. It is now a known value — watch its neighbours’ unknown counts drop in the next table.',
+            eq: [vg + ' = ' + si(V(g), 'V')],
             hl: hl,
           });
         } else {
@@ -356,26 +395,39 @@
 
       if (P.coupled.length) {
         var cHl = { nodes: P.coupled.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) };
+        var cn = P.coupled.length;
         solveSubs.push({
-          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — ready',
-          body: 'These nodes never reach 0 unknown neighbours — each equation still holds another unknown, so they solve together as a system.' + neighborTable(remaining, solvedNow),
+          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — stuck together',
+          body: 'These ' + cn + ' nodes never reach 0 unknown neighbours — every one of their equations still holds another unknown, so no single node opens on its own. They must be solved together as one system of ' + cn + ' equations in ' + cn + ' unknowns.' + neighborTable(remaining, solvedNow),
           hl: cHl,
         });
-        solveSubs.push({
-          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — substitute',
-          body: 'Write each node’s KCL with the known outside voltages in; the inside unknowns stay as letters.',
-          eq: P.coupled.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }),
-          hl: cHl,
+        // one substep per equation — never the whole system in a single view
+        P.coupled.forEach(function (g) {
+          solveSubs.push({
+            title: 'coupled — equation for ' + L(g),
+            body: 'KCL at node <b>' + L(g) + '</b>. Known outside voltages are numbers; the other coupled nodes stay as letters — that is what keeps this equation tied to the rest.',
+            eq: [kclEq(g)],
+            hl: unitHl({ groups: [g] }),
+          });
         });
         solveSubs.push({
-          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — solve',
-          body: 'Solve the simultaneous set by elimination or substitution.',
-          eq: P.coupled.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
+          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — solve the system',
+          body: 'With one equation per node, this is ' + cn + ' equations in ' + cn + ' unknowns. Solve it simultaneously — elimination or substitution — since no node isolates on its own. The results are revealed one node at a time next.',
           hl: cHl,
+        });
+        // one substep per answer — never a wall of results
+        P.coupled.forEach(function (g) {
+          solveSubs.push({
+            title: 'coupled — answer for ' + L(g),
+            body: 'Node ' + L(g) + '’s voltage from the simultaneous solution.',
+            eq: [vsub(L(g)) + ' = ' + si(V(g), 'V')],
+            hl: unitHl({ groups: [g] }),
+          });
         });
         P.coupled.forEach(function (g) { solvedNow[g] = true; });
       }
 
+      // final recap: the payoff, all voltages in one place (a summary list, not a step to work)
       solveSubs.push({
         title: 'all nodes solved',
         body: 'Every unknown node voltage is now filled in — no rows left in the table. Full set:',
