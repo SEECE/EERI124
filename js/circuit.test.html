@@ -55,6 +55,31 @@
       });
     });
 
+    check('reduceSeries', function () {
+      var R = function (id, a, b, v) { return { id: id, type: 'R', a: a, b: b, value: v }; };
+      // a two-resistor corner collapses to one resistor of the summed value
+      var chain = Circuit.reduceSeries({ nodes: [{ id: 'n0' }, { id: 'n1' }, { id: 'n2' }],
+        edges: [R('e0', 'n0', 'n1', 100), R('e1', 'n1', 'n2', 200)] });
+      assert(chain.nodes.length === 2 && chain.edges.length === 1, 'chain not collapsed');
+      assert(chain.edges[0].value === 300, 'series sum wrong: ' + chain.edges[0].value);
+      // a degree-3 junction is left alone
+      var star = Circuit.reduceSeries({ nodes: [{ id: 'n0' }, { id: 'n1' }, { id: 'n2' }, { id: 'n3' }],
+        edges: [R('e0', 'n0', 'n1', 10), R('e1', 'n1', 'n2', 10), R('e2', 'n1', 'n3', 10)] });
+      assert(star.nodes.length === 4, 'reduced a real junction');
+      // cycle rank (E−V+1) is invariant on a loop of corners
+      var loop = { nodes: ['n0', 'n1', 'n2', 'n3'].map(function (id) { return { id: id }; }),
+        edges: [R('e0', 'n0', 'n1', 10), R('e1', 'n1', 'n2', 10), R('e2', 'n2', 'n3', 10), R('e3', 'n3', 'n0', 10)] };
+      var before = loop.edges.length - loop.nodes.length + 1;
+      var red = Circuit.reduceSeries(loop);
+      assert(red.edges.length - red.nodes.length + 1 === before, 'cycle rank changed');
+      // a corner with a source (or wire) is not a two-resistor corner → left alone
+      var srcCorner = Circuit.reduceSeries({ nodes: [{ id: 'n0' }, { id: 'n1' }, { id: 'n2' }],
+        edges: [{ id: 'e0', type: 'V', a: 'n0', b: 'n1', value: 12 }, R('e1', 'n1', 'n2', 100)] });
+      assert(srcCorner.nodes.length === 3, 'collapsed a source terminal');
+      // opt-out families keep their corner nodes — the divider tap must survive
+      assert(Circuit.get('Voltage divider').generate().nodes.length === 5, 'divider tap was reduced away');
+    });
+
     check('list filters', function () {
       assert(Circuit.list({ elements: ['R', 'V', 'W'] }).length === all.length, 'R/V/W filter dropped a generator');
       assert(Circuit.list({ elements: ['R', 'W'] }).length === 0, 'sourceless filter kept a generator');

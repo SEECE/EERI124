@@ -86,6 +86,25 @@ Rules:
 7. **A generator returns a valid circuit or `undefined`.** `build()` already validates;
    retry loops belong inside the generator (see `random-grid.js`).
 
+## Series reduction (on by default)
+
+A "corner" node — one whose only two connections are resistors — is a series pair that hand
+node-voltage would carry as an extra unknown for no teaching gain (V = IR only at this level; no
+conductance). So `register()` runs every generator's output through **`Circuit.reduceSeries`** by
+default: it collapses each such corner into one resistor `R₁+R₂` and drops the node, to a fixpoint.
+Removing a degree-2 node and merging its two edges drops E and V by one each, so **cycle rank
+`E−V+1` is unchanged** — a mesh keeps all its loops, it just sheds redundant nodes, and the hand
+equations stay small.
+
+Reduction is **geometry-aware**: the mesh solver reads planar faces from node `x,y`, so a merge
+whose straight `R₁+R₂` edge would pass through a node, cross another edge, or land on top of an
+existing edge is **skipped** (it would corrupt that drawing). That is why a dense random grid only
+partially reduces — correctness of KVL wins over shedding one more node.
+
+Opt a family **out** with `meta.reduce: false` when its teaching point *is* a corner node: the
+`series`, `parallel`, `divider` (the tap is a two-resistor corner) and `bridge` generators all do.
+Everything else reduces. `Circuit.reduceSeries(circuit)` is also exported for direct use / tests.
+
 ## Consuming generators from a page
 
 ```html

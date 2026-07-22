@@ -23,7 +23,7 @@
       edges.push([i === vAt ? 'V' : (rSet[i] ? 'R' : 'W'), i, (i + 1) % n]);
     }
     return C.build(coords, edges);
-  }, { tags: ['series'] });
+  }, { tags: ['series'], reduce: false });
 
   C.register('Parallel', function () {
     // source sits on a random one of the 4 vertical branches, not always the leftmost
@@ -38,12 +38,12 @@
        [0, 2], [1.5, 2], [3, 2], [4.5, 2]],
       edges
     );
-  }, { tags: ['parallel'] });
+  }, { tags: ['parallel'], reduce: false });
 
   C.register('Voltage divider', function () {
     return C.build(
       [[0, 3], [0, 0], [2.5, 0], [2.5, 1.5], [2.5, 3]],
       [['V', 0, 1], ['W', 1, 2], ['R', 2, 3], ['R', 3, 4], ['W', 4, 0]]
     );
-  }, { tags: ['series', 'divider'] });
+  }, { tags: ['series', 'divider'], reduce: false });
 })(window.Circuit);

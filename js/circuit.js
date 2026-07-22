@@ -95,6 +95,74 @@
     return validate({ nodes: nodes, edges: edges });
   }
 
+  /* ---------- series reduction ----------
+     Collapse every "corner" node — one whose only two connections are resistors — into a
+     single resistor (R1+R2) between its neighbours, dropping the corner node. Removing a
+     degree-2 node and merging its two edges into one drops E and V by 1 each, so the cycle
+     rank E−V+1 is unchanged: a mesh keeps all its loops, it just sheds redundant nodes. That
+     is the whole point — it keeps the hand equations small (V = IR only) without changing the
+     problem's loop structure. Wires and source terminals are never degree-2-two-resistors, so
+     they are left alone; the voltage-divider tap looks like a corner, so its generator opts
+     out (meta.reduce:false). Runs to a fixpoint so a chain of corners fully collapses. */
+  function reduceSeries(c) {
+    var nodes = c.nodes.slice(), edges = c.edges.slice(), changed = true;
+    // geometry helpers: the merged edge p–q is a straight line, and the mesh solver reads its
+    // planar faces from x,y — so a merge that makes p–q pass through a node or cross another
+    // edge would corrupt that drawing. Skip those. (Coordless circuits — the unit tests — have
+    // no geometry to protect, so these pass and the reduction runs unguarded.)
+    function num(n) { return isFinite(n.x) && isFinite(n.y); }
+    function onSeg(p, a, b) {                       // p strictly between a and b (excl. endpoints)
+      var crs = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+      if (Math.abs(crs) > 1e-9) return false;
+      var dot = (p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y);
+      var len2 = (b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y);
+      return dot > 1e-9 && dot < len2 - 1e-9;
+    }
+    function properCross(a, b, cc, d) {             // segments a-b, cc-d cross away from any shared end
+      function o(u, v, w) { return Math.sign((v.x - u.x) * (w.y - u.y) - (v.y - u.y) * (w.x - u.x)); }
+      function same(u, v) { return Math.abs(u.x - v.x) < 1e-9 && Math.abs(u.y - v.y) < 1e-9; }
+      if (same(a, cc) || same(a, d) || same(b, cc) || same(b, d)) return false;
+      return o(a, b, cc) !== o(a, b, d) && o(cc, d, a) !== o(cc, d, b);
+    }
+    while (changed) {
+      changed = false;
+      var pos = {}; nodes.forEach(function (n) { pos[n.id] = n; });
+      // wire components: a corner whose two neighbours are already tied by wire must NOT merge —
+      // the merged resistor would sit directly across the short (flavour() can wire-short a rung).
+      var wp = {};
+      function wf(x) { if (wp[x] === undefined) wp[x] = x; while (wp[x] !== x) { wp[x] = wp[wp[x]]; x = wp[x]; } return x; }
+      nodes.forEach(function (n) { wf(n.id); });
+      edges.forEach(function (e) { if (e.type === 'W') wp[wf(e.a)] = wf(e.b); });
+      var inc = {};
+      nodes.forEach(function (n) { inc[n.id] = []; });
+      edges.forEach(function (e) { inc[e.a].push(e); inc[e.b].push(e); });
+      // true if the straight edge P–Q clears every other node and edge (id is the corner going away)
+      var planarSafe = function (P, Q, id) {
+        var okNodes = nodes.every(function (n) { return n.id === id || n.id === P.id || n.id === Q.id || !num(n) || !onSeg(n, P, Q); });
+        if (!okNodes) return false;
+        return edges.every(function (e) {
+          if (e.a === id || e.b === id) return true;   // the two edges being merged away
+          return !properCross(P, Q, pos[e.a], pos[e.b]);
+        });
+      };
+      for (var i = 0; i < nodes.length; i++) {
+        var id = nodes[i].id, es = inc[id];
+        if (es.length !== 2 || es[0].type !== 'R' || es[1].type !== 'R') continue;
+        var p = es[0].a === id ? es[0].b : es[0].a;
+        var q = es[1].a === id ? es[1].b : es[1].a;
+        if (wf(p) === wf(q)) continue;             // same node or wire-tied — merging would short the resistor
+        if (edges.some(function (e) { return e !== es[0] && e !== es[1] && ((e.a === p && e.b === q) || (e.a === q && e.b === p)); })) continue; // p–q already joined — a coincident straight edge would confuse the planar mesh solver
+        if (num(pos[p]) && num(pos[q]) && !planarSafe(pos[p], pos[q], id)) continue;
+        var merged = { id: es[0].id, type: 'R', a: p, b: q, value: es[0].value + es[1].value };
+        edges = edges.filter(function (e) { return e !== es[0] && e !== es[1]; }).concat([merged]);
+        nodes = nodes.filter(function (n) { return n.id !== id; });
+        changed = true;
+        break;                                    // incidence is now stale — rebuild it
+      }
+    }
+    return validate({ nodes: nodes, edges: edges });
+  }
+
   /* ---------- generator registry ----------
      Generator files call Circuit.register(name, fn, meta) at load time.
      meta.elements — element types the generator can emit, so a page can ask for only
@@ -103,9 +171,13 @@
 
   function register(name, fn, meta) {
     meta = meta || {};
+    // series-reduce every generator's output by default (keeps the hand equations small);
+    // families whose teaching point is a corner node (series, parallel, divider, bridge)
+    // opt out with meta.reduce:false.
+    var gen = meta.reduce === false ? fn : function (o) { var c = fn(o); return c && reduceSeries(c); };
     generators.push({
       name: name,
-      generate: fn,
+      generate: gen,
       elements: meta.elements || ['R', 'V', 'W'],
       tags: meta.tags || [],
     });
@@ -286,6 +358,7 @@
     validate: validate,
     isConnected: isConnected,
     build: build,
+    reduceSeries: reduceSeries,
     degenerate: degenerate,
     // value pickers, for generator files
     pick: pick,
