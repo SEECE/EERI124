@@ -405,13 +405,46 @@
 
           var pool = P.coupled.slice(), stored = [];
           while (pool.length > 1) {
-            var p = pool[0]; resolveSelf(expr[p], p); cleanT(expr[p]);
-            solveSubs.push({
-              title: 'write ' + vsub(L(p)) + ' from its equation',
-              body: 'Clear node <b>' + L(p) + '</b>’s equation and solve it for ' + vsub(L(p) ) + '. The number is volts; each ' + vsub(L(p)) + ' coefficient is just a ratio of resistances.',
-              eq: [vsub(L(p)) + ' = ' + fmtExpr(expr[p])],
-              hl: unitHl({ groups: [p] }),
-            });
+            var p = pool[0];
+            // full derivation for node p — same clear-the-fractions moves as an open node
+            // (solveOpenNode above), except a still-coupled neighbour stays a letter instead
+            // of being plugged in as a number. Ends at the same ratio-form line fmtExpr(expr[p])
+            // already used below, so nothing after this is recomputed — just shown working out.
+            (function () {
+              var vp = vsub(L(p));
+              var terms = resAt(p).map(function (e) {
+                var o = other(e, p);
+                return { R: e.value, o: o, known: !cset[o] };
+              });
+              var M = prod(terms.map(function (t) { return t.R; }));
+              terms.forEach(function (t) { t.ce = M / t.R; t.Vo = t.known ? round(V(t.o)) : null; });
+              var Csum = terms.reduce(function (a, t) { return a + t.ce; }, 0);
+              function otherTxt(t) { return t.known ? t.Vo : vsub(L(t.o)); }
+              var lineWrite = terms.map(function (t) { return '(' + vp + ' − ' + otherTxt(t) + ')/' + t.R; }).join(' + ') + ' = 0';
+              var lineClear = terms.map(function (t) { return t.ce + '·(' + vp + ' − ' + otherTxt(t) + ')'; }).join(' + ') + ' = 0';
+              var lineMult = terms.map(function (t) { return t.ce + '·' + vp; }).join(' + ') +
+                terms.map(function (t) {
+                  if (t.known) { if (t.Vo === 0) return ''; return (t.Vo > 0 ? ' − ' : ' + ') + round(t.ce * Math.abs(t.Vo)); }
+                  return ' − ' + t.ce + '·' + vsub(L(t.o));
+                }).join('') + ' = 0';
+              var Ksum = terms.reduce(function (a, t) { return a + (t.known ? t.ce * t.Vo : 0); }, 0);
+              var rhsUnknown = terms.filter(function (t) { return !t.known; }).map(function (t) { return ' + ' + t.ce + '·' + vsub(L(t.o)); }).join('');
+              var lineCollect = Csum + '·' + vp + ' = ' + round(Ksum) + rhsUnknown;
+
+              var chainP = [];
+              function stepP(title, body, line) { chainP.push(line); solveSubs.push({ title: 'node ' + L(p) + ' — ' + title, body: body, eq: chainP.slice(), hl: unitHl({ groups: [p] }) }); }
+              solveSubs.push({
+                title: 'node ' + L(p) + ' — still coupled',
+                body: 'Node <b>' + L(p) + '</b> has a neighbour that is also still unknown, so it can’t be found on its own yet — but its equation still clears the same way as any other node.',
+                hl: unitHl({ groups: [p] }),
+              });
+              stepP('write the equation', 'Node ' + L(p) + '’s equation from step 6, known neighbours filled in as numbers, coupled ones left as letters.', lineWrite);
+              stepP('clear the fractions', 'Multiply every term by all the resistances (' + terms.map(function (t) { return t.R; }).join(' × ') + '); each division cancels.', lineClear);
+              stepP('multiply out', 'Multiply each bracket out.', lineMult);
+              stepP('collect ' + vp, 'Collect the ' + vp + ' terms on the left and everything else on the right.', lineCollect);
+              stepP('divide', 'Divide both sides by ' + Csum + ' — ' + vp + ' is now written in volts plus a ratio of its still-unknown neighbour(s).', vsub(L(p)) + ' = ' + fmtExpr(expr[p]));
+            })();
+            resolveSelf(expr[p], p); cleanT(expr[p]);
             pool.slice(1).forEach(function (q) {
               if (!(p in expr[q].t)) return;
               var coef = expr[q].t[p]; delete expr[q].t[p];
