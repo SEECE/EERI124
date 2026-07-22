@@ -239,10 +239,16 @@
         var hl = unitHl(u);
         if (!u.supernode) {
           var g = u.groups[0], rs = resAt(g);
+          var unk = rs.map(function (e) { return other(e, g); }).filter(function (o) { return !P.fixed[o]; });
+          var tail = unk.length
+            ? ' Neighbour' + (unk.length === 1 ? ' ' + L(unk[0]) + ' is' : 's ' + unk.map(L).join(', ') + ' are') +
+              ' still unknown, so ' + (unk.length === 1 ? 'its letter stays' : 'their letters stay') + ' in the equation — this node cannot be solved until we know ' +
+              (unk.length === 1 ? 'that voltage' : 'those voltages') + '. Step 8 works out the order.'
+            : ' Every neighbour here is already known, so ' + vsub(L(g)) + ' is the only unknown — step 8 solves this one directly.';
           subs.push({
             title: 'node ' + L(g),
             body: 'At node <b>' + L(g) + '</b>, assume every current leaves the node and add up the ' + rs.length + ' resistor branch' + (rs.length === 1 ? '' : 'es') +
-              '. By Ohm’s law each is (v − v<sub>neighbour</sub>)/R; a neighbour already fixed by a source shows as its number, one still unknown stays as its letter. Set the sum to zero.',
+              '. By Ohm’s law each is (v − v<sub>neighbour</sub>)/R; a neighbour already fixed by a source shows as its number, one still unknown stays as its letter. Set the sum to zero.' + tail,
             eq: ['Node ' + L(g) + ':  ' + kclEq(g)],
             hl: hl,
           });
@@ -299,6 +305,32 @@
     if (m) (function () {
       var solvedNow = {}; order.forEach(function (g) { if (P.fixed[g]) solvedNow[g] = true; });
       var remaining = P.unknown.slice();
+
+      // ---- helpers for the coupled-system substitution walk (below) ----
+      // a linear expression v = const + Σ m[n]·v_n, rendered in volts; valueFn plugs numbers
+      function fmtLin(constV, mCoef, valueFn) {
+        var s = si(constV, 'V');
+        Object.keys(mCoef).forEach(function (n) {
+          var c = round(mCoef[n]); if (c === 0) return;
+          var mag = Math.abs(c), rhs = valueFn ? si(valueFn(n), 'V') : vsub(L(n));
+          s += (c < 0 ? ' − ' : ' + ') + (mag === 1 ? '' : mag + '·') + rhs;
+        });
+        return s;
+      }
+      // a reduced equation Σ coef[n]·v_n = rhs over the nodes still in `list` (coef in S, rhs in A)
+      function fmtEq(row, list) {
+        var parts = [];
+        list.forEach(function (n) {
+          if (!(n in row.coef)) return; var c = round(row.coef[n]); if (c === 0) return;
+          parts.push((c < 0 ? '− ' : (parts.length ? '+ ' : '')) + si(Math.abs(c), 'S') + '·' + vsub(L(n)));
+        });
+        return (parts.join(' ') || '0') + ' = ' + si(row.rhs, 'A');
+      }
+      // small table of the unknowns still left in the coupled system (shrinks each round)
+      function sysTable(list) {
+        return '<div class="kcl-status-wrap"><table class="kcl-status"><thead><tr><th>Unknowns still in the system (' + list.length +
+          ')</th></tr></thead><tbody><tr><td>' + (list.length ? list.map(L).join(', ') : '— none —') + '</td></tr></tbody></table></div>';
+      }
 
       P.open.forEach(function (u) {
         var hl = unitHl(u), tableBefore = neighborTable(remaining, solvedNow);
@@ -395,35 +427,142 @@
 
       if (P.coupled.length) {
         var cHl = { nodes: P.coupled.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) };
-        var cn = P.coupled.length;
-        solveSubs.push({
-          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — stuck together',
-          body: 'These ' + cn + ' nodes never reach 0 unknown neighbours — every one of their equations still holds another unknown, so no single node opens on its own. They must be solved together as one system of ' + cn + ' equations in ' + cn + ' unknowns.' + neighborTable(remaining, solvedNow),
-          hl: cHl,
-        });
-        // one substep per equation — never the whole system in a single view
-        P.coupled.forEach(function (g) {
-          solveSubs.push({
-            title: 'coupled — equation for ' + L(g),
-            body: 'KCL at node <b>' + L(g) + '</b>. Known outside voltages are numbers; the other coupled nodes stay as letters — that is what keeps this equation tied to the rest.',
-            eq: [kclEq(g)],
-            hl: unitHl({ groups: [g] }),
+        var cn = P.coupled.length, cset = {}; P.coupled.forEach(function (g) { cset[g] = true; });
+        // A floating voltage source between two coupled nodes (a supernode inside the block) adds a
+        // source-branch current KCL can't see from resistors alone — the substitution walk below is
+        // resistor-only and would be wrong. Only walk it when the block is purely resistor-coupled.
+        var pureCoupled = !circuit.edges.some(function (e) { return e.type === 'V' && cset[of[e.a]] && cset[of[e.b]]; });
+
+        if (pureCoupled) {
+          // Build the linear system over the coupled unknowns from each node's KCL:
+          //   (Σ 1/Rn)·vg − Σ_{coupled n} (1/Rn)·vn = Σ_{known n} Vn/Rn      (coef in S, rhs in A)
+          // A coupled neighbour keeps its letter (a coefficient); a known neighbour folds into rhs.
+          var rows = P.coupled.map(function (g) {
+            var coef = {}; coef[g] = 0; var rhs = 0;
+            resAt(g).forEach(function (e) {
+              var n = other(e, g), gc = 1 / e.value;
+              coef[g] += gc;
+              if (cset[n]) coef[n] = (coef[n] || 0) - gc;
+              else rhs += V(n) * gc;
+            });
+            return { g: g, coef: coef, rhs: rhs };
           });
-        });
-        solveSubs.push({
-          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — solve the system',
-          body: 'With one equation per node, this is ' + cn + ' equations in ' + cn + ' unknowns. Solve it simultaneously — elimination or substitution — since no node isolates on its own. The results are revealed one node at a time next.',
-          hl: cHl,
-        });
-        // one substep per answer — never a wall of results
-        P.coupled.forEach(function (g) {
+          var rowOf = function (g) { return rows.filter(function (r) { return r.g === g; })[0]; };
+
           solveSubs.push({
-            title: 'coupled — answer for ' + L(g),
-            body: 'Node ' + L(g) + '’s voltage from the simultaneous solution.',
-            eq: [vsub(L(g)) + ' = ' + si(V(g), 'V')],
-            hl: unitHl({ groups: [g] }),
+            title: 'coupled ' + P.coupled.map(L).join(', ') + ' — a system',
+            body: 'These <b>' + cn + '</b> nodes couple: every one of their equations still holds another unknown, so none opens on its own. We solve them together by <b>substitution</b> — take one node’s equation, solve it for that node, put the result into the others so they lose that unknown, and repeat. Each round the system shrinks by one unknown.' + sysTable(P.coupled),
+            hl: cHl,
           });
-        });
+
+          var remainSys = P.coupled.slice();
+          var exprs = [];                           // stored {g, cnst, m} for back-substitution
+
+          for (var pi = 0; pi < P.coupled.length - 1; pi++) {
+            var p = remainSys[0], prow = rowOf(p), app = prow.coef[p];
+            var cnst = prow.rhs / app, mExpr = {};
+            remainSys.forEach(function (n) { if (n !== p && (n in prow.coef)) mExpr[n] = -prow.coef[n] / app; });
+            exprs.push({ g: p, cnst: cnst, m: mExpr });
+
+            solveSubs.push({
+              title: 'express ' + vsub(L(p)),
+              body: 'Take node <b>' + L(p) + '</b>’s equation and solve it for ' + vsub(L(p)) + ' alone — divide through by its own conductance (' + si(app, 'S') + '). Now ' + vsub(L(p)) + ' is written in terms of the unknowns it still touches.',
+              eq: [vsub(L(p)) + ' = ' + fmtLin(cnst, mExpr)],
+              hl: unitHl({ groups: [p] }),
+            });
+
+            remainSys.forEach(function (q) {
+              if (q === p) return;
+              var qrow = rowOf(q); if (!(p in qrow.coef) || qrow.coef[p] === 0) return;
+              var cqp = qrow.coef[p];
+              qrow.rhs -= cqp * cnst;
+              Object.keys(mExpr).forEach(function (n) { qrow.coef[n] = (qrow.coef[n] || 0) + cqp * mExpr[n]; });
+              delete qrow.coef[p];
+              var listAfter = remainSys.filter(function (x) { return x !== p; });
+              solveSubs.push({
+                title: 'put ' + vsub(L(p)) + ' into node ' + L(q),
+                body: 'Node <b>' + L(q) + '</b>’s equation contains ' + vsub(L(p)) + '. Replace it with the expression above and tidy up — node ' + L(q) + '’s equation now holds one fewer unknown.',
+                eq: [fmtEq(qrow, listAfter)],
+                hl: unitHl({ groups: [q] }),
+              });
+            });
+
+            remainSys.shift();
+            solveSubs.push({
+              title: 'system now ' + remainSys.length + ' unknown' + (remainSys.length === 1 ? '' : 's'),
+              body: vsub(L(p)) + ' is eliminated (we recover its number at the end). The system has shrunk — these unknowns remain.' + sysTable(remainSys),
+              hl: { nodes: remainSys.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
+            });
+          }
+
+          // one unknown left → solve it outright
+          var last = remainSys[0], lrow = rowOf(last);
+          solveSubs.push({
+            title: 'node ' + L(last) + ' — one unknown left',
+            body: 'Every other unknown has been eliminated, so node <b>' + L(last) + '</b>’s reduced equation now has just ' + vsub(L(last)) + ' in it.',
+            eq: [fmtEq(lrow, [last])],
+            hl: unitHl({ groups: [last] }),
+          });
+          solveSubs.push({
+            title: 'node ' + L(last) + ' — solve',
+            body: 'Divide both sides by the conductance in front of ' + vsub(L(last)) + ' to get its voltage — the first hard number the whole system hangs on.',
+            eq: [vsub(L(last)) + ' = ' + si(lrow.rhs, 'A') + ' / ' + si(lrow.coef[last], 'S'), vsub(L(last)) + ' = ' + si(V(last), 'V')],
+            hl: unitHl({ groups: [last] }),
+          });
+
+          // back-substitute in reverse: each stored expression now has only known values on the right
+          var known = {}; known[last] = V(last);
+          for (var ei = exprs.length - 1; ei >= 0; ei--) {
+            var ex = exprs[ei];
+            solveSubs.push({
+              title: 'back-substitute ' + vsub(L(ex.g)),
+              body: 'Work back up: every unknown on the right of ' + vsub(L(ex.g)) + '’s expression is now a known number. Put the values in.',
+              eq: [vsub(L(ex.g)) + ' = ' + fmtLin(ex.cnst, ex.m, function (n) { return known[n]; }), vsub(L(ex.g)) + ' = ' + si(V(ex.g), 'V')],
+              hl: unitHl({ groups: [ex.g] }),
+            });
+            known[ex.g] = V(ex.g);
+          }
+        } else {
+          // Source-bridged coupled block: KCL per node PLUS each internal source's voltage
+          // constraint. The substitution walk can't handle the source-branch current, so we set
+          // the system out honestly and hand off to a matrix/calculator solve, then reveal each
+          // answer on its own view (no faked intermediate arithmetic).
+          var innerSrc = circuit.edges.filter(function (e) { return e.type === 'V' && cset[of[e.a]] && cset[of[e.b]]; });
+          solveSubs.push({
+            title: 'coupled ' + P.coupled.map(L).join(', ') + ' — a system with a source',
+            body: 'These <b>' + cn + '</b> nodes couple, and a voltage source floats between two of them — that makes a <b>supernode</b>, so the block also carries the source’s own voltage constraint. This is a genuine simultaneous system best finished with a matrix or calculator; we lay it out, then read off each node.' + sysTable(P.coupled),
+            hl: cHl,
+          });
+          P.coupled.forEach(function (g) {
+            solveSubs.push({
+              title: 'equation for ' + L(g),
+              body: 'KCL at node <b>' + L(g) + '</b>, the coupled neighbours left as letters.',
+              eq: [kclEq(g)],
+              hl: unitHl({ groups: [g] }),
+            });
+          });
+          innerSrc.forEach(function (e) {
+            solveSubs.push({
+              title: 'constraint ' + L(of[e.a]) + '–' + L(of[e.b]),
+              body: 'The floating ' + si(e.value, 'V') + ' source fixes the difference between its two nodes — the extra equation that closes the supernode.',
+              eq: [vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + si(e.value, 'V')],
+              hl: { edges: [e.id] },
+            });
+          });
+          solveSubs.push({
+            title: 'solve the system',
+            body: 'That is ' + cn + ' KCL equations plus the source constraint — solve them together (matrix or calculator). The results, node by node, follow.',
+            hl: cHl,
+          });
+          P.coupled.forEach(function (g) {
+            solveSubs.push({
+              title: 'answer for ' + L(g),
+              body: 'Node ' + L(g) + '’s voltage from the simultaneous solution.',
+              eq: [vsub(L(g)) + ' = ' + si(V(g), 'V')],
+              hl: unitHl({ groups: [g] }),
+            });
+          });
+        }
         P.coupled.forEach(function (g) { solvedNow[g] = true; });
       }
 

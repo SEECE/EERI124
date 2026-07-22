@@ -82,12 +82,23 @@ equations as one simultaneous block. This drives two separate steps:
 - **Step 6 sets up the equations only** — symbolic KCL forms (source-fixed neighbours as numbers,
   still-unknown neighbours as letters) plus the readiness table. **No arithmetic, no answers** —
   showing the solved values here confused first-time students.
-- **Step 8 hand-works the solve**, replaying the reveal order. For each single-unknown node it
-  emits a run of substeps with **one algebraic move each** — *write the KCL sum → split each
-  fraction → move knowns to the right → factor out v → total the left → total the right → divide
-  → answer* — so a first-timer never faces a wall of equations in one view. The node stays
-  highlighted across its whole run; the neighbour table is re-shown before each node so the
-  unknown counts visibly fall as earlier nodes close, node by node until the table empties.
+- **Step 8 hand-works the solve**, replaying the reveal order:
+  - **Single-unknown nodes** (`P.open`): a run of substeps with **one algebraic move each** —
+    *write the KCL sum → split each fraction → move knowns to the right → factor out v → total the
+    left → total the right → divide → answer* — so a first-timer never faces a wall of equations in
+    one view. The node stays highlighted across its whole run; the neighbour table is re-shown
+    before each node so unknown counts visibly fall as earlier nodes close.
+  - **A coupled core** (`P.coupled`, e.g. a symmetric grid) is solved for real. If it is
+    **purely resistor-coupled**, step 8 walks **substitution elimination**: express one node from
+    its own equation, substitute into each other equation (one equation per view), shrink a
+    "system unknowns" table each round, solve the last single unknown, then back-substitute up.
+    The elimination arithmetic is built in the technique (node-admittance rows, coef in S / rhs in
+    A) and is verified to reproduce `nodeVoltages` — displayed answers still come from it.
+  - If a **floating voltage source sits inside the coupled block** (a supernode — the source-branch
+    current a resistor-only substitution can't see), step 8 does **not** fake the walk: it lays out
+    the KCL equations plus the source constraint, hands off to a matrix/calculator solve, and
+    reveals each answer on its own view.
+
   Enough nodes → 40+ substeps, deliberately.
 
 This ordering is pedagogy — the displayed values always come from `nodeVoltages`.
