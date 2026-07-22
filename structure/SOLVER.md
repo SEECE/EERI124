@@ -27,7 +27,7 @@ built. Do not populate §4 until then.
 |---|---|---|
 | **Engine** | `js/solve.js` | `si` (SI/engineering value formatting), `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (**MNA**, any number of sources), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
 | **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine for step 6), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
-| **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps**; renders one view, highlights the circuit via `Circuit.highlight`. |
+| **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view, highlights the circuit via `Circuit.highlight`. |
 | **Page** | `topics/simple-resistive-circuits/index.html` | loads the above, maps the dropdown to a builder, renders the circuit + drives the stepper. |
 
 No ES modules (site opens over `file://`) — plain `<script>` globals, same as `circuit.js`.
@@ -74,10 +74,11 @@ solution; `powerCheck` finishes.
 
 The `node-voltage` technique owns the **equation-assembly engine** behind step 6: it propagates
 source-fixed voltages out from the reference, then reveals each unknown node's KCL equation only
-once it becomes a **single-unknown** equation (a two-panel known/unknown display tracks the state);
-genuinely floating sources are grouped as **supernode units**, and a mutually-coupled core that
-never reduces to single-unknown equations is shown as one simultaneous block. This ordering is
-pedagogy — the displayed values always come from `nodeVoltages`.
+once it becomes a **single-unknown** equation (a per-node status table tracks each node's resistor
+neighbours split into known/unknown — 0 unknown is exactly "solve now"); genuinely floating sources
+are grouped as **supernode units**, and a mutually-coupled core that never reduces to
+single-unknown equations is shown as one simultaneous block. This ordering is pedagogy — the
+displayed values always come from `nodeVoltages`.
 
 ## KVL — mesh-current
 
