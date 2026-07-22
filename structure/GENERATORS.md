@@ -102,7 +102,9 @@ existing edge is **skipped** (it would corrupt that drawing). That is why a dens
 partially reduces — correctness of KVL wins over shedding one more node.
 
 Opt a family **out** with `meta.reduce: false` when its teaching point *is* a corner node: the
-`series`, `parallel`, `divider` (the tap is a two-resistor corner) and `bridge` generators all do.
+`series`, `parallel`, `divider` (the tap is a two-resistor corner) and `bridge` generators all do —
+as do the fixed `grid.js` templates, whose corners are the rectilinear mesh shape mesh-current is
+drilled on; collapsing one into a diagonal turns a square loop into a triangle.
 Everything else reduces. `Circuit.reduceSeries(circuit)` is also exported for direct use / tests.
 
 ## Consuming generators from a page

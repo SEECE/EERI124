@@ -13,7 +13,7 @@
     }
     edges[Math.floor(Math.random() * edges.length)][0] = 'V'; // source on any grid edge
     return C.build(coords, edges);
-  }, { tags: ['grid', 'mesh'] });
+  }, { tags: ['grid', 'mesh'], reduce: false });
 
   C.register('Grid (top loop)', function () {
     // 2×2 grid without the middle top node: the upper half is one wide loop, two below.
@@ -30,7 +30,7 @@
        [0, 3], [1.5, 3], [3, 3]],
       edges
     );
-  }, { tags: ['grid', 'mesh'] });
+  }, { tags: ['grid', 'mesh'], reduce: false });
 
   C.register('Grid (bottom loop)', function () {
     // mirror of the above: two loops on top, one wide one below carrying R–V–R in series
@@ -44,5 +44,5 @@
        ['R', 6, 3], ['R', 5, 9],
        ['R', 6, 7], ['V', 7, 8], ['R', 8, 9]]
     );
-  }, { tags: ['grid', 'mesh'] });
+  }, { tags: ['grid', 'mesh'], reduce: false });
 })(window.Circuit);
