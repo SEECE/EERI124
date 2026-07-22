@@ -14,7 +14,7 @@
        ['W', 0, 4], ['V', 4, 5], ['W', 5, 3]],
       { flavour: false }
     );
-  }, { tags: ['bridge'], reduce: false });
+  }, { tags: ['bridge'] });
 
   C.register('Ladder', function () {
     return C.build(

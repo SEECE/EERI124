@@ -45,8 +45,7 @@
       edges.forEach(function (e) { present[e[0]] = true; present[e[1]] = true; });
       // meshes = E − N + 1. Keep it in [2, 3]: one lone loop is too trivial, but more than
       // three mutually-coupled loops make the by-hand node-voltage substitution explode (and
-      // the mesh system too big). Series reduction later trims nodes, not loop count, so the
-      // loop budget is the real hand-solvability knob.
+      // the mesh system too big).
       var meshes = edges.length - Object.keys(present).length + 1;
       if (!last && (meshes < 2 || meshes > 3)) continue;
 
