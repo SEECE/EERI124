@@ -26,6 +26,8 @@
 
   var si = S.si;
   function vsub(letter) { return 'v<sub>' + letter + '</sub>'; }
+  // real stacked fraction (numerator over denominator) instead of a bare "/" — styled in solver.css
+  function frac(num, den) { return '<span class="frac"><span class="num">' + num + '</span><span class="den">' + den + '</span></span>'; }
 
   window.NodeVoltage = function (circuit) {
     var ln = S.letterNodes(circuit);
@@ -122,13 +124,13 @@
     function kclEq(g) {
       return resAt(g).map(function (e) {
         var o = other(e, g);
-        return '(' + vsub(L(g)) + ' − ' + (P.fixed[o] ? round(V(o)) : vsub(L(o))) + ')/' + e.value;
+        return frac(vsub(L(g)) + ' − ' + (P.fixed[o] ? round(V(o)) : vsub(L(o))), e.value);
       }).join(' + ') + ' = 0';
     }
     // fully-substituted numeric line for the solve step (every neighbour as its value)
     function kclNumeric(g) {
       return resAt(g).map(function (e) {
-        return '(' + vsub(L(g)) + ' − ' + round(V(other(e, g))) + ')/' + e.value;
+        return frac(vsub(L(g)) + ' − ' + round(V(other(e, g))), e.value);
       }).join(' + ') + ' = 0';
     }
 
@@ -318,12 +320,12 @@
         var Rlist = terms.map(function (t) { return t.R; }).join(' × ');
 
         // the derivation lines, in order
-        var lineWrite = terms.map(function (t) { return '(' + vg + ' − ' + t.Vo + ')/' + t.R; }).join(' + ') + ' = 0';
+        var lineWrite = terms.map(function (t) { return frac(vg + ' − ' + t.Vo, t.R); }).join(' + ') + ' = 0';
         var lineClear = terms.map(function (t) { return t.ce + '·(' + vg + ' − ' + t.Vo + ')'; }).join(' + ') + ' = 0';
         var lineMult = terms.map(function (t) { return t.ce + '·' + vg; }).join(' + ') +
           terms.map(function (t) { if (t.Vo === 0) return ''; var k = round(t.ce * Math.abs(t.Vo)); return (t.Vo > 0 ? ' − ' : ' + ') + k; }).join('') + ' = 0';
         var lineCollect = Csum + '·' + vg + ' = ' + round(Ksum);
-        var lineDivide = vg + ' = ' + round(Ksum) + ' / ' + Csum;
+        var lineDivide = vg + ' = ' + frac(round(Ksum), Csum);
         var lineAnswer = vg + ' = ' + si(V(g), 'V');
 
         var chain = [];                                                  // accumulates as we go
@@ -417,7 +419,7 @@
             terms.forEach(function (t) { t.ce = M / t.R; t.Vo = t.known ? round(V(t.o)) : null; });
             var Csum = terms.reduce(function (a, t) { return a + t.ce; }, 0);
             function otherTxt(t) { return t.known ? t.Vo : vsub(L(t.o)); }
-            var lineWrite = terms.map(function (t) { return '(' + vg + ' − ' + otherTxt(t) + ')/' + t.R; }).join(' + ') + ' = 0';
+            var lineWrite = terms.map(function (t) { return frac(vg + ' − ' + otherTxt(t), t.R); }).join(' + ') + ' = 0';
             var lineClear = terms.map(function (t) { return t.ce + '·(' + vg + ' − ' + otherTxt(t) + ')'; }).join(' + ') + ' = 0';
             var lineMult = terms.map(function (t) { return t.ce + '·' + vg; }).join(' + ') +
               terms.map(function (t) {
@@ -550,7 +552,7 @@
       return {
         title: si(r.edge.value, 'Ω'),
         body: 'Current by Ohm’s law, power dissipated as heat: i = Δv/R, P = i²R.',
-        eq: ['i = ' + si(Math.abs(r.drop), 'V') + ' / ' + r.edge.value + ' = ' + si(i, 'A'),
+        eq: ['i = ' + frac(si(Math.abs(r.drop), 'V'), r.edge.value) + ' = ' + si(i, 'A'),
           'P = i²·R = ' + si(p, 'W')],
         hl: { edges: [r.edge.id] },
       };
