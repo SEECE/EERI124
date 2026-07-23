@@ -6,7 +6,10 @@
 
   function randomGrid(opts) {
     opts = opts || {};
-    var m = opts.rows || 3, n = opts.cols || 3, p = opts.p || 0.75, s = 1.5;
+    // 2×3 (not 3×3): a 3×3 mesh leaves too many mutually-coupled interior nodes for hand
+    // node-voltage — its coupled block ran to 6–7 unknowns. 2×3 keeps it ≤4 (the by-hand
+    // design limit, same as a bridge or the fixed grids) while still giving 2–4 loops.
+    var m = opts.rows || 2, n = opts.cols || 3, p = opts.p || 0.75, s = 1.5;
     for (var attempt = 0; attempt < 30; attempt++) {
       var last = attempt === 29; // ponytail: final attempt keeps every adjacency, guaranteed connected
       var present = {}, edges = [];
@@ -40,37 +43,52 @@
       }
       if (edges.length < 4) continue;
       edges.forEach(function (e) { present[e[0]] = true; present[e[1]] = true; });
-      // meshes = E − N + 1; one lone loop is too trivial to be worth solving
-      if (!last && edges.length - Object.keys(present).length + 1 < 2) continue;
+      // meshes = E − N + 1. Keep it in [2, 3]: one lone loop is too trivial, but more than
+      // three mutually-coupled loops make the by-hand node-voltage substitution explode (and
+      // the mesh system too big).
+      var meshes = edges.length - Object.keys(present).length + 1;
+      if (!last && (meshes < 2 || meshes > 3)) continue;
 
-      // source on a rail just outside a randomly chosen side, spanning that side's extreme nodes
       var kept = Object.keys(present).map(Number);
-      var side = C.pick(['bottom', 'top', 'left', 'right']);
-      var horiz = side === 'bottom' || side === 'top'; // rail runs left-right
-      var far = side === 'bottom' || side === 'right'; // rail sits at the high-coordinate end
-      function major(i) { return horiz ? Math.floor(i / n) : i % n; }
-      function minor(i) { return horiz ? i % n : Math.floor(i / n); }
-      var majors = kept.map(major);
-      var rail = far ? Math.max.apply(null, majors) : Math.min.apply(null, majors);
-      var lo = null, hi = null;
-      kept.forEach(function (i) {
-        if (major(i) !== rail) return;
-        if (lo === null || minor(i) < minor(lo)) lo = i;
-        if (hi === null || minor(i) > minor(hi)) hi = i;
-      });
-      if (lo === hi) continue; // need two separated terminals
-
       var idx = {}, coords = [];
       kept.sort(function (a, b) { return a - b; }).forEach(function (i) {
         idx[i] = coords.length;
         coords.push([(i % n) * s, Math.floor(i / n) * s]);
       });
-      var railPos = (rail + (far ? 1 : -1)) * s;
-      function railPt(i) { return horiz ? [minor(i) * s, railPos] : [railPos, minor(i) * s]; }
-      var sa = coords.length; coords.push(railPt(lo));
-      var sb = coords.length; coords.push(railPt(hi));
       var specs = edges.map(function (e) { return ['R', idx[e[0]], idx[e[1]]]; });
-      specs.push(['W', idx[lo], sa], ['V', sa, sb], ['W', sb, idx[hi]]);
+
+      // Place a source on a rail just outside a given side, spanning that side's extreme
+      // nodes. Returns false if the side has fewer than two terminals. Grids may carry more
+      // than one source (opts.sources) — the extra ones go on other sides, so a random
+      // problem can be a multi-source network the node/mesh methods must handle in full.
+      function addSource(side) {
+        var horiz = side === 'bottom' || side === 'top';
+        var far = side === 'bottom' || side === 'right';
+        function major(i) { return horiz ? Math.floor(i / n) : i % n; }
+        function minor(i) { return horiz ? i % n : Math.floor(i / n); }
+        var majors = kept.map(major);
+        var rail = far ? Math.max.apply(null, majors) : Math.min.apply(null, majors);
+        var lo = null, hi = null;
+        kept.forEach(function (i) {
+          if (major(i) !== rail) return;
+          if (lo === null || minor(i) < minor(lo)) lo = i;
+          if (hi === null || minor(i) > minor(hi)) hi = i;
+        });
+        if (lo === hi) return false;
+        var railPos = (rail + (far ? 1 : -1)) * s;
+        var sa = coords.length; coords.push(horiz ? [minor(lo) * s, railPos] : [railPos, minor(lo) * s]);
+        var sb = coords.length; coords.push(horiz ? [minor(hi) * s, railPos] : [railPos, minor(hi) * s]);
+        specs.push(['W', idx[lo], sa], ['V', sa, sb], ['W', sb, idx[hi]]);
+        return true;
+      }
+
+      // default: usually one source, sometimes two — so "Random" alone can be multi-source
+      var want = opts.sources || (Math.random() < 0.35 ? 2 : 1);
+      var sides = ['bottom', 'top', 'left', 'right'];
+      for (i = sides.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = sides[i]; sides[i] = sides[j]; sides[j] = t; }
+      var placed = 0;
+      for (var sd = 0; sd < sides.length && placed < want; sd++) if (addSource(sides[sd])) placed++;
+      if (placed === 0) continue;                 // no usable rail — retry the whole grid
       return C.build(coords, specs);
     }
   }

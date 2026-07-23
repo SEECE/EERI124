@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
   <link rel="stylesheet" href="../../css/circuit-page.css" />
+  <link rel="stylesheet" href="../../css/solver.css" />
 </head>
 
 <body>
@@ -27,16 +28,52 @@
     <div class="circuit-layout">
       <aside class="circuit-sidebar">
         <div class="control-group">
+          <h3>Technique</h3>
+          <select id="technique">
+            <option value="kcl">KCL — node-voltage</option>
+            <option value="kvl">KVL — mesh-current</option>
+            <option value="req-source">Equivalent resistance — over source</option>
+            <option value="req-points">Equivalent resistance — over 2 points</option>
+          </select>
+        </div>
+        <div class="control-group" id="terminals" style="display:none;">
+          <h3>Terminals</h3>
+          <div class="terminal-row">
+            <select id="termA"></select>
+            <span class="terminal-sep">↔</span>
+            <select id="termB"></select>
+          </div>
+        </div>
+        <div class="control-group">
           <h3>Topology</h3>
           <select id="topology"></select>
         </div>
         <div class="control-group">
           <button id="generate">Generate</button>
         </div>
-        <p class="circuit-blurb">Series and parallel resistive networks: equivalent resistance, current and voltage division.</p>
+        <div class="control-group step-control">
+          <h3>Steps</h3>
+          <div class="step-count" id="step-count"></div>
+          <div class="step-nav">
+            <button id="step-prev">◀ Prev</button>
+            <button id="step-next">Next ▶</button>
+          </div>
+          <div class="step-subcount" id="step-subcount"></div>
+          <div class="step-nav step-subnav">
+            <button id="sub-prev">◂ Prev</button>
+            <button id="sub-next">Next ▸</button>
+          </div>
+        </div>
       </aside>
 
       <div class="circuit-canvas"><svg id="canvas"></svg></div>
+
+      <aside class="step-panel">
+        <div class="step-count step-count-label">Workbench</div>
+        <h3 class="step-title" id="step-title"></h3>
+        <div class="step-body" id="step-body"></div>
+        <div class="step-eq" id="step-eq"></div>
+      </aside>
     </div>
   </main>
 
@@ -47,23 +84,89 @@
   <script src="../../js/generators/basic.js"></script>
   <script src="../../js/generators/bridge-ladder.js"></script>
   <script src="../../js/generators/grid.js"></script>
+  <script src="../../js/generators/multi-source.js"></script>
+  <script src="../../js/solve.js"></script>
+  <script src="../../js/techniques/node-voltage.js"></script>
+  <script src="../../js/techniques/mesh-current.js"></script>
+  <script src="../../js/techniques/equivalent-resistance.js"></script>
+  <script src="../../js/stepper.js"></script>
   <script>
-    var select = document.getElementById('topology');
+    var topoSel = document.getElementById('topology');
+    var techSel = document.getElementById('technique');
+    var termWrap = document.getElementById('terminals');
+    var termA = document.getElementById('termA');
+    var termB = document.getElementById('termB');
     var svg = document.getElementById('canvas');
+    var circuit = null;
 
     // this topic covers independent voltage sources + resistors only
     Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
       var o = document.createElement('option');
       o.value = g.name;
       o.textContent = g.name;
-      select.appendChild(o);
+      topoSel.appendChild(o);
     });
 
-    function generate() {
-      Circuit.render(Circuit.get(select.value).generate(), svg);
+    var stepper = Stepper({
+      svg: svg,
+      count: document.getElementById('step-count'),
+      subcount: document.getElementById('step-subcount'),
+      title: document.getElementById('step-title'),
+      body: document.getElementById('step-body'),
+      eq: document.getElementById('step-eq'),
+      prev: document.getElementById('step-prev'),
+      next: document.getElementById('step-next'),
+      subPrev: document.getElementById('sub-prev'),
+      subNext: document.getElementById('sub-next'),
+    });
+
+    // fill the terminal pickers (equivalent resistance over 2 points) with the node letters
+    function refreshTerminals() {
+      var ln = Solve.letterNodes(circuit);
+      var letters = ln.groups.map(function (g) { return ln.letter[g]; });
+      [termA, termB].forEach(function (sel) {
+        var keep = sel.value;
+        sel.innerHTML = '';
+        letters.forEach(function (L) {
+          var o = document.createElement('option');
+          o.value = L; o.textContent = L; sel.appendChild(o);
+        });
+        if (letters.indexOf(keep) >= 0) sel.value = keep;
+      });
+      if (termA.value === termB.value && letters.length > 1) termB.value = letters[letters.length - 1];
     }
+
+    function buildSteps() {
+      switch (techSel.value) {
+        case 'kcl': return NodeVoltage(circuit);
+        case 'kvl': return MeshCurrent(circuit);
+        case 'req-source': return EquivResistance(circuit, { over: 'source' });
+        case 'req-points': return EquivResistance(circuit, { over: 'points', a: termA.value, b: termB.value });
+        default: return [{ n: 0, title: techSel.options[techSel.selectedIndex].text, body: 'Coming soon.' }];
+      }
+    }
+
+    function runTechnique() {
+      if (!circuit) return;
+      circuit.nodes.forEach(function (n) { delete n.label; }); // each technique sets its own labels
+      var points = techSel.value === 'req-points';
+      termWrap.style.display = points ? '' : 'none';
+      if (points) refreshTerminals();
+      var steps = buildSteps();
+      Circuit.render(circuit, svg);   // render draws the labels the technique set, then
+      stepper.load(steps);            // step 1 highlights on the rendered svg
+    }
+
+    function generate() {
+      circuit = Circuit.get(topoSel.value).generate();
+      runTechnique();
+    }
+
     document.getElementById('generate').addEventListener('click', generate);
-    select.addEventListener('change', generate);
+    topoSel.addEventListener('change', generate);
+    techSel.addEventListener('change', runTechnique); // re-analyse the same circuit
+    termA.addEventListener('change', runTechnique);
+    termB.addEventListener('change', runTechnique);
     generate();
   </script>
 </body>
