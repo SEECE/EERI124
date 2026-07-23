@@ -50,30 +50,35 @@
   color: var(--ink);
 }
 /* wrap long equations instead of scrolling them sideways — for big circuits every
-   term stays visible. Hanging indent keeps continuation lines clear of the label. */
+   term stays visible. No hanging indent: a line can start with a stacked fraction
+   (an atomic inline-flex box), and a negative text-indent shoved that fraction
+   left of the container padding, overlapping the box border. */
 .eq-line {
-  padding: 6px 0;
+  padding: 8px 0;
   white-space: normal;
   overflow-wrap: anywhere;
-  padding-left: 1.4em;
-  text-indent: -1.4em;
+  line-height: 1.7;
   letter-spacing: 0.01em;
 }
 .eq-line + .eq-line { border-top: 1px solid rgba(139, 92, 246, 0.14); }
 .eq-line sub, .eq-line sup { font-size: 0.7em; font-style: normal; }
 .eq-line b { font-style: normal; }
 
-/* real stacked fraction for division terms (Ohm's law), instead of a bare "/" */
+/* real stacked fraction for division terms (Ohm's law), instead of a bare "/".
+   nowrap + its own margin so it reads as one atomic symbol and never gets crowded
+   by the +/− on either side or split mid-fraction by the line wrap above. */
 .frac {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   vertical-align: middle;
-  margin: 0 0.2em;
-  line-height: 1.2;
+  margin: 3px 0.3em;
+  line-height: 1.15;
+  white-space: nowrap;
 }
-.frac .num { padding: 0 0.2em 1px; border-bottom: 1.5px solid currentColor; }
-.frac .den { padding: 1px 0.2em 0; }
+.frac .num { padding: 0 0.2em 2px; border-bottom: 1.5px solid currentColor; }
+.frac .den { padding: 2px 0.2em 0; }
 
 /* step counter + Prev/Next now live in the left control panel (left = control) */
 .step-control .step-count { margin-bottom: 10px; }
