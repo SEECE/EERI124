@@ -43,22 +43,25 @@
   background: rgba(139, 92, 246, 0.08);
   border: 1px solid rgba(139, 92, 246, 0.18);
   border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  font-family: 'Cascadia Code', ui-monospace, 'SFMono-Regular', Consolas, monospace;
-  font-size: 13px;
+  padding: 14px 16px;
+  font-family: 'STIX Two Math', 'Cambria Math', Cambria, 'Times New Roman', serif;
+  font-size: 17px;
+  font-style: italic;
   color: var(--ink);
 }
 /* wrap long equations instead of scrolling them sideways — for big circuits every
    term stays visible. Hanging indent keeps continuation lines clear of the label. */
 .eq-line {
-  padding: 4px 0;
+  padding: 6px 0;
   white-space: normal;
   overflow-wrap: anywhere;
   padding-left: 1.4em;
   text-indent: -1.4em;
+  letter-spacing: 0.01em;
 }
 .eq-line + .eq-line { border-top: 1px solid rgba(139, 92, 246, 0.14); }
-.eq-line sub { font-size: 0.78em; }
+.eq-line sub, .eq-line sup { font-size: 0.7em; font-style: normal; }
+.eq-line b { font-style: normal; }
 
 /* step counter + Prev/Next now live in the left control panel (left = control) */
 .step-control .step-count { margin-bottom: 10px; }
