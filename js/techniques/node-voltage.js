@@ -577,12 +577,14 @@
       }]),
     });
 
-    // node letters are introduced in step 2; reveal them from there onward, on the step and every substep
+    // node letters and the ground symbol are introduced in step 2; reveal both from there
+    // onward, on the step and every substep
     var labelledIds = circuit.nodes.filter(function (n) { return n.label; }).map(function (n) { return n.id; });
+    var groundIds = [ln.rep[ref]];
     steps.forEach(function (s) {
       if (s.n < 2) return;
-      s.hl = s.hl || {}; s.hl.labels = labelledIds;
-      (s.subs || []).forEach(function (ss) { ss.hl = ss.hl || {}; ss.hl.labels = labelledIds; });
+      s.hl = s.hl || {}; s.hl.labels = labelledIds; s.hl.ground = groundIds;
+      (s.subs || []).forEach(function (ss) { ss.hl = ss.hl || {}; ss.hl.labels = labelledIds; ss.hl.ground = groundIds; });
     });
 
     return steps;

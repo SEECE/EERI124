@@ -230,9 +230,11 @@
   }
 
   /* Toggle a 'hl' class on the edges/nodes a solver step wants to emphasise.
-     spec = { edges:[edgeId], nodes:[nodeId], labels:[nodeId], loops:[...] }; anything not
-     listed is un-highlighted. `labels` reveals the node letters (hidden at render) for the
-     step that introduces them onward. */
+     spec = { edges:[edgeId], nodes:[nodeId], labels:[nodeId], loops:[...], ground:[nodeId],
+     volts:{nodeId:text} }; anything not listed is un-highlighted. `labels` reveals the node
+     letters (hidden at render) for the step that introduces them onward. `ground` draws the
+     earth symbol under the chosen reference node(s); `volts` writes a solved/known voltage
+     reading above a node. */
   function highlight(svg, spec) {
     spec = spec || {};
     var edges = spec.edges || [], nodes = spec.nodes || [], labels = spec.labels || [];
@@ -278,6 +280,22 @@
         (ex + ah * Math.cos(c2)) + ',' + (ey + ah * Math.sin(c2)),
         fill: 'var(--accent-hover)' }, g);
       if (loop.label) el('text', { x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 15, 'font-weight': 700 }, g).textContent = loop.label;
+    });
+
+    // earth symbol (stub + shrinking bars) under the chosen 0 V reference node(s)
+    Array.prototype.forEach.call(svg.querySelectorAll('.ground-symbol'), function (g) {
+      g.parentNode.removeChild(g);
+    });
+    (spec.ground || []).forEach(function (nid) {
+      var c = svg.querySelector('[data-nid="' + nid + '"]');
+      if (!c) return;
+      var x = +c.getAttribute('cx'), y = +c.getAttribute('cy');
+      var g = el('g', { 'class': 'ground-symbol' }, svg);
+      el('line', { x1: x, y1: y, x2: x, y2: y + 14, stroke: 'var(--ink)', 'stroke-width': 2 }, g);
+      [9, 6, 3].forEach(function (w, idx) {
+        var yy = y + 16 + idx * 4;
+        el('line', { x1: x - w, y1: yy, x2: x + w, y2: yy, stroke: 'var(--ink)', 'stroke-width': 2 }, g);
+      });
     });
   }
 

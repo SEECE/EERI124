@@ -136,6 +136,9 @@
 .circuit-canvas svg .node-label { opacity: 0; }
 .circuit-canvas svg .node-label.show { opacity: 1; }
 
+/* earth symbol drawn under the chosen 0 V reference node (highlight ground:) */
+.circuit-canvas svg .ground-symbol line { stroke: var(--ink); }
+
 @media (max-width: 720px) {
   .step-panel { flex: none; overflow-y: visible; }
 }
