@@ -149,6 +149,20 @@
       return '<div class="kcl-status-wrap"><table class="kcl-status"><thead><tr><th>Node</th><th>Neighbours</th><th>Known</th><th>Unknown</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
 
+    // "current equation" board — one row per node, updated live as step 6 builds each
+    // equation and step 8 folds unknowns down to numbers. Each substep snapshots this
+    // table as it's built, so stepping through nodes shows the whole board settle,
+    // merge-sort-style, from letters/fractions down to solved voltages.
+    var board = {};
+    order.forEach(function (g) { board[g] = P.fixed[g] ? si(V(g), 'V') : '?'; });
+    function boardHtml() {
+      var rows = order.map(function (g) {
+        return '<tr' + (P.fixed[g] || board[g] === si(V(g), 'V') ? ' class="row-ready"' : '') +
+          '><td>' + L(g) + '</td><td>' + board[g] + '</td></tr>';
+      }).join('');
+      return '<div class="kcl-status-wrap"><table class="kcl-status eq-board"><thead><tr><th>Node</th><th>Current equation / value</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }
+
     // ---------- assemble steps ----------
     var nR = circuit.edges.filter(function (e) { return e.type === 'R'; }).length;
     var nSrc = sources.length;
@@ -247,10 +261,11 @@
             ' still unknown, so ' + (unk.length === 1 ? 'its letter stays' : 'their letters stay') + ' in the equation — node ' + L(g) +
             ' can’t be found on its own until we know ' + (unk.length === 1 ? 'that voltage' : 'those voltages') + '.'
           : ' Every neighbour is already a known voltage, so ' + vsub(L(g)) + ' is the only unknown — node ' + L(g) + ' solves in one shot in step 8.';
+        board[g] = kclEq(g);
         return {
           title: 'equation for ' + L(g),
           body: 'Node <b>' + L(g) + '</b> connects through ' + nbr.length + ' resistor' + (nbr.length === 1 ? '' : 's') + ' to ' + nbrList +
-            '. Add up every current leaving node ' + L(g) + ' — by Ohm’s law each branch carries (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R — and set the total to zero.' + tail,
+            '. Add up every current leaving node ' + L(g) + ' — by Ohm’s law each branch carries (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R — and set the total to zero.' + tail + boardHtml(),
           eq: [kclEq(g)],
           hl: unitHl({ groups: [g] }),
         };
@@ -260,7 +275,7 @@
         subs.push({
           title: 'constraint ' + L(of[e.a]) + '–' + L(of[e.b]),
           body: 'A ' + si(e.value, 'V') + ' source floats between nodes <b>' + L(of[e.a]) + '</b> and <b>' + L(of[e.b]) +
-            '</b>, so it fixes the difference between their voltages — an extra equation on top of the KCL ones.',
+            '</b>, so it fixes the difference between their voltages — an extra equation on top of the KCL ones.' + boardHtml(),
           eq: [vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + si(e.value, 'V')],
           hl: { edges: [e.id] },
         });
@@ -333,7 +348,7 @@
 
         solveSubs.push({
           title: 'node ' + L(g) + ' — ready',
-          body: 'Node <b>' + L(g) + '</b>’s neighbours are all known now, so ' + vg + ' is the only unknown in its equation — it solves in one shot. It stays highlighted, and each move stacks under the last so you can watch the equation simplify.' + tableBefore,
+          body: 'Node <b>' + L(g) + '</b>’s neighbours are all known now, so ' + vg + ' is the only unknown in its equation — it solves in one shot. It stays highlighted, and each move stacks under the last so you can watch the equation simplify.' + tableBefore + boardHtml(),
           hl: hl,
         });
         step('write the equation', 'Node ' + L(g) + '’s equation from step 6, with each known neighbour voltage filled in.', lineWrite);
@@ -341,7 +356,9 @@
         step('multiply out', 'Multiply each bracket out.', lineMult);
         step('collect ' + vg, 'Add the ' + vg + ' terms together, and move the plain number to the right-hand side.', lineCollect);
         step('divide', 'Divide both sides by the number in front of ' + vg + '.', lineDivide);
-        step('answer', 'That is node ' + L(g) + '’s voltage — now a known value. Watch its neighbours’ unknown counts drop in the next table.', lineAnswer);
+        board[g] = si(V(g), 'V');
+        chain.push(lineAnswer);
+        solveSubs.push({ title: 'node ' + L(g) + ' — answer', body: 'That is node ' + L(g) + '’s voltage — now a known value. Watch its neighbours’ unknown counts drop in the next table.' + boardHtml(), eq: chain.slice(), hl: hl });
       }
 
       P.open.forEach(function (u) {
@@ -353,13 +370,14 @@
           // the source constraint, then the pair's voltages. Still fraction/Ohm's-law form.
           solveSubs.push({
             title: 'supernode ' + u.groups.map(L).join('+') + ' — set up',
-            body: 'A source floats between nodes ' + u.groups.map(L).join(' and ') + ', so solve them as a pair: their two current equations plus the source’s voltage constraint.' + tableBefore,
+            body: 'A source floats between nodes ' + u.groups.map(L).join(' and ') + ', so solve them as a pair: their two current equations plus the source’s voltage constraint.' + tableBefore + boardHtml(),
             eq: u.groups.map(function (g) { return 'Node ' + L(g) + ':  ' + kclNumeric(g); }).concat(['constraint:  ' + supernodeConstraint(u)]),
             hl: hl,
           });
+          u.groups.forEach(function (g) { board[g] = si(V(g), 'V'); });
           solveSubs.push({
             title: 'supernode ' + u.groups.map(L).join('+') + ' — solve',
-            body: 'Use the constraint to replace one voltage, solve the single remaining unknown, then recover the other from the constraint.',
+            body: 'Use the constraint to replace one voltage, solve the single remaining unknown, then recover the other from the constraint.' + boardHtml(),
             eq: u.groups.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
             hl: hl,
           });
@@ -401,7 +419,7 @@
 
           solveSubs.push({
             title: 'coupled ' + P.coupled.map(L).join(', ') + ' — a linked system',
-            body: 'These <b>' + cn + '</b> nodes are linked — each equation still mentions another unknown, so none solves in one shot. From each node’s equation write that node’s voltage in terms of its neighbours, then substitute those into one another until one falls out as a number.' + sysTable(P.coupled),
+            body: 'These <b>' + cn + '</b> nodes are linked — each equation still mentions another unknown, so none solves in one shot. From each node’s equation write that node’s voltage in terms of its neighbours, then substitute those into one another until one falls out as a number.' + sysTable(P.coupled) + boardHtml(),
             hl: cHl,
           });
 
@@ -441,7 +459,8 @@
             stepG('clear the fractions', 'Multiply every term by all the resistances (' + terms.map(function (t) { return t.R; }).join(' × ') + '); each division cancels.', lineClear);
             stepG('multiply out', 'Multiply each bracket out.', lineMult);
             stepG('collect ' + vg, 'Collect the ' + vg + ' terms on the left and everything else on the right.', lineCollect);
-            stepG('divide', 'Divide both sides by ' + Csum + ' — ' + vg + ' is now written in volts plus a ratio of its still-unknown neighbour(s).', vg + ' = ' + fmtExpr(expr[g]));
+            board[g] = vg + ' = ' + fmtExpr(expr[g]);
+            stepG('divide', 'Divide both sides by ' + Csum + ' — ' + vg + ' is now written in volts plus a ratio of its still-unknown neighbour(s).' + boardHtml(), vg + ' = ' + fmtExpr(expr[g]));
           });
 
           // Now substitute those expressions into one another until one node falls out as a
@@ -461,17 +480,19 @@
               Object.keys(expr[p].t).forEach(function (n) { expr[q].t[n] = (expr[q].t[n] || 0) + coef * expr[p].t[n]; });
               var selfTerm = q in expr[q].t;
               var afterLine = fmtExpr(expr[q]);
+              board[q] = vsub(L(q)) + ' = ' + afterLine;
               solveSubs.push({
                 title: 'substitute ' + vsub(L(p)) + ' into ' + vsub(L(q)),
-                body: 'Node <b>' + L(q) + '</b>’s equation used ' + vsub(L(p)) + '. Replace it with ' + vsub(L(p)) + ' = ' + fmtExpr(expr[p]) + ' and multiply out.',
+                body: 'Node <b>' + L(q) + '</b>’s equation used ' + vsub(L(p)) + '. Replace it with ' + vsub(L(p)) + ' = ' + fmtExpr(expr[p]) + ' and multiply out.' + boardHtml(),
                 eq: [vsub(L(q)) + ' = ' + beforeLine, vsub(L(q)) + ' = ' + afterLine],
                 hl: unitHl({ groups: [q] }),
               });
               if (selfTerm) {
                 resolveSelf(expr[q], q); cleanT(expr[q]);
+                board[q] = vsub(L(q)) + ' = ' + fmtExpr(expr[q]);
                 solveSubs.push({
                   title: vsub(L(q)) + ' — collect and divide',
-                  body: vsub(L(q)) + ' turned up on both sides after that substitution — collect it on the left, then divide, exactly like clearing any single-unknown equation.',
+                  body: vsub(L(q)) + ' turned up on both sides after that substitution — collect it on the left, then divide, exactly like clearing any single-unknown equation.' + boardHtml(),
                   eq: [vsub(L(q)) + ' = ' + afterLine, vsub(L(q)) + ' = ' + fmtExpr(expr[q])],
                   hl: unitHl({ groups: [q] }),
                 });
@@ -482,23 +503,25 @@
             stored.push(p); pool.shift();
             solveSubs.push({
               title: pool.length + ' unknown' + (pool.length === 1 ? '' : 's') + ' left',
-              body: vsub(L(p)) + ' is now written from the others; we come back for its number at the end. Still to pin down:' + sysTable(pool),
+              body: vsub(L(p)) + ' is now written from the others; we come back for its number at the end. Still to pin down:' + sysTable(pool) + boardHtml(),
               hl: { nodes: pool.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
             });
           }
           var last = pool[0]; resolveSelf(expr[last], last); cleanT(expr[last]);
+          board[last] = si(V(last), 'V');
           solveSubs.push({
             title: vsub(L(last)) + ' — falls out',
-            body: 'Node <b>' + L(last) + '</b>’s expression has no unknowns left on the right — it is just a number.',
+            body: 'Node <b>' + L(last) + '</b>’s expression has no unknowns left on the right — it is just a number.' + boardHtml(),
             eq: [vsub(L(last)) + ' = ' + fmtExpr(expr[last]), vsub(L(last)) + ' = ' + si(V(last), 'V')],
             hl: unitHl({ groups: [last] }),
           });
           var known = {}; known[last] = V(last);
           for (var si2 = stored.length - 1; si2 >= 0; si2--) {
             var g2 = stored[si2];
+            board[g2] = si(V(g2), 'V');
             solveSubs.push({
               title: 'back to ' + vsub(L(g2)),
-              body: 'Every voltage on the right of ' + vsub(L(g2)) + '’s line is known now — put the numbers in.',
+              body: 'Every voltage on the right of ' + vsub(L(g2)) + '’s line is known now — put the numbers in.' + boardHtml(),
               eq: [vsub(L(g2)) + ' = ' + fmtExpr(expr[g2], function (n) { return known[n]; }), vsub(L(g2)) + ' = ' + si(V(g2), 'V')],
               hl: unitHl({ groups: [g2] }),
             });
@@ -510,18 +533,19 @@
           var innerSrc = circuit.edges.filter(function (e) { return e.type === 'V' && cset[of[e.a]] && cset[of[e.b]]; });
           solveSubs.push({
             title: 'coupled ' + P.coupled.map(L).join(', ') + ' — a system with a source',
-            body: 'These <b>' + cn + '</b> nodes are linked, and a source floats between two of them (a supernode) — that adds a voltage constraint. This one is a genuine simultaneous system; lay it out and finish with a matrix or calculator, then read off each node.' + sysTable(P.coupled),
+            body: 'These <b>' + cn + '</b> nodes are linked, and a source floats between two of them (a supernode) — that adds a voltage constraint. This one is a genuine simultaneous system; lay it out and finish with a matrix or calculator, then read off each node.' + sysTable(P.coupled) + boardHtml(),
             hl: cHl,
           });
           P.coupled.forEach(function (g) {
-            solveSubs.push({ title: 'equation for ' + L(g), body: 'KCL at node <b>' + L(g) + '</b>, coupled neighbours left as letters.', eq: [kclEq(g)], hl: unitHl({ groups: [g] }) });
+            solveSubs.push({ title: 'equation for ' + L(g), body: 'KCL at node <b>' + L(g) + '</b>, coupled neighbours left as letters.' + boardHtml(), eq: [kclEq(g)], hl: unitHl({ groups: [g] }) });
           });
           innerSrc.forEach(function (e) {
             solveSubs.push({ title: 'constraint ' + L(of[e.a]) + '–' + L(of[e.b]), body: 'The floating ' + si(e.value, 'V') + ' source fixes the difference between its two nodes.', eq: [vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + si(e.value, 'V')], hl: { edges: [e.id] } });
           });
           solveSubs.push({ title: 'solve the system', body: 'That is ' + cn + ' equations plus the constraint — solve together (matrix / calculator). Results follow, node by node.', hl: cHl });
           P.coupled.forEach(function (g) {
-            solveSubs.push({ title: 'answer for ' + L(g), body: 'Node ' + L(g) + '’s voltage from the simultaneous solution.', eq: [vsub(L(g)) + ' = ' + si(V(g), 'V')], hl: unitHl({ groups: [g] }) });
+            board[g] = si(V(g), 'V');
+            solveSubs.push({ title: 'answer for ' + L(g), body: 'Node ' + L(g) + '’s voltage from the simultaneous solution.' + boardHtml(), eq: [vsub(L(g)) + ' = ' + si(V(g), 'V')], hl: unitHl({ groups: [g] }) });
           });
         }
         P.coupled.forEach(function (g) { solvedNow[g] = true; });
