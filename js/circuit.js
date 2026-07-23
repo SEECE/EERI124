@@ -163,7 +163,7 @@
       var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
       var ux = dx / len, uy = dy / len;
       var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      var lx = mx - uy * 28, ly = my + ux * 28; // label, perpendicular offset
+      var lx = mx - uy * 34, ly = my + ux * 34; // label, perpendicular offset — clear of the symbol
       var eg = el('g', { 'class': 'edge edge-' + e.type, 'data-eid': e.id }, svg);
 
       if (e.type === 'W') { line(a.x, a.y, b.x, b.y, eg); return; }
@@ -176,7 +176,7 @@
         var deg = Math.atan2(dy, dx) * 180 / Math.PI;
         var g = el('g', { transform: 'translate(' + mx + ',' + my + ') rotate(' + deg + ')' }, eg);
         el('rect', { x: -20, y: -8, width: 40, height: 16, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, rx: 2 }, g);
-        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14 }, eg)
+        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
           .textContent = fmtR(e.value);
       } else { // V — b is the + terminal
         el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
@@ -184,7 +184,7 @@
         plus.textContent = '+';
         var minus = el('text', { x: mx - ux * 7, y: my - uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, eg);
         minus.textContent = '−';
-        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14 }, eg)
+        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
           .textContent = e.value + ' V';
       }
     });
@@ -224,7 +224,7 @@
       var lx = p.x + Math.cos(dir) * 20, ly = p.y + Math.sin(dir) * 20;
       // hidden by default; a solver step reveals it via highlight({ labels: [nodeId] })
       // so letters appear when the method names them, not from the start
-      el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700 }, svg)
+      el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, svg)
         .textContent = n.label;
     });
   }
