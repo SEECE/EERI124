@@ -26,6 +26,11 @@
 
   var si = S.si;
   function vsub(letter) { return 'v<sub>' + letter + '</sub>'; }
+  // real stacked fraction (numerator over denominator) instead of a bare "/" — styled in solver.css
+  function frac(num, den) { return '<span class="frac"><span class="num">' + num + '</span><span class="den">' + den + '</span></span>'; }
+  function extend(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
+  // "a − b" that flips to "a + b" when b is a negative number, instead of the confusing "− -5"
+  function diff(base, val) { return (typeof val === 'number' && val < 0) ? base + ' + ' + (-val) : base + ' − ' + val; }
 
   window.NodeVoltage = function (circuit) {
     var ln = S.letterNodes(circuit);
@@ -45,6 +50,12 @@
       return circuit.nodes.filter(function (n) { return set[of[n.id]]; }).map(function (n) { return n.id; });
     }
     function V(g) { return sol.v[g]; }
+    // physical voltage readings for the SVG: node group id -> its label node id -> "x.xx V"
+    function voltsFor(gs) {
+      var m = {};
+      gs.forEach(function (g) { m[ln.rep[g]] = si(V(g), 'V'); });
+      return m;
+    }
 
     // ---- incidence over electrical nodes ----
     function resAt(g) { // resistor edges touching group g (as the "other end" too)
@@ -122,13 +133,13 @@
     function kclEq(g) {
       return resAt(g).map(function (e) {
         var o = other(e, g);
-        return '(' + vsub(L(g)) + ' − ' + (P.fixed[o] ? round(V(o)) : vsub(L(o))) + ')/' + e.value;
+        return frac(diff(vsub(L(g)), P.fixed[o] ? round(V(o)) : vsub(L(o))), e.value);
       }).join(' + ') + ' = 0';
     }
     // fully-substituted numeric line for the solve step (every neighbour as its value)
     function kclNumeric(g) {
       return resAt(g).map(function (e) {
-        return '(' + vsub(L(g)) + ' − ' + round(V(other(e, g))) + ')/' + e.value;
+        return frac(diff(vsub(L(g)), round(V(other(e, g)))), e.value);
       }).join(' + ') + ' = 0';
     }
 
@@ -145,6 +156,20 @@
           (ready ? 'solve now' : 'waiting on ' + unknown.map(L).join(', ')) + '</td></tr>';
       }).join('');
       return '<div class="kcl-status-wrap"><table class="kcl-status"><thead><tr><th>Node</th><th>Neighbours</th><th>Known</th><th>Unknown</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    }
+
+    // "current equation" board — one row per node, updated live as step 6 builds each
+    // equation and step 8 folds unknowns down to numbers. Each substep snapshots this
+    // table as it's built, so stepping through nodes shows the whole board settle,
+    // merge-sort-style, from letters/fractions down to solved voltages.
+    var board = {};
+    order.forEach(function (g) { board[g] = P.fixed[g] ? si(V(g), 'V') : '?'; });
+    function boardHtml() {
+      var rows = order.map(function (g) {
+        return '<tr' + (P.fixed[g] || board[g] === si(V(g), 'V') ? ' class="row-ready"' : '') +
+          '><td>' + L(g) + '</td><td>' + board[g] + '</td></tr>';
+      }).join('');
+      return '<div class="kcl-status-wrap"><table class="kcl-status eq-board"><thead><tr><th>Node</th><th>Current equation / value</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
 
     // ---------- assemble steps ----------
@@ -166,7 +191,7 @@
       body: 'Points joined only by wires are one electrical node — ' + order.length + ' here: ' +
         order.map(L).join(', ') + '. Take the reference (0 V) at a source’s − terminal: node <b>' + L(ref) + '</b>. ' +
         'Step through each node to see why it is one.',
-      hl: { nodes: circuit.nodes.map(function (n) { return n.id; }) },
+      hl: { nodes: circuit.nodes.map(function (n) { return n.id; }), volts: voltsFor([ref]) },
       subs: order.map(function (g) {
         var rs = resAt(g), ss = srcAt(g), members = ln.members[g];
         var parts = [];
@@ -176,7 +201,7 @@
         if (members.length > 1) body += ' Points ' + members.join(', ') + ' are tied by wire only, so they are one node.';
         if (g === ref) body += ' This is the <b>reference</b> — its voltage is defined as 0 V.';
         return { title: 'node ' + L(g), body: body,
-          hl: { nodes: nodeIdsOf(g), edges: rs.concat(ss).map(function (e) { return e.id; }) } };
+          hl: { nodes: nodeIdsOf(g), edges: rs.concat(ss).map(function (e) { return e.id; }), volts: voltsFor([ref]) } };
       }),
     });
 
@@ -187,18 +212,20 @@
       body: 'Each source fixes the voltage difference across its two nodes. Walking out from the reference, that pins ' +
         Object.keys(P.fixed).length + ' node voltage' + (Object.keys(P.fixed).length === 1 ? '' : 's') + '. Step through each source.',
       eq: fixedLines,
-      hl: { nodes: order.filter(function (g) { return P.fixed[g]; }).reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
+      hl: { nodes: order.filter(function (g) { return P.fixed[g]; }).reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []),
+        volts: voltsFor(order.filter(function (g) { return P.fixed[g]; })) },
       subs: sources.map(function (e) {
         var a = of[e.a], b = of[e.b];               // a = − terminal, b = +
         var body = 'The ' + si(e.value, 'V') + ' source sits between node <b>' + L(a) + '</b> (− terminal, ' +
           si(V(a), 'V') + ') and node <b>' + L(b) + '</b> (+ terminal, ' + si(V(b), 'V') + '): ' +
           vsub(L(b)) + ' − ' + vsub(L(a)) + ' = ' + si(e.value, 'V') + '.';
+        var knownEnds = [a, b].filter(function (g) { return P.fixed[g]; });
         if (a === ref || b === ref) body += ' One terminal is the reference (0 V), so the other node’s voltage is now known outright.';
         else if (P.fixed[a] && P.fixed[b]) body += ' Both terminals are reached from the reference through other sources, so both voltages are already known.';
         else body += ' Neither terminal is reachable from the reference through sources, so this pair is a <b>supernode</b> (see step 5).';
         return { title: si(e.value, 'V') + ' source', body: body,
           eq: [vsub(L(b)) + ' − ' + vsub(L(a)) + ' = ' + si(e.value, 'V')],
-          hl: { edges: [e.id], nodes: nodeIdsOf(a).concat(nodeIdsOf(b)) } };
+          hl: { edges: [e.id], nodes: nodeIdsOf(a).concat(nodeIdsOf(b)), volts: voltsFor(knownEnds) } };
       }),
     });
 
@@ -245,10 +272,11 @@
             ' still unknown, so ' + (unk.length === 1 ? 'its letter stays' : 'their letters stay') + ' in the equation — node ' + L(g) +
             ' can’t be found on its own until we know ' + (unk.length === 1 ? 'that voltage' : 'those voltages') + '.'
           : ' Every neighbour is already a known voltage, so ' + vsub(L(g)) + ' is the only unknown — node ' + L(g) + ' solves in one shot in step 8.';
+        board[g] = kclEq(g);
         return {
           title: 'equation for ' + L(g),
           body: 'Node <b>' + L(g) + '</b> connects through ' + nbr.length + ' resistor' + (nbr.length === 1 ? '' : 's') + ' to ' + nbrList +
-            '. Add up every current leaving node ' + L(g) + ' — by Ohm’s law each branch carries (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R — and set the total to zero.' + tail,
+            '. Add up every current leaving node ' + L(g) + ' — by Ohm’s law each branch carries (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R — and set the total to zero.' + tail + boardHtml(),
           eq: [kclEq(g)],
           hl: unitHl({ groups: [g] }),
         };
@@ -258,7 +286,7 @@
         subs.push({
           title: 'constraint ' + L(of[e.a]) + '–' + L(of[e.b]),
           body: 'A ' + si(e.value, 'V') + ' source floats between nodes <b>' + L(of[e.a]) + '</b> and <b>' + L(of[e.b]) +
-            '</b>, so it fixes the difference between their voltages — an extra equation on top of the KCL ones.',
+            '</b>, so it fixes the difference between their voltages — an extra equation on top of the KCL ones.' + boardHtml(),
           eq: [vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + si(e.value, 'V')],
           hl: { edges: [e.id] },
         });
@@ -301,6 +329,8 @@
         ')</th></tr></thead><tbody><tr><td>' + (list.length ? list.map(L).join(', ') : '— none —') + '</td></tr></tbody></table></div>';
     }
     var solveSubs = [];
+    var boardAtStart = boardHtml();                 // snapshot before solving narrows the board down
+    var voltsAtStart = voltsFor(order.filter(function (g) { return P.fixed[g]; }));
     if (m) (function () {
       var solvedNow = {}; order.forEach(function (g) { if (P.fixed[g]) solvedNow[g] = true; });
       var remaining = P.unknown.slice();
@@ -318,20 +348,24 @@
         var Rlist = terms.map(function (t) { return t.R; }).join(' × ');
 
         // the derivation lines, in order
-        var lineWrite = terms.map(function (t) { return '(' + vg + ' − ' + t.Vo + ')/' + t.R; }).join(' + ') + ' = 0';
-        var lineClear = terms.map(function (t) { return t.ce + '·(' + vg + ' − ' + t.Vo + ')'; }).join(' + ') + ' = 0';
+        var lineWrite = terms.map(function (t) { return frac(diff(vg, t.Vo), t.R); }).join(' + ') + ' = 0';
+        var lineClear = terms.map(function (t) { return t.ce + '·(' + diff(vg, t.Vo) + ')'; }).join(' + ') + ' = 0';
         var lineMult = terms.map(function (t) { return t.ce + '·' + vg; }).join(' + ') +
           terms.map(function (t) { if (t.Vo === 0) return ''; var k = round(t.ce * Math.abs(t.Vo)); return (t.Vo > 0 ? ' − ' : ' + ') + k; }).join('') + ' = 0';
         var lineCollect = Csum + '·' + vg + ' = ' + round(Ksum);
-        var lineDivide = vg + ' = ' + round(Ksum) + ' / ' + Csum;
+        var lineDivide = vg + ' = ' + frac(round(Ksum), Csum);
         var lineAnswer = vg + ' = ' + si(V(g), 'V');
 
+        // volts known so far don't change again until this node's own answer below, so every
+        // substep of this node's derivation carries the same baseline — nothing should vanish
+        // partway through a node's own algebra and reappear after.
+        hl = extend(hl, { volts: voltsFor(Object.keys(solvedNow)) });
         var chain = [];                                                  // accumulates as we go
-        function step(title, body, newLine) { chain.push(newLine); solveSubs.push({ title: 'node ' + L(g) + ' — ' + title, body: body, eq: chain.slice(), hl: hl }); }
+        function step(title, body, newLine) { chain.push(newLine); solveSubs.push({ title: 'node ' + L(g) + ' — ' + title, body: body + boardHtml(), eq: chain.slice(), hl: hl }); }
 
         solveSubs.push({
           title: 'node ' + L(g) + ' — ready',
-          body: 'Node <b>' + L(g) + '</b>’s neighbours are all known now, so ' + vg + ' is the only unknown in its equation — it solves in one shot. It stays highlighted, and each move stacks under the last so you can watch the equation simplify.' + tableBefore,
+          body: 'Node <b>' + L(g) + '</b>’s neighbours are all known now, so ' + vg + ' is the only unknown in its equation — it solves in one shot. It stays highlighted, and each move stacks under the last so you can watch the equation simplify.' + tableBefore + boardHtml(),
           hl: hl,
         });
         step('write the equation', 'Node ' + L(g) + '’s equation from step 6, with each known neighbour voltage filled in.', lineWrite);
@@ -339,7 +373,14 @@
         step('multiply out', 'Multiply each bracket out.', lineMult);
         step('collect ' + vg, 'Add the ' + vg + ' terms together, and move the plain number to the right-hand side.', lineCollect);
         step('divide', 'Divide both sides by the number in front of ' + vg + '.', lineDivide);
-        step('answer', 'That is node ' + L(g) + '’s voltage — now a known value. Watch its neighbours’ unknown counts drop in the next table.', lineAnswer);
+        board[g] = si(V(g), 'V');
+        chain.push(lineAnswer);
+        solveSubs.push({
+          title: 'node ' + L(g) + ' — answer',
+          body: 'That is node ' + L(g) + '’s voltage — now a known value. Watch its neighbours’ unknown counts drop in the next table.' + boardHtml(),
+          eq: chain.slice(),
+          hl: extend(hl, { volts: voltsFor(Object.keys(solvedNow).concat([g])) }),
+        });
       }
 
       P.open.forEach(function (u) {
@@ -351,15 +392,16 @@
           // the source constraint, then the pair's voltages. Still fraction/Ohm's-law form.
           solveSubs.push({
             title: 'supernode ' + u.groups.map(L).join('+') + ' — set up',
-            body: 'A source floats between nodes ' + u.groups.map(L).join(' and ') + ', so solve them as a pair: their two current equations plus the source’s voltage constraint.' + tableBefore,
+            body: 'A source floats between nodes ' + u.groups.map(L).join(' and ') + ', so solve them as a pair: their two current equations plus the source’s voltage constraint.' + tableBefore + boardHtml(),
             eq: u.groups.map(function (g) { return 'Node ' + L(g) + ':  ' + kclNumeric(g); }).concat(['constraint:  ' + supernodeConstraint(u)]),
-            hl: hl,
+            hl: extend(hl, { volts: voltsFor(Object.keys(solvedNow)) }),
           });
+          u.groups.forEach(function (g) { board[g] = si(V(g), 'V'); });
           solveSubs.push({
             title: 'supernode ' + u.groups.map(L).join('+') + ' — solve',
-            body: 'Use the constraint to replace one voltage, solve the single remaining unknown, then recover the other from the constraint.',
+            body: 'Use the constraint to replace one voltage, solve the single remaining unknown, then recover the other from the constraint.' + boardHtml(),
             eq: u.groups.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
-            hl: hl,
+            hl: extend(hl, { volts: voltsFor(Object.keys(solvedNow).concat(u.groups)) }),
           });
         }
         u.groups.forEach(function (g) { solvedNow[g] = true; remaining.splice(remaining.indexOf(g), 1); });
@@ -399,8 +441,8 @@
 
           solveSubs.push({
             title: 'coupled ' + P.coupled.map(L).join(', ') + ' — a linked system',
-            body: 'These <b>' + cn + '</b> nodes are linked — each equation still mentions another unknown, so none solves in one shot. From each node’s equation write that node’s voltage in terms of its neighbours, then substitute those into one another until one falls out as a number.' + sysTable(P.coupled),
-            hl: cHl,
+            body: 'These <b>' + cn + '</b> nodes are linked — each equation still mentions another unknown, so none solves in one shot. From each node’s equation write that node’s voltage in terms of its neighbours, then substitute those into one another until one falls out as a number.' + sysTable(P.coupled) + boardHtml(),
+            hl: extend(cHl, { volts: voltsFor(Object.keys(solvedNow)) }),
           });
 
           // Derive EVERY coupled node's own cleared equation first — same clear-the-fractions
@@ -417,8 +459,8 @@
             terms.forEach(function (t) { t.ce = M / t.R; t.Vo = t.known ? round(V(t.o)) : null; });
             var Csum = terms.reduce(function (a, t) { return a + t.ce; }, 0);
             function otherTxt(t) { return t.known ? t.Vo : vsub(L(t.o)); }
-            var lineWrite = terms.map(function (t) { return '(' + vg + ' − ' + otherTxt(t) + ')/' + t.R; }).join(' + ') + ' = 0';
-            var lineClear = terms.map(function (t) { return t.ce + '·(' + vg + ' − ' + otherTxt(t) + ')'; }).join(' + ') + ' = 0';
+            var lineWrite = terms.map(function (t) { return frac(diff(vg, otherTxt(t)), t.R); }).join(' + ') + ' = 0';
+            var lineClear = terms.map(function (t) { return t.ce + '·(' + diff(vg, otherTxt(t)) + ')'; }).join(' + ') + ' = 0';
             var lineMult = terms.map(function (t) { return t.ce + '·' + vg; }).join(' + ') +
               terms.map(function (t) {
                 if (t.known) { if (t.Vo === 0) return ''; return (t.Vo > 0 ? ' − ' : ' + ') + round(t.ce * Math.abs(t.Vo)); }
@@ -428,17 +470,19 @@
             var rhsUnknown = terms.filter(function (t) { return !t.known; }).map(function (t) { return ' + ' + t.ce + '·' + vsub(L(t.o)); }).join('');
             var lineCollect = Csum + '·' + vg + ' = ' + round(Ksum) + rhsUnknown;
 
+            var gHl = extend(unitHl({ groups: [g] }), { volts: voltsFor(Object.keys(solvedNow)) });
             var chainG = [];
-            function stepG(title, body, line) { chainG.push(line); solveSubs.push({ title: 'node ' + L(g) + ' — ' + title, body: body, eq: chainG.slice(), hl: unitHl({ groups: [g] }) }); }
+            function stepG(title, body, line) { chainG.push(line); solveSubs.push({ title: 'node ' + L(g) + ' — ' + title, body: body + boardHtml(), eq: chainG.slice(), hl: gHl }); }
             solveSubs.push({
               title: 'node ' + L(g) + ' — still coupled',
-              body: 'Node <b>' + L(g) + '</b> has a neighbour that is also still unknown, so it can’t be found on its own yet — but its equation still clears the same way as any other node.',
-              hl: unitHl({ groups: [g] }),
+              body: 'Node <b>' + L(g) + '</b> has a neighbour that is also still unknown, so it can’t be found on its own yet — but its equation still clears the same way as any other node.' + boardHtml(),
+              hl: gHl,
             });
             stepG('write the equation', 'Node ' + L(g) + '’s equation from step 6, known neighbours filled in as numbers, coupled ones left as letters.', lineWrite);
             stepG('clear the fractions', 'Multiply every term by all the resistances (' + terms.map(function (t) { return t.R; }).join(' × ') + '); each division cancels.', lineClear);
             stepG('multiply out', 'Multiply each bracket out.', lineMult);
             stepG('collect ' + vg, 'Collect the ' + vg + ' terms on the left and everything else on the right.', lineCollect);
+            board[g] = vg + ' = ' + fmtExpr(expr[g]);
             stepG('divide', 'Divide both sides by ' + Csum + ' — ' + vg + ' is now written in volts plus a ratio of its still-unknown neighbour(s).', vg + ' = ' + fmtExpr(expr[g]));
           });
 
@@ -459,19 +503,21 @@
               Object.keys(expr[p].t).forEach(function (n) { expr[q].t[n] = (expr[q].t[n] || 0) + coef * expr[p].t[n]; });
               var selfTerm = q in expr[q].t;
               var afterLine = fmtExpr(expr[q]);
+              board[q] = vsub(L(q)) + ' = ' + afterLine;
               solveSubs.push({
                 title: 'substitute ' + vsub(L(p)) + ' into ' + vsub(L(q)),
-                body: 'Node <b>' + L(q) + '</b>’s equation used ' + vsub(L(p)) + '. Replace it with ' + vsub(L(p)) + ' = ' + fmtExpr(expr[p]) + ' and multiply out.',
+                body: 'Node <b>' + L(q) + '</b>’s equation used ' + vsub(L(p)) + '. Replace it with ' + vsub(L(p)) + ' = ' + fmtExpr(expr[p]) + ' and multiply out.' + boardHtml(),
                 eq: [vsub(L(q)) + ' = ' + beforeLine, vsub(L(q)) + ' = ' + afterLine],
-                hl: unitHl({ groups: [q] }),
+                hl: extend(unitHl({ groups: [q] }), { volts: voltsFor(Object.keys(solvedNow)) }),
               });
               if (selfTerm) {
                 resolveSelf(expr[q], q); cleanT(expr[q]);
+                board[q] = vsub(L(q)) + ' = ' + fmtExpr(expr[q]);
                 solveSubs.push({
                   title: vsub(L(q)) + ' — collect and divide',
-                  body: vsub(L(q)) + ' turned up on both sides after that substitution — collect it on the left, then divide, exactly like clearing any single-unknown equation.',
+                  body: vsub(L(q)) + ' turned up on both sides after that substitution — collect it on the left, then divide, exactly like clearing any single-unknown equation.' + boardHtml(),
                   eq: [vsub(L(q)) + ' = ' + afterLine, vsub(L(q)) + ' = ' + fmtExpr(expr[q])],
-                  hl: unitHl({ groups: [q] }),
+                  hl: extend(unitHl({ groups: [q] }), { volts: voltsFor(Object.keys(solvedNow)) }),
                 });
               } else {
                 cleanT(expr[q]);
@@ -480,27 +526,29 @@
             stored.push(p); pool.shift();
             solveSubs.push({
               title: pool.length + ' unknown' + (pool.length === 1 ? '' : 's') + ' left',
-              body: vsub(L(p)) + ' is now written from the others; we come back for its number at the end. Still to pin down:' + sysTable(pool),
-              hl: { nodes: pool.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
+              body: vsub(L(p)) + ' is now written from the others; we come back for its number at the end. Still to pin down:' + sysTable(pool) + boardHtml(),
+              hl: extend({ nodes: pool.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) }, { volts: voltsFor(Object.keys(solvedNow)) }),
             });
           }
           var last = pool[0]; resolveSelf(expr[last], last); cleanT(expr[last]);
+          board[last] = si(V(last), 'V');
+          var known = {}; known[last] = V(last);
           solveSubs.push({
             title: vsub(L(last)) + ' — falls out',
-            body: 'Node <b>' + L(last) + '</b>’s expression has no unknowns left on the right — it is just a number.',
+            body: 'Node <b>' + L(last) + '</b>’s expression has no unknowns left on the right — it is just a number.' + boardHtml(),
             eq: [vsub(L(last)) + ' = ' + fmtExpr(expr[last]), vsub(L(last)) + ' = ' + si(V(last), 'V')],
-            hl: unitHl({ groups: [last] }),
+            hl: extend(unitHl({ groups: [last] }), { volts: voltsFor(Object.keys(solvedNow).concat(Object.keys(known))) }),
           });
-          var known = {}; known[last] = V(last);
           for (var si2 = stored.length - 1; si2 >= 0; si2--) {
             var g2 = stored[si2];
+            board[g2] = si(V(g2), 'V');
+            known[g2] = V(g2);
             solveSubs.push({
               title: 'back to ' + vsub(L(g2)),
-              body: 'Every voltage on the right of ' + vsub(L(g2)) + '’s line is known now — put the numbers in.',
+              body: 'Every voltage on the right of ' + vsub(L(g2)) + '’s line is known now — put the numbers in.' + boardHtml(),
               eq: [vsub(L(g2)) + ' = ' + fmtExpr(expr[g2], function (n) { return known[n]; }), vsub(L(g2)) + ' = ' + si(V(g2), 'V')],
-              hl: unitHl({ groups: [g2] }),
+              hl: extend(unitHl({ groups: [g2] }), { volts: voltsFor(Object.keys(solvedNow).concat(Object.keys(known))) }),
             });
-            known[g2] = V(g2);
           }
         } else {
           // Source-bridged coupled block (supernode): resistor-only expressions miss the source
@@ -508,18 +556,20 @@
           var innerSrc = circuit.edges.filter(function (e) { return e.type === 'V' && cset[of[e.a]] && cset[of[e.b]]; });
           solveSubs.push({
             title: 'coupled ' + P.coupled.map(L).join(', ') + ' — a system with a source',
-            body: 'These <b>' + cn + '</b> nodes are linked, and a source floats between two of them (a supernode) — that adds a voltage constraint. This one is a genuine simultaneous system; lay it out and finish with a matrix or calculator, then read off each node.' + sysTable(P.coupled),
-            hl: cHl,
+            body: 'These <b>' + cn + '</b> nodes are linked, and a source floats between two of them (a supernode) — that adds a voltage constraint. This one is a genuine simultaneous system; lay it out and finish with a matrix or calculator, then read off each node.' + sysTable(P.coupled) + boardHtml(),
+            hl: extend(cHl, { volts: voltsFor(Object.keys(solvedNow)) }),
           });
           P.coupled.forEach(function (g) {
-            solveSubs.push({ title: 'equation for ' + L(g), body: 'KCL at node <b>' + L(g) + '</b>, coupled neighbours left as letters.', eq: [kclEq(g)], hl: unitHl({ groups: [g] }) });
+            solveSubs.push({ title: 'equation for ' + L(g), body: 'KCL at node <b>' + L(g) + '</b>, coupled neighbours left as letters.' + boardHtml(), eq: [kclEq(g)], hl: extend(unitHl({ groups: [g] }), { volts: voltsFor(Object.keys(solvedNow)) }) });
           });
           innerSrc.forEach(function (e) {
-            solveSubs.push({ title: 'constraint ' + L(of[e.a]) + '–' + L(of[e.b]), body: 'The floating ' + si(e.value, 'V') + ' source fixes the difference between its two nodes.', eq: [vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + si(e.value, 'V')], hl: { edges: [e.id] } });
+            solveSubs.push({ title: 'constraint ' + L(of[e.a]) + '–' + L(of[e.b]), body: 'The floating ' + si(e.value, 'V') + ' source fixes the difference between its two nodes.' + boardHtml(), eq: [vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + si(e.value, 'V')], hl: extend({ edges: [e.id] }, { volts: voltsFor(Object.keys(solvedNow)) }) });
           });
-          solveSubs.push({ title: 'solve the system', body: 'That is ' + cn + ' equations plus the constraint — solve together (matrix / calculator). Results follow, node by node.', hl: cHl });
+          solveSubs.push({ title: 'solve the system', body: 'That is ' + cn + ' equations plus the constraint — solve together (matrix / calculator). Results follow, node by node.' + boardHtml(), hl: extend(cHl, { volts: voltsFor(Object.keys(solvedNow)) }) });
+          var answered = [];
           P.coupled.forEach(function (g) {
-            solveSubs.push({ title: 'answer for ' + L(g), body: 'Node ' + L(g) + '’s voltage from the simultaneous solution.', eq: [vsub(L(g)) + ' = ' + si(V(g), 'V')], hl: unitHl({ groups: [g] }) });
+            board[g] = si(V(g), 'V'); answered.push(g);
+            solveSubs.push({ title: 'answer for ' + L(g), body: 'Node ' + L(g) + '’s voltage from the simultaneous solution.' + boardHtml(), eq: [vsub(L(g)) + ' = ' + si(V(g), 'V')], hl: extend(unitHl({ groups: [g] }), { volts: voltsFor(Object.keys(solvedNow).concat(answered)) }) });
           });
         }
         P.coupled.forEach(function (g) { solvedNow[g] = true; });
@@ -528,17 +578,17 @@
       // final recap: all voltages in one place
       solveSubs.push({
         title: 'all nodes solved',
-        body: 'Every unknown node voltage is now found. Full set:',
+        body: 'Every unknown node voltage is now found. Full set:' + boardHtml(),
         eq: P.unknown.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
-        hl: { nodes: circuit.nodes.map(function (n) { return n.id; }) },
+        hl: { nodes: circuit.nodes.map(function (n) { return n.id; }), volts: voltsFor(order) },
       });
     })();
     steps.push({
       n: 8, title: 'Solve the equations',
-      body: m ? 'Solve the ' + m + ' equation' + (m === 1 ? '' : 's') + ' from step 6 with Ohm’s law only — clear the fractions, multiply out, collect and divide. Start with any node whose neighbours are all known (it solves in one shot); each answer then unlocks the next. Step through node by node.'
-        : 'Nothing to solve — the node voltages are read straight off the sources.',
+      body: (m ? 'Solve the ' + m + ' equation' + (m === 1 ? '' : 's') + ' from step 6 with Ohm’s law only — clear the fractions, multiply out, collect and divide. Start with any node whose neighbours are all known (it solves in one shot); each answer then unlocks the next. Step through node by node.'
+        : 'Nothing to solve — the node voltages are read straight off the sources.') + boardAtStart,
       eq: order.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
-      hl: { nodes: circuit.nodes.map(function (n) { return n.id; }) },
+      hl: { nodes: circuit.nodes.map(function (n) { return n.id; }), volts: voltsAtStart },
       subs: solveSubs,
     });
 
@@ -549,8 +599,8 @@
       var i = Math.abs(r.current), p = Math.abs(r.power);
       return {
         title: si(r.edge.value, 'Ω'),
-        body: 'Current by Ohm’s law, power dissipated as heat: i = Δv/R, P = i²R.',
-        eq: ['i = ' + si(Math.abs(r.drop), 'V') + ' / ' + r.edge.value + ' = ' + si(i, 'A'),
+        body: 'Current by Ohm’s law, power dissipated as heat: i = Δv/R, P = i²R.' + boardHtml(),
+        eq: ['i = ' + frac(si(Math.abs(r.drop), 'V'), r.edge.value) + ' = ' + si(i, 'A'),
           'P = i²·R = ' + si(p, 'W')],
         hl: { edges: [r.edge.id] },
       };
@@ -559,30 +609,43 @@
       var deliver = -r.power;                       // absorbed<0 ⇒ delivering
       return {
         title: si(r.edge.value, 'V') + ' source',
-        body: (deliver >= 0 ? 'This source delivers' : 'This source absorbs') + ' power P = V·I.',
+        body: (deliver >= 0 ? 'This source delivers' : 'This source absorbs') + ' power P = V·I.' + boardHtml(),
         eq: ['i = ' + si(Math.abs(r.current), 'A'), 'P = ' + si(Math.abs(deliver), 'W') + (deliver >= 0 ? ' delivered' : ' absorbed')],
         hl: { edges: [r.edge.id] },
       };
     });
     steps.push({
       n: 9, title: 'Currents & power check',
-      body: 'Ohm’s law gives each resistor current and its dissipation; each source’s power is V·I. Total dissipated must equal total generated. Step through every element.',
+      body: 'Ohm’s law gives each resistor current and its dissipation; each source’s power is V·I. Total dissipated must equal total generated. Step through every element.' + boardHtml(),
       eq: ['ΣP<sub>diss</sub> = ' + si(pc.dissipated, 'W'), 'ΣP<sub>gen</sub> = ' + si(pc.generated, 'W') + ' ' + (pc.ok ? '✓' : '✗')],
       hl: {},
       subs: resSubs.concat(srcSubs).concat([{
         title: 'balance',
-        body: 'Every resistor’s dissipation summed equals the power the sources deliver — energy is conserved.',
+        body: 'Every resistor’s dissipation summed equals the power the sources deliver — energy is conserved.' + boardHtml(),
         eq: ['ΣP<sub>diss</sub> = ' + si(pc.dissipated, 'W'), 'ΣP<sub>gen</sub> = ' + si(pc.generated, 'W') + ' ' + (pc.ok ? '✓' : '✗')],
         hl: { edges: sources.map(function (e) { return e.id; }) },
       }]),
     });
 
-    // node letters are introduced in step 2; reveal them from there onward, on the step and every substep
+    // node letters and the ground symbol are introduced in step 2; reveal both from there
+    // onward, on the step and every substep. Likewise a voltage, once known, must never
+    // disappear on a later step: steps 3–7 always carry at least the source-fixed voltages
+    // (step 8 already builds its own progressively-growing set and is left alone), and step
+    // 9 — everything solved by now — always shows the full set.
     var labelledIds = circuit.nodes.filter(function (n) { return n.label; }).map(function (n) { return n.id; });
+    var groundIds = [ln.rep[ref]];
+    var fixedVolts = voltsFor(order.filter(function (g) { return P.fixed[g]; }));
+    var allVolts = voltsFor(order);
     steps.forEach(function (s) {
       if (s.n < 2) return;
-      s.hl = s.hl || {}; s.hl.labels = labelledIds;
-      (s.subs || []).forEach(function (ss) { ss.hl = ss.hl || {}; ss.hl.labels = labelledIds; });
+      s.hl = s.hl || {}; s.hl.labels = labelledIds; s.hl.ground = groundIds;
+      if (s.n >= 3 && s.n <= 7) s.hl.volts = extend(fixedVolts, s.hl.volts || {});
+      if (s.n >= 9) s.hl.volts = allVolts;
+      (s.subs || []).forEach(function (ss) {
+        ss.hl = ss.hl || {}; ss.hl.labels = labelledIds; ss.hl.ground = groundIds;
+        if (s.n >= 3 && s.n <= 7) ss.hl.volts = extend(fixedVolts, ss.hl.volts || {});
+        if (s.n >= 9) ss.hl.volts = allVolts;
+      });
     });
 
     return steps;

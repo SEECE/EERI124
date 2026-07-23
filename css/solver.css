@@ -50,18 +50,35 @@
   color: var(--ink);
 }
 /* wrap long equations instead of scrolling them sideways — for big circuits every
-   term stays visible. Hanging indent keeps continuation lines clear of the label. */
+   term stays visible. No hanging indent: a line can start with a stacked fraction
+   (an atomic inline-flex box), and a negative text-indent shoved that fraction
+   left of the container padding, overlapping the box border. */
 .eq-line {
-  padding: 6px 0;
+  padding: 8px 0;
   white-space: normal;
   overflow-wrap: anywhere;
-  padding-left: 1.4em;
-  text-indent: -1.4em;
+  line-height: 1.7;
   letter-spacing: 0.01em;
 }
 .eq-line + .eq-line { border-top: 1px solid rgba(139, 92, 246, 0.14); }
 .eq-line sub, .eq-line sup { font-size: 0.7em; font-style: normal; }
 .eq-line b { font-style: normal; }
+
+/* real stacked fraction for division terms (Ohm's law), instead of a bare "/".
+   nowrap + its own margin so it reads as one atomic symbol and never gets crowded
+   by the +/− on either side or split mid-fraction by the line wrap above. */
+.frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin: 3px 0.3em;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.frac .num { padding: 0 0.2em 2px; border-bottom: 1.5px solid currentColor; }
+.frac .den { padding: 2px 0.2em 0; }
 
 /* step counter + Prev/Next now live in the left control panel (left = control) */
 .step-control .step-count { margin-bottom: 10px; }
@@ -92,6 +109,13 @@
 .kcl-status th, .kcl-status td { padding: 4px 6px; text-align: left; white-space: nowrap; border-bottom: 1px solid rgba(139, 92, 246, 0.14); }
 .kcl-status th { color: var(--ink-faint); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.03em; }
 .kcl-status tr.row-ready td { color: var(--accent-deep); font-weight: 600; }
+
+/* live "current equation per node" board — updates as step 6/8 substeps are visited */
+.eq-board td:last-child {
+  font-family: 'STIX Two Math', 'Cambria Math', Cambria, 'Times New Roman', serif;
+  font-style: italic;
+  white-space: normal;
+}
 
 .step-nav {
   display: flex;
@@ -135,6 +159,9 @@
 /* node letters stay hidden until the step that names them reveals them (highlight labels:) */
 .circuit-canvas svg .node-label { opacity: 0; }
 .circuit-canvas svg .node-label.show { opacity: 1; }
+
+/* earth symbol drawn under the chosen 0 V reference node (highlight ground:) */
+.circuit-canvas svg .ground-symbol line { stroke: var(--ink); }
 
 @media (max-width: 720px) {
   .step-panel { flex: none; overflow-y: visible; }
