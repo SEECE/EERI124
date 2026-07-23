@@ -29,6 +29,8 @@
   // real stacked fraction (numerator over denominator) instead of a bare "/" — styled in solver.css
   function frac(num, den) { return '<span class="frac"><span class="num">' + num + '</span><span class="den">' + den + '</span></span>'; }
   function extend(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
+  // "a − b" that flips to "a + b" when b is a negative number, instead of the confusing "− -5"
+  function diff(base, val) { return (typeof val === 'number' && val < 0) ? base + ' + ' + (-val) : base + ' − ' + val; }
 
   window.NodeVoltage = function (circuit) {
     var ln = S.letterNodes(circuit);
@@ -131,13 +133,13 @@
     function kclEq(g) {
       return resAt(g).map(function (e) {
         var o = other(e, g);
-        return frac(vsub(L(g)) + ' − ' + (P.fixed[o] ? round(V(o)) : vsub(L(o))), e.value);
+        return frac(diff(vsub(L(g)), P.fixed[o] ? round(V(o)) : vsub(L(o))), e.value);
       }).join(' + ') + ' = 0';
     }
     // fully-substituted numeric line for the solve step (every neighbour as its value)
     function kclNumeric(g) {
       return resAt(g).map(function (e) {
-        return frac(vsub(L(g)) + ' − ' + round(V(other(e, g))), e.value);
+        return frac(diff(vsub(L(g)), round(V(other(e, g)))), e.value);
       }).join(' + ') + ' = 0';
     }
 
@@ -344,8 +346,8 @@
         var Rlist = terms.map(function (t) { return t.R; }).join(' × ');
 
         // the derivation lines, in order
-        var lineWrite = terms.map(function (t) { return frac(vg + ' − ' + t.Vo, t.R); }).join(' + ') + ' = 0';
-        var lineClear = terms.map(function (t) { return t.ce + '·(' + vg + ' − ' + t.Vo + ')'; }).join(' + ') + ' = 0';
+        var lineWrite = terms.map(function (t) { return frac(diff(vg, t.Vo), t.R); }).join(' + ') + ' = 0';
+        var lineClear = terms.map(function (t) { return t.ce + '·(' + diff(vg, t.Vo) + ')'; }).join(' + ') + ' = 0';
         var lineMult = terms.map(function (t) { return t.ce + '·' + vg; }).join(' + ') +
           terms.map(function (t) { if (t.Vo === 0) return ''; var k = round(t.ce * Math.abs(t.Vo)); return (t.Vo > 0 ? ' − ' : ' + ') + k; }).join('') + ' = 0';
         var lineCollect = Csum + '·' + vg + ' = ' + round(Ksum);
@@ -451,8 +453,8 @@
             terms.forEach(function (t) { t.ce = M / t.R; t.Vo = t.known ? round(V(t.o)) : null; });
             var Csum = terms.reduce(function (a, t) { return a + t.ce; }, 0);
             function otherTxt(t) { return t.known ? t.Vo : vsub(L(t.o)); }
-            var lineWrite = terms.map(function (t) { return frac(vg + ' − ' + otherTxt(t), t.R); }).join(' + ') + ' = 0';
-            var lineClear = terms.map(function (t) { return t.ce + '·(' + vg + ' − ' + otherTxt(t) + ')'; }).join(' + ') + ' = 0';
+            var lineWrite = terms.map(function (t) { return frac(diff(vg, otherTxt(t)), t.R); }).join(' + ') + ' = 0';
+            var lineClear = terms.map(function (t) { return t.ce + '·(' + diff(vg, otherTxt(t)) + ')'; }).join(' + ') + ' = 0';
             var lineMult = terms.map(function (t) { return t.ce + '·' + vg; }).join(' + ') +
               terms.map(function (t) {
                 if (t.known) { if (t.Vo === 0) return ''; return (t.Vo > 0 ? ' − ' : ' + ') + round(t.ce * Math.abs(t.Vo)); }
