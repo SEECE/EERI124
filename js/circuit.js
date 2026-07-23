@@ -297,6 +297,22 @@
         el('line', { x1: x - w, y1: yy, x2: x + w, y2: yy, stroke: 'var(--ink)', 'stroke-width': 2 }, g);
       });
     });
+
+    // physical voltage reading above a node, once it's known/solved (spec.volts = {nodeId: text})
+    Array.prototype.forEach.call(svg.querySelectorAll('.node-volt'), function (t) {
+      t.parentNode.removeChild(t);
+    });
+    var volts = spec.volts || {};
+    Object.keys(volts).forEach(function (nid) {
+      var c = svg.querySelector('[data-nid="' + nid + '"]');
+      if (!c) return;
+      var x = +c.getAttribute('cx'), y = +c.getAttribute('cy');
+      el('text', {
+        'class': 'node-volt', x: x, y: y - 18, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        fill: 'var(--accent-hover)', 'font-size': 12, 'font-weight': 600,
+        'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4,
+      }, svg).textContent = volts[nid];
+    });
   }
 
   window.Circuit = {
