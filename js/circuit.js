@@ -189,14 +189,16 @@
       }
     });
 
+    var circleOf = {};
     circuit.nodes.forEach(function (n) {
       var p = byId[n.id];
-      el('circle', { 'class': 'node', 'data-nid': n.id, cx: p.x, cy: p.y, r: 3.5, fill: 'var(--ink)' }, svg);
+      circleOf[n.id] = el('circle', { 'class': 'node', 'data-nid': n.id, cx: p.x, cy: p.y, r: 3.5, fill: 'var(--ink)' }, svg);
     });
 
-    // optional node labels (letters/measuring points): drop each into the widest angular
-    // gap between the edges meeting at the node, so the letter clears the wires/resistors
-    // instead of landing on top of them. Fall back to the centroid direction if isolated.
+    // angular gaps around each node, widest first, so letters/ground/voltage readings drop
+    // into open space instead of landing on top of a wire. Fall back to the centroid
+    // direction if isolated. The widest gap is reserved for the ground symbol (data-gdir);
+    // labels/volts use the *next*-widest (data-ldir) so the two never share a spot.
     var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
     var incident = {};
     circuit.nodes.forEach(function (n) { incident[n.id] = []; });
@@ -205,23 +207,26 @@
       incident[e.a].push(Math.atan2(b.y - a.y, b.x - a.x));
       incident[e.b].push(Math.atan2(a.y - b.y, a.x - b.x));
     });
-    circuit.nodes.forEach(function (n) {
-      if (!n.label) return;
-      var p = byId[n.id];
-      var angs = incident[n.id].slice().sort(function (x, y) { return x - y; });
-      var dir;
-      if (!angs.length) {
-        dir = Math.atan2(p.y - cy, p.x - cx);
-      } else {
-        var best = -1, mid = 0;
-        for (var k = 0; k < angs.length; k++) {
-          var lo = angs[k];
-          var hi = k === angs.length - 1 ? angs[0] + 2 * Math.PI : angs[k + 1];
-          if (hi - lo > best) { best = hi - lo; mid = lo + (hi - lo) / 2; }
-        }
-        dir = mid;
+    function gapsOf(nid) {
+      var p = byId[nid];
+      var angs = incident[nid].slice().sort(function (x, y) { return x - y; });
+      if (!angs.length) return [Math.atan2(p.y - cy, p.x - cx)];
+      var gaps = [];
+      for (var k = 0; k < angs.length; k++) {
+        var lo = angs[k], hi = k === angs.length - 1 ? angs[0] + 2 * Math.PI : angs[k + 1];
+        gaps.push({ mid: lo + (hi - lo) / 2, width: hi - lo });
       }
-      var lx = p.x + Math.cos(dir) * 20, ly = p.y + Math.sin(dir) * 20;
+      gaps.sort(function (a, b) { return b.width - a.width; });
+      return gaps.map(function (gp) { return gp.mid; });
+    }
+    circuit.nodes.forEach(function (n) {
+      var p = byId[n.id];
+      var gaps = gapsOf(n.id);
+      circleOf[n.id].setAttribute('data-gdir', (gaps[0] * 180 / Math.PI).toFixed(1));
+      if (!n.label) return;
+      var ldir = gaps.length > 1 ? gaps[1] : gaps[0];
+      circleOf[n.id].setAttribute('data-ldir', (ldir * 180 / Math.PI).toFixed(1));
+      var lx = p.x + Math.cos(ldir) * 20, ly = p.y + Math.sin(ldir) * 20;
       // hidden by default; a solver step reveals it via highlight({ labels: [nodeId] })
       // so letters appear when the method names them, not from the start
       el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, svg)
@@ -282,7 +287,9 @@
       if (loop.label) el('text', { x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 15, 'font-weight': 700 }, g).textContent = loop.label;
     });
 
-    // earth symbol (stub + shrinking bars) under the chosen 0 V reference node(s)
+    // earth symbol (stub + shrinking bars) under the chosen 0 V reference node(s) — aimed
+    // into the node's widest open angular gap (data-gdir, set at render time) so it never
+    // crosses a wire, instead of always pointing straight down.
     Array.prototype.forEach.call(svg.querySelectorAll('.ground-symbol'), function (g) {
       g.parentNode.removeChild(g);
     });
@@ -290,15 +297,20 @@
       var c = svg.querySelector('[data-nid="' + nid + '"]');
       if (!c) return;
       var x = +c.getAttribute('cx'), y = +c.getAttribute('cy');
-      var g = el('g', { 'class': 'ground-symbol' }, svg);
-      el('line', { x1: x, y1: y, x2: x, y2: y + 14, stroke: 'var(--ink)', 'stroke-width': 2 }, g);
+      var gdirAttr = c.getAttribute('data-gdir');
+      var deg = gdirAttr !== null ? +gdirAttr : 90;                      // default: straight down
+      var g = el('g', { 'class': 'ground-symbol', transform: 'translate(' + x + ',' + y + ') rotate(' + (deg - 90) + ')' }, svg);
+      el('line', { x1: 0, y1: 0, x2: 0, y2: 14, stroke: 'var(--ink)', 'stroke-width': 2 }, g);
       [9, 6, 3].forEach(function (w, idx) {
-        var yy = y + 16 + idx * 4;
-        el('line', { x1: x - w, y1: yy, x2: x + w, y2: yy, stroke: 'var(--ink)', 'stroke-width': 2 }, g);
+        var yy = 16 + idx * 4;
+        el('line', { x1: -w, y1: yy, x2: w, y2: yy, stroke: 'var(--ink)', 'stroke-width': 2 }, g);
       });
     });
 
-    // physical voltage reading above a node, once it's known/solved (spec.volts = {nodeId: text})
+    // physical voltage reading once a node is known/solved (spec.volts = {nodeId: text}) —
+    // offset along the node's letter direction (data-ldir, the *second*-widest gap) at a
+    // bigger radius than the letter, so it clears both the wires and the ground symbol
+    // (which claims the widest gap) instead of sitting in a fixed spot above the node.
     Array.prototype.forEach.call(svg.querySelectorAll('.node-volt'), function (t) {
       t.parentNode.removeChild(t);
     });
@@ -307,8 +319,11 @@
       var c = svg.querySelector('[data-nid="' + nid + '"]');
       if (!c) return;
       var x = +c.getAttribute('cx'), y = +c.getAttribute('cy');
+      var ldirAttr = c.getAttribute('data-ldir');
+      var rad = ldirAttr !== null ? (+ldirAttr * Math.PI / 180) : -Math.PI / 2;  // default: straight up
+      var vx = x + Math.cos(rad) * 36, vy = y + Math.sin(rad) * 36;
       el('text', {
-        'class': 'node-volt', x: x, y: y - 18, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        'class': 'node-volt', x: vx, y: vy, 'text-anchor': 'middle', 'dominant-baseline': 'central',
         fill: 'var(--accent-hover)', 'font-size': 12, 'font-weight': 600,
         'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4,
       }, svg).textContent = volts[nid];
