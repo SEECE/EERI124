@@ -15,6 +15,8 @@
   <script src="generators/grid.js"></script>
   <script src="generators/multi-source.js"></script>
   <script src="solve.js"></script>
+  <script src="techniques/mesh-current.js"></script>
+  <script src="techniques/node-voltage.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -112,6 +114,50 @@
             if (r.edge.type !== 'R') return;
             var im = Math.abs(mc.edgeCurrent[r.edge.id]), iv = Math.abs(r.current);
             assert(Math.abs(im - iv) <= 1e-6 * (iv + 1), 'mesh current ≠ node-voltage current');
+          });
+        }
+      });
+    });
+
+    // ---- KVL technique step list: loops persist, and the narrated algebra lands on the engine ----
+    Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
+      check('KVL steps ' + g.name + ' ×10', function () {
+        for (var i = 0; i < 10; i++) {
+          var c = g.generate(), mc = Solve.meshCurrents(c), steps = MeshCurrent(c);
+          assert(steps.length === 10, '10 PPT steps expected, got ' + steps.length);
+          steps.forEach(function (s, k) {
+            [s].concat(s.subs || []).forEach(function (view) {
+              var loops = view.hl && view.hl.loops;
+              if (k === 0) assert(!loops, 'step 1 draws loops too early');
+              else assert(loops && loops.length === mc.meshes.length, 'step ' + s.n + ' dropped the mesh loops');
+            });
+          });
+          assert(!/undefined|NaN/.test(JSON.stringify(steps)), 'step text has undefined/NaN');
+          // step 4 must meet every shared resistor twice and show it both ways round (3 eq lines)
+          var shared = c.edges.filter(function (e, k) {
+            var fa = mc.F.faceOf[2 * k], fb = mc.F.faceOf[2 * k + 1];
+            return e.type === 'R' && fa !== fb && fa !== mc.F.outer && fb !== mc.F.outer;
+          }).length;
+          var bothWays = (steps[3].subs || []).filter(function (view) { return (view.eq || []).length === 3; }).length;
+          assert(bothWays === shared, shared + ' shared resistors but ' + bothWays + ' both-ways views in step 4');
+          // the running board is a pinned panel field, never baked into the body text, and from
+          // step 6 (first equation written) on it must never blank out — in either technique
+          [steps, NodeVoltage(c)].forEach(function (list) {
+            list.forEach(function (s2) {
+              [s2].concat(s2.subs || []).forEach(function (view) {
+                assert(!/eq-board/.test(view.body || ''), 'step ' + s2.n + ' still has the board inside its body');
+              });
+            });
+            list.slice(5).forEach(function (s2) {
+              [s2].concat(s2.subs || []).forEach(function (view) {
+                assert(/eq-board/.test(view.board || ''), 'step ' + s2.n + ' view "' + (view.title || 'overview') + '" lost its board');
+              });
+            });
+          });
+          // the substitution chain reaching the engine's number is what makes "falls out" a
+          // single line; two lines would mean the hand algebra and the solver disagree
+          (steps[7].subs || []).forEach(function (view) {
+            if (/ — falls out$/.test(view.title)) assert(view.eq.length === 1, 'substitution chain ended at ' + view.eq[0] + ', engine says ' + view.eq[1]);
           });
         }
       });
