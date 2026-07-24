@@ -57,7 +57,7 @@
   C.register('Supermesh + known current (3 meshes)', function () {
     return C.build(
       [[0, 0], [2, 0], [4, 0], [6, 0], [6, 2], [4, 2], [2, 2], [0, 2]],
-      [['I', 7, 0], ['R', 0, 1], ['R', 1, 6], ['R', 1, 2], ['I', 2, 5], ['R', 2, 3], ['V', 3, 4],
+      [['I', 0, 7], ['R', 0, 1], ['R', 1, 6], ['R', 1, 2], ['I', 2, 5], ['R', 2, 3], ['V', 3, 4],
        ['W', 4, 5], ['W', 5, 6], ['W', 6, 7]],
       { flavour: false }   // the teaching point is exactly this arrangement of the two sources
     );
