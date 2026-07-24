@@ -589,7 +589,27 @@
         });
       });
 
-      // --- substitute the expressions into one another until one mesh falls out as a number ---
+      // --- a mesh already fixed by a current source is a number: put it into every line that
+      // mentions it before anything else (the PPT's 40·(i₂−i₁) with i₁ = 30 A) ---
+      mc.order.filter(function (f) { return groupOf[f].fixed; }).forEach(function (p) {
+        mc.order.forEach(function (q) {
+          if (q === p || !(p in expr[q].t)) return;
+          var beforeLine = fmtExpr(expr[q]);
+          var coef = expr[q].t[p]; delete expr[q].t[p];
+          expr[q].c += coef * expr[p].c;
+          cleanT(expr[q]); snap(q);
+          board[q] = name[q] + ' = ' + fmtExpr(expr[q]);
+          solveSubs.push({
+            title: 'put ' + name[p] + ' into ' + name[q],
+            body: 'Mesh <b>' + name[q] + '</b>’s line still mentions ' + name[p] + ', and that one is already known (' +
+              si(value[p], 'A') + ' from step 3) — put the number in.', board: boardHtml(),
+            eq: [name[q] + ' = ' + beforeLine, name[q] + ' = ' + fmtExpr(expr[q])],
+            hl: H({ edges: faceEdgeIds(q), nodes: faceNodeIds(q) }),
+          });
+        });
+      });
+
+      // --- substitute the remaining expressions into one another until one falls out ---
       var pool = mc.order.filter(function (f) { return Object.keys(expr[f].t).length; });
       if (pool.length > 1) {
         solveSubs.push({
