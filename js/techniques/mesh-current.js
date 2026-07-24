@@ -213,32 +213,62 @@
       hl: H({}),
     });
 
-    // Step 6 — BUILD the equations, one substep per mesh. No arithmetic here: this step only
-    // establishes how many equations there are and what each looks like. Solving is step 8.
+    // Step 6 — BUILD the equations. No arithmetic here, and no equation appears whole out of
+    // nowhere: each mesh's walk adds ONE term per substep — the same drops just marked in step 4,
+    // in the order you meet them going clockwise — and only the last substep closes it with "= 0".
+    var eqSubs = [];
+    mc.order.forEach(function (f) {
+      var t = T[f], sh = Object.keys(t.shared), run = [];
+      var hlF = H({ edges: faceEdgeIds(f), nodes: faceNodeIds(f) });
+      function partial() { return run.join(' + ') + ' …'; }
+      eqSubs.push({
+        title: name[f] + ' — start the walk',
+        body: 'Start anywhere on mesh <b>' + name[f] + '</b> and go <b>clockwise</b>, adding one term for every element you meet — exactly the drops marked in step 4. The equation is built one term at a time; it is only set to zero once the walk closes.' + boardHtml(),
+        hl: hlF,
+      });
+      t.parts.forEach(function (p) {
+        run.push(p.g === null ? name[f] + '·' + p.R : '(' + name[f] + '−' + name[p.g] + ')·' + p.R);
+        eqSubs.push({
+          title: name[f] + ' · add ' + si(p.R, 'Ω'),
+          body: p.g === null
+            ? 'Next element: the ' + si(p.R, 'Ω') + ' resistor on the outside boundary. Only ' + name[f] + ' flows in it, so it adds a drop of ' + p.R + '·' + name[f] + '.' + boardHtml()
+            : 'Next element: the ' + si(p.R, 'Ω') + ' resistor shared with mesh ' + name[p.g] + '. Walking <i>this</i> mesh, the current in it is ' + name[f] + ' − ' + name[p.g] +
+              ', so it adds (' + name[f] + '−' + name[p.g] + ')·' + p.R + '. Mesh ' + name[p.g] + '’s own equation will write the same resistor the other way round.',
+          eq: [partial()], hl: H({ edges: [p.e.id], nodes: faceNodeIds(f) }),
+        });
+      });
+      t.srcs.forEach(function (s) {
+        run.push((s.drop > 0 ? '+ ' : '− ') + Math.abs(s.drop));
+        eqSubs.push({
+          title: name[f] + ' · add ' + si(s.e.value, 'V') + ' source',
+          body: 'Next element: the ' + si(s.e.value, 'V') + ' source. Going clockwise we cross it ' +
+            (s.drop < 0 ? 'from − to +, which is a <b>rise</b>, so it enters the sum of drops as −' + Math.abs(s.drop)
+              : 'from + to −, which is a <b>drop</b>, so it enters as +' + Math.abs(s.drop)) + '.' + boardHtml(),
+          eq: [run.slice(0, -1).join(' + ') + ' ' + run[run.length - 1] + ' …'],
+          hl: H({ edges: [s.e.id], nodes: faceNodeIds(f) }),
+        });
+      });
+      var tail = sh.length
+        ? ' ' + (sh.length === 1 ? 'Neighbour ' + name[sh[0]] + ' is' : 'Neighbours ' + sh.map(function (g) { return name[g]; }).join(', ') + ' are') +
+          ' still unknown too, so ' + (sh.length === 1 ? 'its symbol stays' : 'their symbols stay') + ' in the equation — mesh ' + name[f] +
+          ' can’t be found on its own until we know ' + (sh.length === 1 ? 'that current' : 'those currents') + '.'
+        : ' Nothing else is unknown in it, so ' + name[f] + ' solves in one shot in step 8.';
+      board[f] = kvl(f);
+      eqSubs.push({
+        title: name[f] + ' — close the loop',
+        body: 'The walk is back where it started, so every drop around mesh <b>' + name[f] +
+          '</b> has been counted — by KVL they sum to zero. That is ' + name[f] + '’s equation, and it goes on the board.' + tail + boardHtml(),
+        eq: [kvl(f)], hl: hlF,
+      });
+    });
+
     steps.push({
       n: 6, title: 'Mesh-current equations  (Σ voltages = 0)',
       body: 'One equation per mesh — walk clockwise around it, add up every voltage drop and set the total to zero (Kirchhoff’s voltage law). That is <b>' + m + '</b> equation' + (m === 1 ? '' : 's') +
         ' to build. Step through each mesh to see how its equation is put together; the solving is step 8.',
       eq: mc.order.map(function (f) { return name[f] + ':  ' + kvl(f); }),
       hl: H({ edges: nonWireIds }),
-      subs: mc.order.map(function (f) {
-        var t = T[f], sh = Object.keys(t.shared);
-        var tail = sh.length
-          ? ' ' + (sh.length === 1 ? 'Neighbour ' + name[sh[0]] + ' is' : 'Neighbours ' + sh.map(function (g) { return name[g]; }).join(', ') + ' are') +
-            ' still unknown too, so ' + (sh.length === 1 ? 'its symbol stays' : 'their symbols stay') + ' in the equation — mesh ' + name[f] +
-            ' can’t be found on its own until we know ' + (sh.length === 1 ? 'that current' : 'those currents') + '.'
-          : ' Nothing else is unknown in it, so ' + name[f] + ' solves in one shot in step 8.';
-        board[f] = kvl(f);
-        return {
-          title: 'equation for ' + name[f],
-          body: 'Walk clockwise around mesh <b>' + name[f] + '</b>. Each resistor drops R·(current through it) — ' +
-            name[f] + ' alone on the boundary, (' + name[f] + ' − i<sub>adj</sub>) on a shared one — and each source ' +
-            'contributes ' + (t.srcDrop ? 'its ' + Math.abs(t.srcDrop) + ' V (a rise going − to +, so it enters with the opposite sign)' : 'its voltage') +
-            '. Set the total to zero.' + tail + boardHtml(),
-          eq: [kvl(f)],
-          hl: H({ edges: faceEdgeIds(f), nodes: faceNodeIds(f) }),
-        };
-      }),
+      subs: eqSubs,
     });
 
     steps.push({
