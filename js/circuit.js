@@ -8,15 +8,18 @@
   /* ---------- values ---------- */
   var R_VALUES = [100, 220, 330, 470, 680, 1000, 1500, 2200, 3300, 4700];
   var V_VALUES = [5, 9, 12, 15];
+  var I_VALUES = [0.01, 0.02, 0.05, 0.1];   // 10–100 mA: same order as V/R above gives
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function pickR() { return pick(R_VALUES); }
   function pickV() { return pick(V_VALUES); }
+  function pickI() { return pick(I_VALUES); }
 
   /* ---------- model ----------
      circuit = { nodes: [{id,x,y}], edges: [{id,type,a,b,value?}] }
-     Element types: 'R' resistor, 'V' independent voltage source (b is +), 'W' plain wire.
-     Later phases add 'I' and the dependent sources — see structure/GENERATORS.md. */
-  var VALUED = { R: 'resistance', V: 'voltage' }; // types that need a positive value
+     Element types: 'R' resistor, 'V' independent voltage source (b is +), 'W' plain wire,
+     'I' independent current source (current flows a → b, i.e. out of the b terminal).
+     Later phases add the dependent sources — see structure/GENERATORS.md. */
+  var VALUED = { R: 'resistance', V: 'voltage', I: 'current' }; // types that need a positive value
 
   function validate(c) {
     var ids = {};
@@ -65,8 +68,8 @@
   /* Same topology, different problem: random source polarity and now and then one resistor
      replaced by a short, so a template rewards reading the circuit over recalling it. */
   function flavour(specs) {
-    specs = specs.map(function (s) {
-      return s[0] === 'V' && Math.random() < 0.5 ? ['V', s[2], s[1]] : s;
+    specs = specs.map(function (s) {  // source polarity / current direction, both ways
+      return (s[0] === 'V' || s[0] === 'I') && Math.random() < 0.5 ? [s[0], s[2], s[1], s[3]] : s;
     });
     var rs = [];
     specs.forEach(function (s, i) { if (s[0] === 'R') rs.push(i); });
@@ -89,6 +92,7 @@
       var e = { id: 'e' + i, type: s[0], a: 'n' + s[1], b: 'n' + s[2] };
       if (s[0] === 'R') e.value = pickR();
       if (s[0] === 'V') e.value = pickV();
+      if (s[0] === 'I') e.value = pickI();
       if (s[3] !== undefined) e.value = s[3]; // explicit value wins
       return e;
     });
@@ -138,6 +142,7 @@
     return e;
   }
   function fmtR(v) { return v >= 1000 ? (v / 1000) + ' kΩ' : v + ' Ω'; }
+  function fmtI(v) { return v >= 1 ? v + ' A' : Math.round(v * 1000) + ' mA'; }
 
   function render(circuit, svg) {
     var PX = 90, PAD = 50;
@@ -169,6 +174,7 @@
       if (e.type === 'W') { line(a.x, a.y, b.x, b.y, eg); return; }
 
       var gap = e.type === 'R' ? 20 : 17;
+      var vx = -uy, vy = ux;                      // unit vector across the element (for arrowheads)
       line(a.x, a.y, mx - ux * gap, my - uy * gap, eg);
       line(mx + ux * gap, my + uy * gap, b.x, b.y, eg);
 
@@ -178,6 +184,19 @@
         el('rect', { x: -20, y: -8, width: 40, height: 16, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, rx: 2 }, g);
         el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
           .textContent = fmtR(e.value);
+      } else if (e.type === 'I') {
+        // current source — same circle as a voltage source but with an arrow through it,
+        // pointing a → b: the direction the source pushes current out of its b terminal.
+        el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
+        var tx = mx + ux * 10, ty = my + uy * 10;   // arrow tip, inside the circle
+        el('line', { x1: mx - ux * 10, y1: my - uy * 10, x2: tx, y2: ty, stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
+        el('polygon', { points:
+          tx + ',' + ty + ' ' +
+          (tx - ux * 7 + vx * 4) + ',' + (ty - uy * 7 + vy * 4) + ' ' +
+          (tx - ux * 7 - vx * 4) + ',' + (ty - uy * 7 - vy * 4),
+          fill: 'var(--accent-deep)' }, eg);
+        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
+          .textContent = fmtI(e.value);
       } else { // V — b is the + terminal
         el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
         var plus = el('text', { x: mx + ux * 7, y: my + uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, eg);
@@ -340,6 +359,7 @@
     pick: pick,
     pickR: pickR,
     pickV: pickV,
+    pickI: pickI,
     // registry
     register: register,
     list: list,
