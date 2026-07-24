@@ -8,9 +8,9 @@ Static, dependency-free educational site: interactive visualisations for the **E
 
 ## Architecture
 
-- **Home** ([index.html](index.html)) — landing page listing 4 topic pages grouped into 2 sections named after the study guide: **Simple resistive circuits** (§3) and **Techniques in circuit analysis** (§4). One `.card` link per topic into `topics/<slug>/index.html`. Topic folders: `simple-resistive-circuits`, `node-voltage`, `mesh-current`, `thevenin-norton`. (Study guide §1 Circuit variables and §2 Circuit elements have no page yet.)
-- **Topic pages** ([topics/](topics/)) — one folder per topic, each a self-contained `index.html`. The §4 pages are placeholders (hero + "Visualiser in progress"); `simple-resistive-circuits` is the **stepwise solver** — circuit generator, SVG renderer, and a Technique dropdown (KCL, KVL, equivalent resistance) that steps through the study-guide method. All solving lives here for now; §4 stays empty until current/dependent sources arrive (see [structure/SOLVER.md](structure/SOLVER.md)).
-- **Shared JS** ([js/](js/)) — `circuit.js` is the core shared by all topic pages: data model (`{nodes, edges}` graph, edge types `R`/`V`/`W`), `build()`/validation, the **generator registry**, and the SVG renderer. Circuit topologies live in [js/generators/](js/generators/), one file per topology family, each self-registering via `Circuit.register()`. The **solver** consumes the same model: `solve.js` (linear engine — node-voltage, mesh, reduction), `js/techniques/*.js` (one per technique → step list), `stepper.js` (generic Prev/Next). Plain scripts exposing one global each (`Circuit`, `Solve`, `Stepper`, `NodeVoltage`…) — **no ES modules** (site must work over `file://`). `circuit.test.html` and `solve.test.html` are browser-run self-checks.
+- **Home** ([index.html](index.html)) — landing page listing 3 topic pages grouped into 2 sections named after the study guide: **Simple resistive circuits** (§3) and **Techniques in circuit analysis** (§4). One `.card` link per topic into `topics/<slug>/index.html`. Topic folders: `simple-resistive-circuits`, `current-sources`, `dependent-sources`. Pages are named after the **kind of circuit** they teach, not the technique — each offers whichever techniques suit its circuits. (Study guide §1 Circuit variables and §2 Circuit elements have no page yet.)
+- **Topic pages** ([topics/](topics/)) — one folder per topic, each a self-contained `index.html`. Two are **stepwise solvers** sharing one script (`js/solver-page.js`): `simple-resistive-circuits` (resistors + voltage sources → KCL, KVL, equivalent resistance) and `current-sources` (adds the independent current source → KCL, KVL, with the known-current / supermesh / constraint steps live). `dependent-sources` is still a placeholder (hero + "Visualiser in progress"). See [structure/SOLVER.md](structure/SOLVER.md).
+- **Shared JS** ([js/](js/)) — `circuit.js` is the core shared by all topic pages: data model (`{nodes, edges}` graph, edge types `R`/`V`/`I`/`W`), `build()`/validation, the **generator registry**, and the SVG renderer. Circuit topologies live in [js/generators/](js/generators/), one file per topology family, each self-registering via `Circuit.register()`. The **solver** consumes the same model: `solve.js` (linear engine — node-voltage, mesh, reduction), `js/techniques/*.js` (one per technique → step list), `stepper.js` (generic Prev/Next) and `solver-page.js` (the page wiring every solver page calls). Plain scripts exposing one global each (`Circuit`, `Solve`, `Stepper`, `SolverPage`, `NodeVoltage`…) — **no ES modules** (site must work over `file://`). `circuit.test.html` and `solve.test.html` are browser-run self-checks.
 - **CSS** ([css/](css/)) — split by scope, loaded in order:
   - `tokens.css` — design tokens (`:root` custom properties). **The only file to edit to reskin the whole site.**
   - `base.css` — shared layout (nav, `.page`, footer).
@@ -31,16 +31,16 @@ update it in the same change if the decision itself moves.
 
 - [structure/GENERATORS.md](structure/GENERATORS.md) — **required** before touching
   `js/circuit.js`, anything in `js/generators/`, or any page that renders a circuit. Covers
-  the locked edge model and element type codes (`R`/`V`/`W` now; `I` and the dependent
+  the locked edge model and element type codes (`R`/`V`/`I`/`W` now; the dependent
   sources planned), how to write and register a generator, how a page filters the registry
   to the elements its topic teaches, and the self-check obligation. Never add a topology as
   a one-off inside a topic page or as a new object in `circuit.js` — it goes in
   `js/generators/` and registers itself.
 - [structure/SOLVER.md](structure/SOLVER.md) — **required** before touching `js/solve.js`,
   `js/techniques/`, `js/stepper.js`, or a page that solves a circuit. Covers where solving
-  lives (the §3 page; §4 stays empty for now), the engine/technique/stepper layers, the step
-  model, the "Nothing to do" convention for the PPTs' source-only steps, and how KCL / KVL /
-  equivalent-resistance work. Never re-implement the linear solve or node contraction in a
+  lives (which page teaches which circuits and techniques), the engine/technique/stepper/page
+  layers, the step model, the "Nothing to do" convention for the PPTs' source-only steps, and how
+  KCL / KVL / equivalent-resistance work — including supernodes and supermeshes. Never re-implement the linear solve or node contraction in a
   technique — reuse `js/solve.js`.
 
 ## Conventions
