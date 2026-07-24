@@ -161,7 +161,10 @@
             [s].concat(s.subs || []).forEach(function (view) {
               var loops = view.hl && view.hl.loops;
               if (k === 0) assert(!loops, 'step 1 draws loops too early');
-              else assert(loops && loops.length === mc.meshes.length, 'step ' + s.n + ' dropped the mesh loops');
+              // steps 5-8 draw a supermesh as ONE loop over its meshes, so there the count is
+              // the number of groups; everywhere else it is one arrow per mesh
+              else assert(loops && loops.length === (s.n >= 5 && s.n <= 8 ? mc.groups.length : mc.meshes.length),
+                'step ' + s.n + ' dropped the mesh loops');
             });
           });
           assert(!/undefined|NaN/.test(JSON.stringify(steps)), 'step text has undefined/NaN');

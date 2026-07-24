@@ -51,8 +51,12 @@
     var loops = mc.order.map(function (f) { return { nodes: faceNodeIds(f), label: plainName[f] }; });
 
     // Once the loops are drawn (step 2) they stay for the rest of the method — every hl spec
-    // from there on goes through H() so nothing ever removes them.
-    function H(spec) { return extend(spec || {}, { loops: loops }); }
+    // from there on goes through H() so nothing ever removes them. `curLoops` is what H()
+    // stamps at the moment a view is built: steps 2–4 draw one arrow per mesh, but from the
+    // supermesh step (5) through the solve (8) a supermesh is drawn as ONE loop around both
+    // its meshes — that is the whole idea of a supermesh, and it is how the slides draw it.
+    var curLoops = loops;
+    function H(spec) { return extend(spec || {}, { loops: curLoops }); }
 
     var Redges = circuit.edges.filter(function (e) { return e.type === 'R'; });
     var nonWireIds = circuit.edges.filter(function (e) { return e.type !== 'W'; }).map(function (e) { return e.id; });
@@ -127,6 +131,13 @@
     }).sort(function (a, b) { return mc.order.indexOf(a.lead) - mc.order.indexOf(b.lead); });
 
     function gname(grp) { return grp.meshes.map(function (f) { return name[f]; }).join(' + '); }
+    // one arrow per group: a supermesh gets a single loop spanning both meshes' nodes
+    var groupLoops = G.map(function (grp) {
+      return grp.super
+        ? { nodes: grp.meshes.reduce(function (a, f) { return a.concat(faceNodeIds(f)); }, []),
+          label: grp.meshes.map(function (f) { return plainName[f]; }).join('+'), merged: true }
+        : { nodes: faceNodeIds(grp.lead), label: plainName[grp.lead] };
+    });
     // a boundary current source fixes its mesh: i_f − 0 = I one way round, 0 − i_f = I the other
     function fixedSign(f) {
       var s = groupOf[f].srcs.filter(function (s) { return s.fa === F.outer || s.fb === F.outer; })[0];
@@ -331,6 +342,8 @@
 
     // Step 5 — two meshes sharing a current source can't be walked separately (its voltage is
     // unknown), so they become ONE loop walked around the outside of the pair: the supermesh.
+    // From here to the end of the solve that is also what the drawing shows.
+    curLoops = groupLoops;
     var supers = G.filter(function (grp) { return grp.super; });
     steps.push({
       n: 5, title: 'Identify supermesh(es)', todo: supers.length === 0,
@@ -707,6 +720,7 @@
       hl: H({}),
       subs: solveSubs,
     }));
+    curLoops = loops;      // back to one arrow per mesh: steps 9–10 are about branch currents
 
     // Step 9 — branch currents, one substep per element
     steps.push(WB({

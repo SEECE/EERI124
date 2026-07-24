@@ -62,7 +62,7 @@
       assert(rvw.every(function (g) { return g.elements.indexOf('I') < 0; }), 'R/V/W filter kept a current-source generator');
       assert(Circuit.list({ elements: ['R', 'V', 'I', 'W'] }).length === all.length, 'full filter dropped a generator');
       assert(Circuit.list({ elements: ['R', 'W'] }).length === 0, 'sourceless filter kept a generator');
-      assert(Circuit.list({ tags: ['random'] }).length === 1, 'expected exactly one random generator');
+      assert(Circuit.list({ tags: ['random'] }).length === 2, 'expected the two random generators');
     });
 
     check('render smoke', function () {

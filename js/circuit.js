@@ -145,14 +145,22 @@
   function fmtI(v) { return v >= 1 ? v + ' A' : Math.round(v * 1000) + ' mA'; }
 
   function render(circuit, svg) {
-    var PX = 90, PAD = 50;
+    var PX = 90, PAD = 34;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     var xs = circuit.nodes.map(function (n) { return n.x * PX; });
     var ys = circuit.nodes.map(function (n) { return n.y * PX; });
     var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
     var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
-    svg.setAttribute('viewBox',
-      (minX - PAD) + ' ' + (minY - PAD) + ' ' + (maxX - minX + 2 * PAD) + ' ' + (maxY - minY + 2 * PAD));
+    // the drawing's centre, so each element's value label can be pushed to the side facing
+    // AWAY from the circuit — inside a loop it would land on other elements or a mesh arrow
+    var midX = (minX + maxX) / 2, midY = (minY + maxY) / 2;
+    // value labels stick out past the nodes; the viewBox is widened to hold them (below) so
+    // nothing gets clipped at the edge of the canvas
+    function fit(x, y, text) {
+      var w = String(text).length * 7.2 / 2 + 4, h = 9;
+      minX = Math.min(minX, x - w); maxX = Math.max(maxX, x + w);
+      minY = Math.min(minY, y - h); maxY = Math.max(maxY, y + h);
+    }
 
     var byId = {};
     circuit.nodes.forEach(function (n) { byId[n.id] = { x: n.x * PX, y: n.y * PX }; });
@@ -168,7 +176,11 @@
       var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
       var ux = dx / len, uy = dy / len;
       var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      var lx = mx - uy * 34, ly = my + ux * 34; // label, perpendicular offset — clear of the symbol
+      // label sits perpendicular to the element, on whichever side points away from the middle
+      // of the drawing — a fixed side lands inside the loop half the time (and the source
+      // symbols, whose a/b order is randomised, flipped sides at random)
+      var side = ((mx - midX) * -uy + (my - midY) * ux) >= 0 ? 1 : -1;
+      var lx = mx - uy * 38 * side, ly = my + ux * 38 * side;   // 38 clears the r=16 source circle and the resistor box
       var eg = el('g', { 'class': 'edge edge-' + e.type, 'data-eid': e.id }, svg);
 
       if (e.type === 'W') { line(a.x, a.y, b.x, b.y, eg); return; }
@@ -184,6 +196,7 @@
         el('rect', { x: -20, y: -8, width: 40, height: 16, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, rx: 2 }, g);
         el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
           .textContent = fmtR(e.value);
+        fit(lx, ly, fmtR(e.value));
       } else if (e.type === 'I') {
         // current source — same circle as a voltage source but with an arrow through it,
         // pointing a → b: the direction the source pushes current out of its b terminal.
@@ -197,6 +210,7 @@
           fill: 'var(--accent-deep)' }, eg);
         el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
           .textContent = fmtI(e.value);
+        fit(lx, ly, fmtI(e.value));
       } else { // V — b is the + terminal
         el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
         var plus = el('text', { x: mx + ux * 7, y: my + uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, eg);
@@ -205,6 +219,7 @@
         minus.textContent = '−';
         el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
           .textContent = e.value + ' V';
+        fit(lx, ly, e.value + ' V');
       }
     });
 
@@ -246,11 +261,16 @@
       var ldir = gaps.length > 1 ? gaps[1] : gaps[0];
       circleOf[n.id].setAttribute('data-ldir', (ldir * 180 / Math.PI).toFixed(1));
       var lx = p.x + Math.cos(ldir) * 20, ly = p.y + Math.sin(ldir) * 20;
+      fit(lx, ly, n.label + '   ');        // room for the voltage reading drawn here later too
       // hidden by default; a solver step reveals it via highlight({ labels: [nodeId] })
       // so letters appear when the method names them, not from the start
       el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, svg)
         .textContent = n.label;
     });
+
+    // set last: minX…maxY have grown to cover every label, so nothing is clipped
+    svg.setAttribute('viewBox',
+      (minX - PAD) + ' ' + (minY - PAD) + ' ' + (maxX - minX + 2 * PAD) + ' ' + (maxY - minY + 2 * PAD));
   }
 
   /* Toggle a 'hl' class on the edges/nodes a solver step wants to emphasise.
@@ -272,8 +292,12 @@
       t.classList.toggle('show', labels.indexOf(t.getAttribute('data-nlabel')) >= 0);
     });
 
-    // clockwise mesh loop-arrows (KVL). loops:[{nodes:[ids], label}] — centroid + radius
-    // are read from the rendered node circles so this stays in the svg's user space.
+    // clockwise mesh loop-arrows (KVL). loops:[{nodes:[ids], label, merged}] — the arc is an
+    // ELLIPSE fitted to the bounding box of the given nodes, read from the rendered node
+    // circles so this stays in the svg's user space. Fitting the box (rather than a circle on
+    // the centroid) is what lets a supermesh pass the nodes of BOTH its meshes and get one
+    // wide loop around the pair, exactly as the lecture slides draw it; `merged` lifts that
+    // loop's label off the shared branch it would otherwise sit on.
     Array.prototype.forEach.call(svg.querySelectorAll('.mesh-loop'), function (m) {
       m.parentNode.removeChild(m);
     });
@@ -283,27 +307,30 @@
         return c ? { x: +c.getAttribute('cx'), y: +c.getAttribute('cy') } : null;
       }).filter(Boolean);
       if (pts.length < 3) return;
-      var cx = 0, cy = 0;
-      pts.forEach(function (p) { cx += p.x; cy += p.y; });
-      cx /= pts.length; cy /= pts.length;
-      var r = Infinity;
-      pts.forEach(function (p) { r = Math.min(r, Math.hypot(p.x - cx, p.y - cy)); });
-      r *= 0.55;
+      var bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+      pts.forEach(function (p) {
+        bx0 = Math.min(bx0, p.x); bx1 = Math.max(bx1, p.x);
+        by0 = Math.min(by0, p.y); by1 = Math.max(by1, p.y);
+      });
+      var cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
+      var rx = Math.max(16, (bx1 - bx0) * 0.32), ry = Math.max(16, (by1 - by0) * 0.32);
       var g = el('g', { 'class': 'mesh-loop' }, svg);
       // ~320° arc, gap at the top, swept clockwise (SVG sweep-flag 1 with y down)
       var sa = -70 * Math.PI / 180, ea = 250 * Math.PI / 180;
-      var sx = cx + r * Math.cos(sa), sy = cy + r * Math.sin(sa);
-      var ex = cx + r * Math.cos(ea), ey = cy + r * Math.sin(ea);
-      el('path', { d: 'M ' + sx + ' ' + sy + ' A ' + r + ' ' + r + ' 0 1 1 ' + ex + ' ' + ey, fill: 'none', stroke: 'var(--accent-hover)', 'stroke-width': 2 }, g);
-      // arrowhead at the arc end, pointing along the clockwise tangent (ea + 90°)
-      var fwd = ea + Math.PI / 2, ah = 8;
+      var sx = cx + rx * Math.cos(sa), sy = cy + ry * Math.sin(sa);
+      var ex = cx + rx * Math.cos(ea), ey = cy + ry * Math.sin(ea);
+      el('path', { d: 'M ' + sx + ' ' + sy + ' A ' + rx + ' ' + ry + ' 0 1 1 ' + ex + ' ' + ey, fill: 'none', stroke: 'var(--accent-hover)', 'stroke-width': 2 }, g);
+      // arrowhead at the arc end, along the clockwise tangent of the ellipse at that angle
+      var fwd = Math.atan2(ry * Math.cos(ea), -rx * Math.sin(ea)), ah = 8;
       var c1 = fwd + Math.PI + 0.4, c2 = fwd + Math.PI - 0.4;
       el('polygon', { points:
         ex + ',' + ey + ' ' +
         (ex + ah * Math.cos(c1)) + ',' + (ey + ah * Math.sin(c1)) + ' ' +
         (ex + ah * Math.cos(c2)) + ',' + (ey + ah * Math.sin(c2)),
         fill: 'var(--accent-hover)' }, g);
-      if (loop.label) el('text', { x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 15, 'font-weight': 700 }, g).textContent = loop.label;
+      // a merged (supermesh) loop is centred on the branch its two meshes share — lift the
+      // label off that element instead of printing it on top of the source symbol
+      if (loop.label) el('text', { x: cx, y: cy - (loop.merged ? ry * 0.55 : 0), 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 15, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, g).textContent = loop.label;
     });
 
     // earth symbol (stub + shrinking bars) under the chosen 0 V reference node(s) — aimed
