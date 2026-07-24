@@ -85,7 +85,10 @@ Rules:
    by a short — so a fixed topology is still a fresh problem each press. Pass
    `{ flavour: false }` as the third argument only when a template's teaching point depends
    on its exact wiring.
-7. **A generator returns a valid circuit or `undefined`.** `build()` already validates;
+7. **A current source may only sit on an edge that is not a cut.** A source in a bridge branch
+   (or two in series) has nowhere to send its current — unsolvable, not hard. `random-grid.js`
+   checks connectivity with the chosen source edges removed before converting a resistor.
+8. **A generator returns a valid circuit or `undefined`.** `build()` already validates;
    retry loops belong inside the generator (see `random-grid.js`).
 
 ## Consuming generators from a page
