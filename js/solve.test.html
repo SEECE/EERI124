@@ -132,6 +132,13 @@
             });
           });
           assert(!/undefined|NaN/.test(JSON.stringify(steps)), 'step text has undefined/NaN');
+          // step 4 must meet every shared resistor twice and show it both ways round (3 eq lines)
+          var shared = c.edges.filter(function (e, k) {
+            var fa = mc.F.faceOf[2 * k], fb = mc.F.faceOf[2 * k + 1];
+            return e.type === 'R' && fa !== fb && fa !== mc.F.outer && fb !== mc.F.outer;
+          }).length;
+          var bothWays = (steps[3].subs || []).filter(function (view) { return (view.eq || []).length === 3; }).length;
+          assert(bothWays === shared, shared + ' shared resistors but ' + bothWays + ' both-ways views in step 4');
           // the substitution chain reaching the engine's number is what makes "falls out" a
           // single line; two lines would mean the hand algebra and the solver disagree
           (steps[7].subs || []).forEach(function (view) {

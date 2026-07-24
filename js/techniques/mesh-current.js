@@ -63,16 +63,18 @@
     // kept here in element form so the derivation can be written out term by term.
     var T = {};
     mc.order.forEach(function (f) {
-      var t = { self: 0, shared: {}, srcDrop: 0, parts: [] };
+      var t = { self: 0, shared: {}, srcDrop: 0, parts: [], srcs: [] };
       F.faceList[f].forEach(function (h) {
         var e = circuit.edges[F.H[h].edge], g = F.faceOf[h ^ 1];
         if (e.type === 'R') {
           if (g === f) return;                                   // dead-end/bridge edge inside one mesh → no drop
           t.self += e.value;
-          if (g === F.outer) t.parts.push({ R: e.value, g: null });
-          else { t.shared[g] = (t.shared[g] || 0) + e.value; t.parts.push({ R: e.value, g: g }); }
+          if (g === F.outer) t.parts.push({ R: e.value, g: null, e: e });
+          else { t.shared[g] = (t.shared[g] || 0) + e.value; t.parts.push({ R: e.value, g: g, e: e }); }
         } else if (e.type === 'V') {
-          t.srcDrop += (F.H[h].tail === e.a) ? -e.value : e.value; // a→b is −→+ = a rise (−drop)
+          var drop = (F.H[h].tail === e.a) ? -e.value : e.value;  // a→b is −→+ = a rise (−drop)
+          t.srcDrop += drop;
+          t.srcs.push({ e: e, drop: drop });
         }
       });
       T[f] = t;
@@ -149,28 +151,60 @@
       hl: H({}),
     });
 
-    // Step 4 — polarities, one substep per resistor: which loop(s) drive it
+    // Step 4 — polarities. Walked MESH BY MESH, then resistor by resistor inside that mesh, because
+    // the whole difficulty of the method is that a shared resistor is written differently depending
+    // on which loop you are walking: (i₁ − i₂) from one side, (i₂ − i₁) from the other. Meeting the
+    // same resistor a second time, from the neighbouring mesh, is where that gets said out loud —
+    // otherwise step 6's equations look like they contradict each other.
+    var polSubs = [];
+    var seenIn = {};                        // edge id → the mesh whose walk wrote it first
+    mc.order.forEach(function (f) {
+      var t = T[f];
+      polSubs.push({
+        title: 'walk mesh ' + name[f],
+        body: 'Walk clockwise around mesh <b>' + name[f] + '</b> and mark each resistor + where ' + name[f] +
+          ' <i>enters</i> it — that is the end current flows into, so the drop across it is counted positive going that way. ' +
+          t.parts.length + ' resistor' + (t.parts.length === 1 ? '' : 's') + ' on this loop.',
+        hl: H({ edges: faceEdgeIds(f), nodes: faceNodeIds(f) }),
+      });
+      t.parts.forEach(function (p) {
+        var first = seenIn[p.e.id];             // face indices start at 0 — test for undefined, not truthiness
+        var body, eq;
+        if (p.g === null) {
+          body = 'Only mesh ' + name[f] + ' touches this ' + si(p.R, 'Ω') + ' resistor — no other loop crosses it, so the current in it <i>is</i> ' +
+            name[f] + ' and the drop is R·' + name[f] + '.';
+          eq = ['v = ' + p.R + '·' + name[f]];
+        } else if (first === undefined) {
+          body = 'This ' + si(p.R, 'Ω') + ' resistor is <b>shared</b> with mesh ' + name[p.g] + '. Both loops run through it, and because both are drawn clockwise they run through it in <i>opposite</i> directions — so the current in it is the difference. Walking ' +
+            name[f] + ', the current going our way is ' + name[f] + ' − ' + name[p.g] + '.';
+          eq = ['from ' + name[f] + ':  v = ' + p.R + '·(' + name[f] + ' − ' + name[p.g] + ')'];
+        } else {
+          body = 'The same ' + si(p.R, 'Ω') + ' resistor again — we already wrote it while walking mesh ' + name[first] +
+            ', as ' + name[first] + ' − ' + name[f] + '. Now we are walking the <i>other</i> side of it, so the current going <i>our</i> way is ' +
+            name[f] + ' − ' + name[first] + ': the same physical current, read with the opposite sign. Each mesh writes the branch its own way, and both equations stay true — that is why step 6 shows (' +
+            name[first] + '−' + name[f] + ') in one line and (' + name[f] + '−' + name[first] + ') in the other.';
+          eq = ['from ' + name[first] + ':  v = ' + p.R + '·(' + name[first] + ' − ' + name[f] + ')',
+            'from ' + name[f] + ':  v = ' + p.R + '·(' + name[f] + ' − ' + name[first] + ')',
+            'the two are equal and opposite:  (' + name[first] + ' − ' + name[f] + ') = −(' + name[f] + ' − ' + name[first] + ')'];
+        }
+        if (first === undefined) seenIn[p.e.id] = f;
+        polSubs.push({ title: name[f] + ' · ' + si(p.R, 'Ω'), body: body, eq: eq, hl: H({ edges: [p.e.id], nodes: faceNodeIds(f) }) });
+      });
+    });
+    Redges.filter(function (e) { return !meshesOf(e).length; }).forEach(function (e) {
+      polSubs.push({
+        title: 'dead end · ' + si(e.value, 'Ω'),
+        body: 'No mesh loop crosses this ' + si(e.value, 'Ω') + ' resistor — it hangs off the circuit, so it carries no current and drops 0 V. It appears in no mesh equation.',
+        eq: ['v = 0 V'], hl: H({ edges: [e.id] }),
+      });
+    });
     steps.push({
       n: 4, title: 'Indicate polarities at the resistors',
-      body: 'Mark each resistor + where its mesh current enters. With every loop clockwise, a resistor on the outside boundary carries its single mesh current; a resistor shared between two meshes carries the <b>difference</b>, so its drop is R·(i<sub>this</sub> − i<sub>adjacent</sub>). Step through each resistor.',
+      body: 'Mark each resistor + where its mesh current enters. A resistor on the outside boundary carries its single mesh current; a resistor <b>shared</b> between two meshes carries the difference — and which difference depends on which loop you are walking: R·(' +
+        (m > 1 ? 'i<sub>this</sub> − i<sub>adjacent</sub>) one way, R·(i<sub>adjacent</sub> − i<sub>this</sub>) the other' : 'i<sub>this</sub> − i<sub>adjacent</sub>)') +
+        '. Step through each mesh and each of its resistors.',
       hl: H({ edges: rIds }),
-      subs: Redges.map(function (e) {
-        var fs = meshesOf(e);
-        var body, eq;
-        if (fs.length === 2) {
-          body = 'The ' + si(e.value, 'Ω') + ' resistor sits between meshes <b>' + name[fs[0]] + '</b> and <b>' + name[fs[1]] +
-            '</b>. The two clockwise loops run through it in opposite directions, so its current is the difference and its drop is R·(' + name[fs[0]] + ' − ' + name[fs[1]] + ').';
-          eq = ['v = ' + e.value + '·(' + name[fs[0]] + ' − ' + name[fs[1]] + ')'];
-        } else if (fs.length === 1) {
-          body = 'The ' + si(e.value, 'Ω') + ' resistor is on the boundary of mesh <b>' + name[fs[0]] +
-            '</b> only, so it carries that loop current alone; + is where ' + name[fs[0]] + ' enters.';
-          eq = ['v = ' + e.value + '·' + name[fs[0]]];
-        } else {
-          body = 'The ' + si(e.value, 'Ω') + ' resistor is a dead-end branch — no mesh loop crosses it, so it carries no current and drops 0 V.';
-          eq = ['v = 0 V'];
-        }
-        return { title: si(e.value, 'Ω'), body: body, eq: eq, hl: H({ edges: [e.id] }) };
-      }),
+      subs: polSubs,
     });
 
     steps.push({
