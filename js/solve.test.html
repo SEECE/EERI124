@@ -15,6 +15,7 @@
   <script src="generators/grid.js"></script>
   <script src="generators/multi-source.js"></script>
   <script src="solve.js"></script>
+  <script src="techniques/mesh-current.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -112,6 +113,29 @@
             if (r.edge.type !== 'R') return;
             var im = Math.abs(mc.edgeCurrent[r.edge.id]), iv = Math.abs(r.current);
             assert(Math.abs(im - iv) <= 1e-6 * (iv + 1), 'mesh current ≠ node-voltage current');
+          });
+        }
+      });
+    });
+
+    // ---- KVL technique step list: loops persist, and the narrated algebra lands on the engine ----
+    Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
+      check('KVL steps ' + g.name + ' ×10', function () {
+        for (var i = 0; i < 10; i++) {
+          var c = g.generate(), mc = Solve.meshCurrents(c), steps = MeshCurrent(c);
+          assert(steps.length === 10, '10 PPT steps expected, got ' + steps.length);
+          steps.forEach(function (s, k) {
+            [s].concat(s.subs || []).forEach(function (view) {
+              var loops = view.hl && view.hl.loops;
+              if (k === 0) assert(!loops, 'step 1 draws loops too early');
+              else assert(loops && loops.length === mc.meshes.length, 'step ' + s.n + ' dropped the mesh loops');
+            });
+          });
+          assert(!/undefined|NaN/.test(JSON.stringify(steps)), 'step text has undefined/NaN');
+          // the substitution chain reaching the engine's number is what makes "falls out" a
+          // single line; two lines would mean the hand algebra and the solver disagree
+          (steps[7].subs || []).forEach(function (view) {
+            if (/ — falls out$/.test(view.title)) assert(view.eq.length === 1, 'substitution chain ended at ' + view.eq[0] + ', engine says ' + view.eq[1]);
           });
         }
       });

@@ -113,6 +113,26 @@ faces are the meshes (Euler: `E − V + 1`), the outer face encloses the most ar
 writes Σ voltages = 0 per mesh (wires drop 0) and solves with `linsolve`. **Cross-checked against
 node-voltage** — per-resistor currents must agree (see the self-check).
 
+The technique is **deliberately the mirror image of KCL** — same substep rhythm, same live board,
+same algebra — so a student who learned one reads the other for free:
+
+- **The loop-arrows are drawn in step 2 and never removed.** Every `hl` from step 2 on (steps *and*
+  substeps) goes through the local `H()` helper, which re-attaches `loops:`. `Circuit.highlight`
+  wipes `.mesh-loop` on every call, so a spec that omits `loops` erases them — never build an `hl`
+  by hand in this file.
+- **Step 6 builds** — one substep per mesh, walking it clockwise and writing its equation, no
+  arithmetic. **Step 8 solves**, per mesh: *write → multiply out → collect the loop current →
+  divide*, each line stacking under the last, ending at `i_k = amps + ratio·i_neighbour`. Those
+  expressions are then **substituted into one another** (a mesh's own symbol collects and divides
+  out) until one falls out as a number, then back-substituted — the same machinery as KCL's coupled
+  core. Ratios are R/R, dimensionless: no conductance, no siemens.
+- Values always come from `meshCurrents()`. `snap()` pins a fully-numeric expression to the engine
+  value so accumulated float noise can't print a last digit that contradicts the answer shown two
+  views later; the self-check asserts the chain lands there (the "falls out" view is one line, not
+  two).
+- The live **board** (one row per mesh, `?` → equation → expression → value) uses the same
+  `kcl-status eq-board` markup as KCL's node board.
+
 ## Equivalent resistance
 
 Repeated **series / parallel / dead-end-prune / self-loop** reduction to a single `Req`, one move
