@@ -102,6 +102,10 @@
       }).join('');
       return '<div class="kcl-status-wrap"><table class="kcl-status eq-board"><thead><tr><th>Mesh</th><th>Current equation / value</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
+    // stamp the board as it stands AT THIS POINT in the build — the panel is pinned now, so a
+    // view without a board would blank it out mid-walk. Must be called where the view is made,
+    // never later: the board is time-varying.
+    function WB(o) { if (o.board == null) o.board = boardHtml(); return o; }
     function sysTable(list, header) {
       return '<div class="kcl-status-wrap"><table class="kcl-status"><thead><tr><th>' + (header || 'Mesh currents still to find') + ' (' + list.length +
         ')</th></tr></thead><tbody><tr><td>' + (list.length ? list.map(function (f) { return name[f]; }).join(', ') : '— none —') + '</td></tr></tbody></table></div>';
@@ -223,7 +227,7 @@
       function partial() { return run.join(' + ') + ' …'; }
       eqSubs.push({
         title: name[f] + ' — start the walk',
-        body: 'Start anywhere on mesh <b>' + name[f] + '</b> and go <b>clockwise</b>, adding one term for every element you meet — exactly the drops marked in step 4. The equation is built one term at a time; it is only set to zero once the walk closes.' + boardHtml(),
+        body: 'Start anywhere on mesh <b>' + name[f] + '</b> and go <b>clockwise</b>, adding one term for every element you meet — exactly the drops marked in step 4. The equation is built one term at a time; it is only set to zero once the walk closes.', board: boardHtml(),
         hl: hlF,
       });
       t.parts.forEach(function (p) {
@@ -231,10 +235,10 @@
         eqSubs.push({
           title: name[f] + ' · add ' + si(p.R, 'Ω'),
           body: p.g === null
-            ? 'Next element: the ' + si(p.R, 'Ω') + ' resistor on the outside boundary. Only ' + name[f] + ' flows in it, so it adds a drop of ' + p.R + '·' + name[f] + '.' + boardHtml()
+            ? 'Next element: the ' + si(p.R, 'Ω') + ' resistor on the outside boundary. Only ' + name[f] + ' flows in it, so it adds a drop of ' + p.R + '·' + name[f] + '.'
             : 'Next element: the ' + si(p.R, 'Ω') + ' resistor shared with mesh ' + name[p.g] + '. Walking <i>this</i> mesh, the current in it is ' + name[f] + ' − ' + name[p.g] +
               ', so it adds (' + name[f] + '−' + name[p.g] + ')·' + p.R + '. Mesh ' + name[p.g] + '’s own equation will write the same resistor the other way round.',
-          eq: [partial()], hl: H({ edges: [p.e.id], nodes: faceNodeIds(f) }),
+          eq: [partial()], hl: H({ edges: [p.e.id], nodes: faceNodeIds(f) }), board: boardHtml(),
         });
       });
       t.srcs.forEach(function (s) {
@@ -243,7 +247,7 @@
           title: name[f] + ' · add ' + si(s.e.value, 'V') + ' source',
           body: 'Next element: the ' + si(s.e.value, 'V') + ' source. Going clockwise we cross it ' +
             (s.drop < 0 ? 'from − to +, which is a <b>rise</b>, so it enters the sum of drops as −' + Math.abs(s.drop)
-              : 'from + to −, which is a <b>drop</b>, so it enters as +' + Math.abs(s.drop)) + '.' + boardHtml(),
+              : 'from + to −, which is a <b>drop</b>, so it enters as +' + Math.abs(s.drop)) + '.', board: boardHtml(),
           eq: [run.slice(0, -1).join(' + ') + ' ' + run[run.length - 1] + ' …'],
           hl: H({ edges: [s.e.id], nodes: faceNodeIds(f) }),
         });
@@ -257,25 +261,25 @@
       eqSubs.push({
         title: name[f] + ' — close the loop',
         body: 'The walk is back where it started, so every drop around mesh <b>' + name[f] +
-          '</b> has been counted — by KVL they sum to zero. That is ' + name[f] + '’s equation, and it goes on the board.' + tail + boardHtml(),
+          '</b> has been counted — by KVL they sum to zero. That is ' + name[f] + '’s equation, and it goes on the board.' + tail, board: boardHtml(),
         eq: [kvl(f)], hl: hlF,
       });
     });
 
-    steps.push({
+    steps.push(WB({
       n: 6, title: 'Mesh-current equations  (Σ voltages = 0)',
       body: 'One equation per mesh — walk clockwise around it, add up every voltage drop and set the total to zero (Kirchhoff’s voltage law). That is <b>' + m + '</b> equation' + (m === 1 ? '' : 's') +
         ' to build. Step through each mesh to see how its equation is put together; the solving is step 8.',
       eq: mc.order.map(function (f) { return name[f] + ':  ' + kvl(f); }),
       hl: H({ edges: nonWireIds }),
       subs: eqSubs,
-    });
+    }));
 
-    steps.push({
+    steps.push(WB({
       n: 7, title: 'Constraint equations', todo: true,
       body: 'Constraints link the currents of a supermesh and express dependent-source control variables. This network has neither.',
       hl: H({}),
-    });
+    }));
 
     // ---- Step 8 — SOLVE. Same algebra as KCL step 8, one mesh at a time:
     // write → multiply out → collect → divide, stacking each new line under the previous ones,
@@ -324,16 +328,16 @@
 
         var hl = H({ edges: faceEdgeIds(f), nodes: faceNodeIds(f) });
         var chain = [];
-        function step(title, body, line) { chain.push(line); solveSubs.push({ title: 'mesh ' + nf + ' — ' + title, body: body + boardHtml(), eq: chain.slice(), hl: hl }); }
+        function step(title, body, line) { chain.push(line); solveSubs.push({ title: 'mesh ' + nf + ' — ' + title, body: body, board: boardHtml(), eq: chain.slice(), hl: hl }); }
 
-        solveSubs.push({
+        solveSubs.push(WB({
           title: 'mesh ' + nf + (sh.length ? ' — linked to ' + sh.map(function (g) { return name[g]; }).join(', ') : ' — on its own'),
           body: sh.length
             ? 'Mesh <b>' + nf + '</b> shares a resistor with ' + sh.map(function (g) { return name[g]; }).join(' and ') +
               ', so its equation still mentions another unknown — it can’t be finished on its own yet, but it rearranges the same way as any other. Each move stacks under the last.'
             : 'Mesh <b>' + nf + '</b>’s equation has only one unknown in it, so it solves in one shot. Each move stacks under the last so you can watch it simplify.',
           hl: hl,
-        });
+        }));
         step('write the equation', 'Mesh ' + nf + '’s equation from step 6.', lineWrite);
         step('multiply out', 'Multiply each bracket out — every drop becomes a resistance times a single loop current.', lineMult);
         step('collect ' + nf, 'Gather the ' + nf + ' terms on the left (they add up to the mesh’s total resistance, ' + t.self + ' Ω) and move everything else to the right.', lineCollect);
@@ -346,7 +350,7 @@
           chain.push(nf + ' = ' + si(value[f], 'A'));
           solveSubs.push({
             title: 'mesh ' + nf + ' — answer', eq: chain.slice(), hl: hl,
-            body: 'That is mesh ' + nf + '’s current — a known value from here on.' + boardHtml(),
+            body: 'That is mesh ' + nf + '’s current — a known value from here on.', board: boardHtml(),
           });
         }
       });
@@ -356,7 +360,7 @@
       if (pool.length > 1) {
         solveSubs.push({
           title: 'a linked system',
-          body: 'Each mesh is now written as amps plus a ratio of its neighbours. Substitute those expressions into one another — a mesh’s own symbol collects and divides out — until one falls out as a number, then work back.' + sysTable(pool) + boardHtml(),
+          body: 'Each mesh is now written as amps plus a ratio of its neighbours. Substitute those expressions into one another — a mesh’s own symbol collects and divides out — until one falls out as a number, then work back.' + sysTable(pool), board: boardHtml(),
           hl: H({ edges: nonWireIds }),
         });
       }
@@ -375,7 +379,7 @@
           board[q] = name[q] + ' = ' + afterLine;
           solveSubs.push({
             title: 'substitute ' + name[p] + ' into ' + name[q],
-            body: 'Mesh <b>' + name[q] + '</b>’s line used ' + name[p] + '. Replace it with ' + name[p] + ' = ' + fmtExpr(expr[p]) + ' and multiply out.' + boardHtml(),
+            body: 'Mesh <b>' + name[q] + '</b>’s line used ' + name[p] + '. Replace it with ' + name[p] + ' = ' + fmtExpr(expr[p]) + ' and multiply out.', board: boardHtml(),
             eq: [name[q] + ' = ' + beforeLine, name[q] + ' = ' + afterLine],
             hl: H({ edges: faceEdgeIds(q), nodes: faceNodeIds(q) }),
           });
@@ -385,7 +389,7 @@
             // a self-term too small to show rounds away to the same line — don't waste a view on it
             if (fmtExpr(expr[q]) !== afterLine) solveSubs.push({
               title: name[q] + ' — collect and divide',
-              body: name[q] + ' turned up on both sides after that substitution — collect it on the left, then divide, exactly like clearing any single-unknown equation.' + boardHtml(),
+              body: name[q] + ' turned up on both sides after that substitution — collect it on the left, then divide, exactly like clearing any single-unknown equation.', board: boardHtml(),
               eq: [name[q] + ' = ' + afterLine, name[q] + ' = ' + fmtExpr(expr[q])],
               hl: H({ edges: faceEdgeIds(q), nodes: faceNodeIds(q) }),
             });
@@ -396,7 +400,7 @@
         stored.push(p); pool.shift();
         solveSubs.push({
           title: pool.length + ' unknown' + (pool.length === 1 ? '' : 's') + ' left',
-          body: name[p] + ' is now written from the others; we come back for its number at the end. Still to pin down:' + sysTable(pool) + boardHtml(),
+          body: name[p] + ' is now written from the others; we come back for its number at the end. Still to pin down:' + sysTable(pool), board: boardHtml(),
           hl: H({ edges: pool.reduce(function (a, f) { return a.concat(faceEdgeIds(f)); }, []) }),
         });
       }
@@ -415,7 +419,7 @@
         for (var j = solveSubs.length - 1; j >= 0 && !prevEq; j--) if (solveSubs[j].eq && solveSubs[j].eq.length) prevEq = solveSubs[j].eq[solveSubs[j].eq.length - 1];
         if (!(landed && prevEq === answer)) solveSubs.push({
           title: name[last] + ' — falls out',
-          body: 'Mesh <b>' + name[last] + '</b>’s line has no unknown left on the right — it is just a number.' + boardHtml(),
+          body: 'Mesh <b>' + name[last] + '</b>’s line has no unknown left on the right — it is just a number.', board: boardHtml(),
           eq: landed ? [answer] : [name[last] + ' = ' + derived, answer],
           hl: H({ edges: faceEdgeIds(last), nodes: faceNodeIds(last) }),
         });
@@ -425,7 +429,7 @@
         board[g2] = si(value[g2], 'A'); known[g2] = value[g2];
         solveSubs.push({
           title: 'back to ' + name[g2],
-          body: 'Every current on the right of ' + name[g2] + '’s line is known now — put the numbers in.' + boardHtml(),
+          body: 'Every current on the right of ' + name[g2] + '’s line is known now — put the numbers in.', board: boardHtml(),
           eq: [name[g2] + ' = ' + fmtExpr(expr[g2], function (g) { return known[g]; }), name[g2] + ' = ' + si(value[g2], 'A')],
           hl: H({ edges: faceEdgeIds(g2), nodes: faceNodeIds(g2) }),
         });
@@ -433,27 +437,27 @@
 
       if (m > 1) solveSubs.push({          // with one mesh the answer view above already is the recap
         title: 'all meshes solved',
-        body: 'Every mesh current is now found. Full set:' + boardHtml(),
+        body: 'Every mesh current is now found. Full set:', board: boardHtml(),
         eq: mc.order.map(function (f) { return name[f] + ' = ' + si(value[f], 'A'); }),
         hl: H({ edges: nonWireIds }),
       });
     })();
 
-    steps.push({
+    steps.push(WB({
       n: 8, title: 'Solve the equations',
       body: (m ? 'Solve the ' + m + ' equation' + (m === 1 ? '' : 's') + ' from step 6 with Ohm’s law only — multiply out, collect the loop current, divide. ' +
         (m === 1 ? 'One mesh, one unknown: it falls straight out.'
           : 'That leaves each mesh as amps plus a ratio of its neighbours; substitute those into one another until one is a number, then work back.') + ' Step through mesh by mesh.'
-        : 'Nothing to solve — this network has no mesh.') + boardAtStart,
+        : 'Nothing to solve — this network has no mesh.'), board: boardAtStart,
       eq: mc.order.map(function (f) { return name[f] + ' = ' + si(value[f], 'A'); }),
       hl: H({}),
       subs: solveSubs,
-    });
+    }));
 
     // Step 9 — branch currents, one substep per element
-    steps.push({
+    steps.push(WB({
       n: 9, title: 'Branch currents from mesh currents',
-      body: 'A resistor between two meshes carries the difference of their currents; a boundary element carries its single mesh current. Step through every element.' + boardHtml(),
+      body: 'A resistor between two meshes carries the difference of their currents; a boundary element carries its single mesh current. Step through every element.', board: boardHtml(),
       eq: Redges.map(function (e) { return 'i(' + si(e.value, 'Ω') + ') = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A'); })
         .concat(srcs.map(function (e) { return 'i(' + si(e.value, 'V') + ' source) = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A'); })),
       hl: H({ edges: nonWireIds }),
@@ -472,40 +476,40 @@
           body = 'No mesh loop crosses the ' + what + ' — it is a dead-end branch and carries no current.';
           eq = ['i = 0 A'];
         }
-        return { title: what, body: body + boardHtml(), eq: eq, hl: H({ edges: [e.id] }) };
+        return { title: what, body: body, board: boardHtml(), eq: eq, hl: H({ edges: [e.id] }) };
       }),
-    });
+    }));
 
     // Step 10 — power check, one substep per element then the balance
     var powSubs = Redges.map(function (e) {
       var i = Math.abs(mc.edgeCurrent[e.id]);
-      return {
+      return WB({
         title: si(e.value, 'Ω'),
         body: 'Power dissipated as heat in this resistor: P = i²R.',
         eq: ['P = (' + si(i, 'A') + ')²·' + si(e.value, 'Ω') + ' = ' + si(i * i * e.value, 'W')],
         hl: H({ edges: [e.id] }),
-      };
+      });
     }).concat(srcs.map(function (e) {
       var p = e.value * mc.edgeCurrent[e.id];
-      return {
+      return WB({
         title: si(e.value, 'V') + ' source',
         body: (p >= 0 ? 'This source delivers' : 'This source absorbs') + ' power P = V·i.',
         eq: ['P = ' + si(e.value, 'V') + '·' + si(Math.abs(mc.edgeCurrent[e.id]), 'A') + ' = ' + si(Math.abs(p), 'W') + (p >= 0 ? ' delivered' : ' absorbed')],
         hl: H({ edges: [e.id] }),
-      };
-    })).concat([{
+      });
+    })).concat([WB({
       title: 'balance',
       body: 'Total dissipated must equal total generated — if it does, the mesh currents are consistent.',
       eq: ['ΣP<sub>diss</sub> = ' + si(diss, 'W'), 'ΣP<sub>gen</sub> = ' + si(gen, 'W') + ' ' + (pcOk ? '✓' : '✗')],
       hl: H({ edges: nonWireIds }),
-    }]);
-    steps.push({
+    })]);
+    steps.push(WB({
       n: 10, title: 'Power check',
       body: 'Currents through the resistors give the dissipated power; it must equal the power delivered by the source' + (srcs.length === 1 ? '' : 's') + '. Step through every element.',
       eq: ['ΣP<sub>diss</sub> = ' + si(diss, 'W'), 'ΣP<sub>gen</sub> = ' + si(gen, 'W') + ' ' + (pcOk ? '✓' : '✗')],
       hl: H({ edges: srcs.map(function (e) { return e.id; }) }),
       subs: powSubs,
-    });
+    }));
 
     return steps;
   };

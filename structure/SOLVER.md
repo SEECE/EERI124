@@ -46,6 +46,13 @@ A technique returns an array of steps:
 - `hl` → highlighted elements. The renderer wraps each edge in `<g class="edge" data-eid>` and tags
   each node circle `data-nid`; `Circuit.highlight(svg, hl)` toggles a `.hl` class (styled in
   `css/solver.css`, which beats the renderer's presentation attributes).
+- `board` (optional) → the **running board** html (KCL: node voltages, KVL: mesh currents). The
+  stepper renders it into its own element (`#step-board`), **pinned to the bottom of the panel**
+  (`css/solver.css`, `position: sticky`), so it stays in one place while the derivation scrolls
+  above it. Never concatenate the board into `body` — that was what made it jump around and vanish.
+  Build it with the technique's local `WB()` helper **at the point the view is created**: the board
+  is time-varying, so stamping it later records the wrong state. A view with no `board` hides the
+  panel — intended only for steps 1–5, before the first equation exists.
 - `subs` (optional) → **substeps**. Entering a step shows its overview (sub 0); `subPrev`/`subNext`
   drill through the substeps, `next` skips the whole step. A substep's `body`/`eq`/`hl` override the
   step's for that view (any omitted field falls back). Used by KCL for per-node / per-source /
@@ -120,8 +127,13 @@ same algebra — so a student who learned one reads the other for free:
   substeps) goes through the local `H()` helper, which re-attaches `loops:`. `Circuit.highlight`
   wipes `.mesh-loop` on every call, so a spec that omits `loops` erases them — never build an `hl`
   by hand in this file.
-- **Step 6 builds** — one substep per mesh, walking it clockwise and writing its equation, no
-  arithmetic. **Step 8 solves**, per mesh: *write → multiply out → collect the loop current →
+- **Step 4 walks mesh by mesh, then resistor by resistor inside it** — and a shared resistor is met
+  **twice**, once from each loop. The second meeting is where `(i₁−i₂)` vs `(i₂−i₁)` gets said out
+  loud (same current, opposite reference), which is what makes step 6's equations stop looking
+  contradictory. The self-check counts one both-ways view per shared resistor.
+- **Step 6 builds one term at a time** — a substep per element met on the clockwise walk, the
+  partial sum growing, and only the closing substep writes `= 0`. No equation ever appears whole.
+  **Step 8 solves**, per mesh: *write → multiply out → collect the loop current →
   divide*, each line stacking under the last, ending at `i_k = amps + ratio·i_neighbour`. Those
   expressions are then **substituted into one another** (a mesh's own symbol collects and divides
   out) until one falls out as a number, then back-substituted — the same machinery as KCL's coupled
@@ -131,7 +143,7 @@ same algebra — so a student who learned one reads the other for free:
   views later; the self-check asserts the chain lands there (the "falls out" view is one line, not
   two).
 - The live **board** (one row per mesh, `?` → equation → expression → value) uses the same
-  `kcl-status eq-board` markup as KCL's node board.
+  `kcl-status eq-board` markup as KCL's node board, and rides in the pinned `board` field (above).
 
 ## Equivalent resistance
 

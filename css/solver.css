@@ -110,6 +110,24 @@
 .kcl-status th { color: var(--ink-faint); font-weight: 600; text-transform: uppercase; font-size: 11px; letter-spacing: 0.03em; }
 .kcl-status tr.row-ready td { color: var(--accent-deep); font-weight: 600; }
 
+/* The running board (node voltages for KCL, mesh currents for KVL) is PINNED to the bottom of
+   the panel: it is the one thing that must not move as you step, so the derivation scrolls
+   above it while the board stays in the same spot. Sticky inside the panel's own scroll box;
+   full-bleed + negative bottom margin so nothing shows through under it, and its own scrollbar
+   when a big circuit's board gets tall. */
+.step-board {
+  position: sticky;
+  bottom: -20px;
+  margin: auto -20px -20px;
+  padding: 10px 20px 20px;
+  background: var(--surface);
+  border-top: 1px solid rgba(139, 92, 246, 0.18);
+  max-height: 45%;
+  overflow-y: auto;
+}
+.step-board .kcl-status-wrap { margin-top: 0; }
+.step-board .kcl-status thead th { position: sticky; top: 0; background: var(--surface); }
+
 /* live "current equation per node" board — updates as step 6/8 substeps are visited */
 .eq-board td:last-child {
   font-family: 'STIX Two Math', 'Cambria Math', Cambria, 'Times New Roman', serif;
@@ -165,4 +183,6 @@
 
 @media (max-width: 720px) {
   .step-panel { flex: none; overflow-y: visible; }
+  /* no scroll box to stick inside — sticky would pin the board to the viewport instead */
+  .step-board { position: static; margin: 0; padding: 10px 0 0; max-height: none; }
 }

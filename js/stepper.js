@@ -24,7 +24,7 @@
       var s = steps[i];
       if (!s) return null;
       var subs = subsOf(s);
-      if (sub === 0 || !subs.length) return { title: s.title, body: s.body, eq: s.eq, todo: s.todo, hl: s.hl, label: null };
+      if (sub === 0 || !subs.length) return { title: s.title, body: s.body, eq: s.eq, todo: s.todo, hl: s.hl, board: s.board, label: null };
       var ss = subs[sub - 1];
       return {
         title: s.title,
@@ -32,6 +32,7 @@
         eq: ss.eq != null ? ss.eq : null,
         todo: false,
         hl: ss.hl != null ? ss.hl : s.hl,
+        board: ss.board != null ? ss.board : s.board,
         label: ss.title || null,
       };
     }
@@ -48,6 +49,12 @@
         var has = v.eq && v.eq.length;
         o.eq.style.display = has ? '' : 'none';
         o.eq.innerHTML = has ? v.eq.map(function (l) { return '<div class="eq-line">' + l + '</div>'; }).join('') : '';
+      }
+      // the running board (KCL nodes / KVL meshes) lives in its own pinned element, not in the
+      // body — it must stay put while the derivation above it scrolls, not jump around per view
+      if (o.board) {
+        o.board.style.display = v.board ? '' : 'none';
+        o.board.innerHTML = v.board || '';
       }
       if (o.svg && window.Circuit) window.Circuit.highlight(o.svg, v.hl || {});
       if (o.prev) o.prev.disabled = i <= 0;

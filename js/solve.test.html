@@ -16,6 +16,7 @@
   <script src="generators/multi-source.js"></script>
   <script src="solve.js"></script>
   <script src="techniques/mesh-current.js"></script>
+  <script src="techniques/node-voltage.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -139,6 +140,20 @@
           }).length;
           var bothWays = (steps[3].subs || []).filter(function (view) { return (view.eq || []).length === 3; }).length;
           assert(bothWays === shared, shared + ' shared resistors but ' + bothWays + ' both-ways views in step 4');
+          // the running board is a pinned panel field, never baked into the body text, and from
+          // step 6 (first equation written) on it must never blank out — in either technique
+          [steps, NodeVoltage(c)].forEach(function (list) {
+            list.forEach(function (s2) {
+              [s2].concat(s2.subs || []).forEach(function (view) {
+                assert(!/eq-board/.test(view.body || ''), 'step ' + s2.n + ' still has the board inside its body');
+              });
+            });
+            list.slice(5).forEach(function (s2) {
+              [s2].concat(s2.subs || []).forEach(function (view) {
+                assert(/eq-board/.test(view.board || ''), 'step ' + s2.n + ' view "' + (view.title || 'overview') + '" lost its board');
+              });
+            });
+          });
           // the substitution chain reaching the engine's number is what makes "falls out" a
           // single line; two lines would mean the hand algebra and the solver disagree
           (steps[7].subs || []).forEach(function (view) {
