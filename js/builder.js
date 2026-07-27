@@ -267,7 +267,7 @@
         // convention circuit.js draws (current source: arrow a→b; voltage source: b is +).
         var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
         var ux = dx / len, uy = dy / len, vx = -uy, vy = ux;
-        var ox = mx + vx * 18, oy = my + vy * 18; // offset centre, clear of the label rect
+        var ox = mx + vx * 27, oy = my + vy * 27; // offset centre, clear of the circle/diamond body (r ≤ 19)
         if (e.type === 'I' || e.type === 'F' || e.type === 'G') {
           var tx = ox + ux * 9, ty = oy + uy * 9;
           extra += '<line x1="' + (ox - ux * 9) + '" y1="' + (oy - uy * 9) + '" x2="' + tx + '" y2="' + ty +
@@ -279,12 +279,26 @@
             '<text x="' + (ox - ux * 12) + '" y="' + (oy - uy * 12 + 4) + '" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent-hover)">−</text>' +
             '<text x="' + (ox + ux * 12) + '" y="' + (oy + uy * 12 + 4) + '" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent-hover)">+</text>';
         }
+        // shape says what kind of element this is (rectangle = resistor, circle = independent
+        // source, diamond = dependent source — circuit.js's own convention), so the value text
+        // never has to carry a type letter.
+        var body = '';
+        if (e.type === 'R') {
+          body = '<rect x="' + (mx - 20) + '" y="' + (my - 9) + '" width="40" height="18" rx="3" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"></rect>' +
+            '<text x="' + mx + '" y="' + (my + 4) + '" text-anchor="middle" font-size="11" fill="var(--ink)">' + fmtVal(e) + '</text>';
+        } else if (e.type !== 'W') {
+          var dep = Circuit.isDependent(e.type), sr = dep ? 19 : 17;
+          body = dep
+            ? '<polygon points="' + (mx + ux * sr) + ',' + (my + uy * sr) + ' ' + (mx + vx * sr) + ',' + (my + vy * sr) + ' ' +
+              (mx - ux * sr) + ',' + (my - uy * sr) + ' ' + (mx - vx * sr) + ',' + (my - vy * sr) +
+              '" fill="var(--surface)" stroke="var(--accent-deep)" stroke-width="2"></polygon>'
+            : '<circle cx="' + mx + '" cy="' + my + '" r="' + sr + '" fill="var(--surface)" stroke="var(--accent-deep)" stroke-width="2"></circle>';
+          body += '<text x="' + mx + '" y="' + (my + 4) + '" text-anchor="middle" font-size="11" fill="var(--ink)">' + fmtVal(e) + '</text>';
+        }
+        // wire: no shape, no label — a plain line needs neither
         g.innerHTML =
           '<line x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="var(--accent-deep)" stroke-width="2"></line>' +
-          extra +
-          '<rect x="' + (mx - 22) + '" y="' + (my - 10) + '" width="44" height="20" rx="4" fill="var(--surface)" stroke="var(--accent-deep)"></rect>' +
-          '<text x="' + mx + '" y="' + (my + 4) + '" text-anchor="middle" font-size="11" fill="var(--ink)">' +
-            e.type + (e.value !== undefined ? ' ' + fmtVal(e) : '') + '</text>';
+          extra + body;
         g.addEventListener('click', function (ev) { ev.stopPropagation(); removeEdge(e.id); });
         svg.appendChild(g);
       });
