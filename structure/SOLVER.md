@@ -14,7 +14,7 @@ offers whichever techniques make sense for its circuits, through the same **Tech
 |---|---|---|
 | `topics/simple-resistive-circuits/` (§3) | resistors + one or more independent **voltage** sources | KCL, KVL, equivalent resistance (over the source / over 2 points) |
 | `topics/current-sources/` (§4) | the above **plus independent current sources** | KCL, KVL only |
-| `topics/dependent-sources/` (§4) | controlled sources | placeholder — not built |
+| `topics/dependent-sources/` (§4) | the above **plus the four controlled sources** | KCL, KVL only |
 
 Both solver pages share **`js/solver-page.js`** (registry → topology dropdown, stepper wiring,
 technique switch). A page differs only in which generator files it loads, its `Circuit.list`
@@ -33,15 +33,65 @@ Topology dropdown from whichever set is selected and runs the set's optional `tr
 (here, `currentify`) on each freshly generated circuit; a page with one filter and no transform
 still just passes `{ filter }`.
 
-**Supernodes and supermeshes are real content, not "later".** The engine is modified nodal
-analysis plus a supermesh-aware mesh solve, so a voltage source between two non-reference nodes
-(supernode, §3) and a current source shared between two meshes (supermesh, §4) both solve and
-are both narrated. Only the **dependent** sources are still unbuilt.
+`topics/dependent-sources/` has the same two-set shape: its own tagged circuits, or every §3/§4
+topology run through `Circuit.dependify()` (GENERATORS.md), which turns some resistors into
+controlled sources.
+
+**Supernodes, supermeshes and controlled sources are all real content.** The engine is modified
+nodal analysis plus a supermesh-aware mesh solve, so a voltage source between two non-reference
+nodes (supernode, §3), a current source shared between two meshes (supermesh, §4) and the four
+controlled sources all solve and are all narrated.
+
+## Dependent sources — why they need no new method
+
+A controlled source reads a **resistor** (GENERATORS.md), so its control variable is itself a
+combination of the quantities the method is already solving for:
+
+    v_ctrl = v_x − v_y            i_ctrl = (v_x − v_y) / R          (node voltages, KCL)
+    i_ctrl = i_fa − i_fb          v_ctrl = R·(i_fa − i_fb)          (mesh currents, KVL)
+
+Everything follows from that one fact:
+
+- **Engine.** `nodeVoltages` gives `E`/`H` the same branch-current row as `V` with the
+  gain·control terms moved to the left, and stamps `F`/`G` into the two KCL rows they touch
+  instead of into the right-hand side. `meshCurrents` gives `E`/`H` extra *columns* in the KVL
+  row, and lets `F`/`G` weld a supermesh exactly like an independent source, with the constraint
+  `i_fa − i_fb − gain·control = 0`. No iteration, no special case.
+- **Two flags, not one.** A group held by a boundary current source is `fixed` (structural — no
+  KVL row, its constraint takes the place) and, only if that source is **independent**, also
+  `known` (the value is handed over outright, the PPT's step 3). A controlled one is `fixed`
+  without being `known`: it is a constraint, step 7's business, not step 3's.
+- **Techniques.** The source rides through step 6 as its own symbol (`iφ`, `vΔ`); **step 7**
+  replaces the symbol with the combination above; from there the algebra is the algebra the
+  student already did. `js/techniques/controls.js` (`ControlVars`) owns the naming, the gain
+  labels, the marker keys and the little `Lin` linear-form type both techniques use; it is
+  key-agnostic because KCL keys by electrical node and KVL keys by mesh.
+- **The drawing keeps up.** A controlled source is a diamond, and the control variable is drawn
+  on the resistor it is read from (an arrow for a current, a `+ … −` pair for a voltage), hidden
+  at render and revealed by `highlight({ marks: [...] })` at the step that names it — the same
+  mechanism as the node letters.
+
+Two structural cases have no independent-source analogue:
+
+- **A pinned node** (KCL): a controlled voltage source straight onto an already-known node. No
+  KCL can be written there — the source's branch current is an unknown of its own — so the gain
+  equation *is* that node's equation. `pinEquation` rearranges it into the same
+  "volts + ratio·neighbour" shape every other node ends at, so it joins the ordinary
+  substitution round rather than being handed to a matrix.
+- **A controlled supermesh** (KVL): the offset between the two loop currents is `gain·control`,
+  not a number, so the pair cannot be folded into the lead's symbol. Each member is instead
+  rearranged out of its own constraint into that same shape.
+
+**When a control term cancels a quantity's own coefficient exactly**, the line is still true —
+it relates the *other* unknowns instead of giving this one. Both techniques detect that and say
+so, rather than dividing by zero.
 
 ## Layers
 
 | Layer | Files | Owns |
 |---|---|---|
+| **Kit** | `js/techniques/kit.js` | `StepKit` — the presentation and small-algebra layer both techniques share: fraction/subscript fragments, the status and board tables, number formatting that never prints `-12` or `− -5`, and the `{ c, t }` expression objects (`cleanT`, `resolveSelf`, `snap`, `settle`, `fmtExpr`) their step 8s substitute into one another. Knows nothing about circuits. |
+| **Controls** | `js/techniques/controls.js` | `ControlVars` — everything a step list says about a dependent source (type names, symbol, gain label, sign-aware term text, marker key) plus `Lin`, the key-agnostic linear form. |
 | **Engine** | `js/solve.js` | `si` (SI/engineering value formatting), `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (**MNA**, any number of sources), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
 | **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — sets up equations in step 6, hand-works the solve in step 8), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
 | **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view, highlights the circuit via `Circuit.highlight`. |
@@ -63,7 +113,10 @@ A technique returns an array of steps:
 - `todo: true` → a muted **"Nothing to do"** badge.
 - `hl` → highlighted elements. The renderer wraps each edge in `<g class="edge" data-eid>` and tags
   each node circle `data-nid`; `Circuit.highlight(svg, hl)` toggles a `.hl` class (styled in
-  `css/solver.css`, which beats the renderer's presentation attributes).
+  `css/solver.css`, which beats the renderer's presentation attributes). `hl.marks` reveals a
+  control variable's notation, keyed `'i:<edgeId>'` / `'v:<edgeId>'` — like `hl.labels`, a view
+  that omits it *erases* the markers, so both techniques stamp the full set onto any view that
+  is not about one particular source.
 - `board` (optional) → the **running board** html (KCL: node voltages, KVL: mesh currents). The
   stepper renders it into its own element (`#step-board`), **pinned to the bottom of the panel**
   (`css/solver.css`, `position: sticky`), so it stays in one place while the derivation scrolls
@@ -85,10 +138,12 @@ A technique returns an array of steps:
 The two PPTs in the repo root give the **exact** step order — node-voltage **9 steps**, mesh
 **10 steps**. Steps that only fire for special cases are **shown, never skipped**. For KCL the
 **supernode step 5** carries **real content** when a source floats between two non-reference
-nodes (it says "Nothing to do" only when every source is pinned by the reference — the usual
-single-source and ref-chained case). For mesh, **step 3** (known current), **step 5** (supermesh)
-and **step 7** (constraint) fire the moment the circuit holds a current source, and say "Nothing
-to do" otherwise. Only the dependent-source half of KCL's step 7 is still always "Nothing to do".
+nodes — **any** voltage source, independent or dependent, which is the slides' own rule (it
+says "Nothing to do" only when every source is pinned by an already-known node). For mesh,
+**step 3** (known current), **step 5** (supermesh) and **step 7** (constraint) fire the moment
+the circuit holds a current source, and say "Nothing to do" otherwise. **Step 7 of both
+methods** is the dependent sources' step and carries real content whenever one is present.
+Nothing is permanently "Nothing to do" any more.
 
 ## KCL — node-voltage
 
@@ -205,7 +260,9 @@ is the pedagogy and is verified to match `V/I` for every generator.
 ## Adding a technique
 
 1. `js/techniques/<name>.js` exposing `window.<Name>(circuit[, opts]) → steps[]`; reuse
-   `js/solve.js` — never re-implement the linear solve or node contraction.
+   `js/solve.js` — never re-implement the linear solve or node contraction — and reuse
+   `js/techniques/kit.js` for the tables, formatting and expression objects rather than growing
+   a third copy of them.
 2. `<script>` it on the page, add a dropdown `<option>`, map it in `buildSteps()` in
    `js/solver-page.js` (one switch, shared by every page).
 3. Add a case to `js/solve.test.html`.
@@ -213,9 +270,14 @@ is the pedagogy and is verified to match `V/I` for every generator.
 ## The self-check
 
 `js/solve.test.html` — open in a browser, every line must read `PASS`. It runs hand-computed
-series/parallel/divider circuits, then sweeps **every generator**: node-voltage solves, mesh agrees
-(Euler face count + per-resistor current), and power balances. A new technique or element type is
-only done when it has a case here.
+series/parallel/divider circuits and one hand-worked case per controlled type (CCVS, VCVS, CCCS,
+VCCS), then sweeps **every generator**: node-voltage solves, mesh agrees (Euler face count +
+per-resistor current), and power balances. It then walks both techniques' step lists and asserts
+the narration invariants — the mesh loops never blink out, no view says `undefined`/`NaN`, the
+board is never baked into the body text, and, whatever route the derivation took, **the final
+board shows every node voltage and mesh current the engine found**. That last one is the check
+that matters most for a new element type; a new technique or element type is only done when it
+has a case here.
 
 ## Verifying without a browser
 

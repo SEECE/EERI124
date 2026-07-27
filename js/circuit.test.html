@@ -15,6 +15,8 @@
   <script src="generators/grid.js"></script>
   <script src="generators/multi-source.js"></script>
   <script src="generators/current-source.js"></script>
+  <script src="generators/dependent.js"></script>
+  <script src="solve.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -47,7 +49,12 @@
           Circuit.validate(c); // ids unique, edges reference real nodes
           assert(hasSource(c), 'no source');
           assert(Circuit.isConnected(c), 'not connected');
-          assert(c.edges.every(function (e) { return e.type === 'W' || e.value > 0; }), 'zero-value edge');
+          // a dependent source's GAIN may legitimately be negative (the slides' −30 iΔ); every
+          // other valued element must be positive
+          assert(c.edges.every(function (e) {
+            if (e.type === 'W') return true;
+            return Circuit.isDependent(e.type) ? (e.value !== 0 && isFinite(e.value)) : e.value > 0;
+          }), 'zero-value edge');
           assert(!shorted(c), 'shorted source or resistor');
           // a generator must not emit element types it did not declare
           assert(c.edges.every(function (e) { return g.elements.indexOf(e.type) >= 0; }), 'undeclared element type');
@@ -60,9 +67,62 @@
       var rvw = Circuit.list({ elements: ['R', 'V', 'W'] });
       assert(rvw.length > 0 && rvw.length < all.length, 'R/V/W filter should keep the voltage-only generators and drop the current-source ones');
       assert(rvw.every(function (g) { return g.elements.indexOf('I') < 0; }), 'R/V/W filter kept a current-source generator');
-      assert(Circuit.list({ elements: ['R', 'V', 'I', 'W'] }).length === all.length, 'full filter dropped a generator');
+      var rvi = Circuit.list({ elements: ['R', 'V', 'I', 'W'] });
+      assert(rvi.length > rvw.length && rvi.length < all.length, 'R/V/I/W should add the current-source generators and still drop the dependent ones');
+      assert(rvi.every(function (g) { return !g.elements.some(Circuit.isDependent); }), 'R/V/I/W filter kept a dependent-source generator');
+      assert(Circuit.list({ elements: ['R', 'V', 'I', 'W', 'E', 'F', 'G', 'H'] }).length === all.length, 'full filter dropped a generator');
       assert(Circuit.list({ elements: ['R', 'W'] }).length === 0, 'sourceless filter kept a generator');
-      assert(Circuit.list({ tags: ['random'] }).length === 2, 'expected the two random generators');
+      assert(Circuit.list({ tags: ['random'] }).length === 3, 'expected the three random generators');
+      assert(Circuit.list({ tags: ['dependent-source'] }).length > 0, 'no dependent-source generators registered');
+    });
+
+    // ---- dependent sources: the control field, and what dependify() may and may not do ----
+    var isDep = Circuit.isDependent;
+
+    check('dependent generators name a resistor as their control', function () {
+      Circuit.list({ tags: ['dependent-source'] }).forEach(function (g) {
+        for (var i = 0; i < 30; i++) {
+          var c = g.generate(), byId = {};
+          c.edges.forEach(function (e) { byId[e.id] = e; });
+          var deps = c.edges.filter(function (e) { return isDep(e.type); });
+          assert(deps.length > 0, g.name + ' produced no dependent source');
+          deps.forEach(function (e) {
+            assert(byId[e.control], g.name + ': control ' + e.control + ' is not an edge');
+            assert(byId[e.control].type === 'R', g.name + ': control is a ' + byId[e.control].type + ', not a resistor');
+            assert(byId[e.control] !== e, g.name + ': source controls itself');
+            assert(e.value !== 0 && isFinite(e.value), g.name + ': zero or non-finite gain');
+          });
+          // a network of controlled sources alone solves to all zeros — one independent source
+          // must always survive
+          assert(c.edges.some(function (e) { return e.type === 'V' || e.type === 'I'; }), g.name + ' has no independent source');
+        }
+      });
+    });
+
+    check('dependify keeps the circuit sane', function () {
+      Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
+        for (var i = 0; i < 20; i++) {
+          var c = Circuit.dependify(g.generate());
+          Circuit.validate(c);
+          assert(Circuit.isConnected(c), 'dependify disconnected ' + g.name);
+          assert(c.edges.some(function (e) { return e.type === 'V' || e.type === 'I'; }), 'dependify removed every independent source');
+          assert(!shorted(c), 'dependify shorted an element');
+          assert(Circuit.solvable(c), 'dependify produced an unsolvable circuit from ' + g.name);
+        }
+      });
+    });
+
+    check('controls() names each variable once', function () {
+      var c = Circuit.get('Supernode (floating dependent source)').generate();
+      var ctl = Circuit.controls(c);
+      assert(ctl.list.length === c.edges.filter(function (e) { return isDep(e.type); }).length, 'entry per dependent source');
+      ctl.list.forEach(function (x) {
+        assert(x.label && x.labelHtml && x.symPlain, 'missing label/symbol');
+        assert(x.label.indexOf('undefined') < 0 && x.label.indexOf('NaN') < 0, 'bad label ' + x.label);
+      });
+      // one marker per (control edge, kind), and every entry points at one of them
+      var keys = ctl.marks.map(function (m) { return m.kind + ':' + m.ctrl.id; });
+      assert(keys.length === keys.filter(function (k, i) { return keys.indexOf(k) === i; }).length, 'duplicate marker key');
     });
 
     check('render smoke', function () {

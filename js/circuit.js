@@ -9,17 +9,42 @@
   var R_VALUES = [100, 220, 330, 470, 680, 1000, 1500, 2200, 3300, 4700];
   var V_VALUES = [5, 9, 12, 15];
   var I_VALUES = [0.01, 0.02, 0.05, 0.1];   // 10–100 mA: same order as V/R above gives
+  // dependent-source gains, sized so the controlled quantity lands in the same band as the
+  // independent ones above (volts of the order 1–50, currents of the order 10–100 mA).
+  var MU_VALUES = [0.5, 2, 3, 4];           // E — VCVS, v = μ·v_ctrl        (dimensionless)
+  var BETA_VALUES = [0.5, 2, 3, 4];         // F — CCCS, i = β·i_ctrl        (dimensionless)
+  var GM_DIVISORS = [200, 500, 1000, 2000]; // G — VCCS, i = v_ctrl / divisor (stored in siemens,
+  //                                             but written as a division so no siemens is shown)
+  var RM_VALUES = [100, 220, 470, 1000];    // H — CCVS, v = r·i_ctrl        (ohms)
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function pickR() { return pick(R_VALUES); }
   function pickV() { return pick(V_VALUES); }
   function pickI() { return pick(I_VALUES); }
+  // a gain may be negative — the slides' "−30 iΔ" is an ordinary case, not a trick
+  function sgn(x) { return Math.random() < 0.3 ? -x : x; }
+  function pickGain(type) {
+    if (type === 'E') return sgn(pick(MU_VALUES));
+    if (type === 'F') return sgn(pick(BETA_VALUES));
+    if (type === 'G') return sgn(1 / pick(GM_DIVISORS));
+    return sgn(pick(RM_VALUES));                    // H
+  }
 
   /* ---------- model ----------
-     circuit = { nodes: [{id,x,y}], edges: [{id,type,a,b,value?}] }
+     circuit = { nodes: [{id,x,y}], edges: [{id,type,a,b,value?,control?}] }
      Element types: 'R' resistor, 'V' independent voltage source (b is +), 'W' plain wire,
      'I' independent current source (current flows a → b, i.e. out of the b terminal).
-     Later phases add the dependent sources — see structure/GENERATORS.md. */
+     Dependent (controlled) sources carry a `control` field naming the edge they read:
+       'E' VCVS  v = value·v_ctrl   (b is +)      'H' CCVS  v = value·i_ctrl   (b is +)
+       'F' CCCS  i = value·i_ctrl   (a → b)       'G' VCCS  i = value·v_ctrl   (a → b)
+     The controlling edge is always a RESISTOR (that is what the lecture slides use, and it
+     keeps the control variable readable straight off Ohm's law). Its sense is fixed by the
+     control edge's own a/b: v_ctrl = v(ctrl.a) − v(ctrl.b), i_ctrl = current ctrl.a → ctrl.b.
+     See structure/GENERATORS.md. */
   var VALUED = { R: 'resistance', V: 'voltage', I: 'current' }; // types that need a positive value
+  var DEP = { E: 'v', F: 'i', G: 'v', H: 'i' };  // dependent type → what its control variable is
+  var DEP_OUT = { E: 'v', F: 'i', G: 'i', H: 'v' }; // …and what the source itself delivers
+  function isDependent(t) { return DEP[t] !== undefined; }
+  function isSource(t) { return t === 'V' || t === 'I' || isDependent(t); }
 
   function validate(c) {
     var ids = {};
@@ -34,6 +59,15 @@
       if (!ids[e.a] || !ids[e.b]) throw new Error('edge ' + e.id + ' references missing node');
       if (e.a === e.b) throw new Error('edge ' + e.id + ' is a self-loop');
       if (VALUED[e.type] && !(e.value > 0)) throw new Error('edge ' + e.id + ' needs a positive ' + VALUED[e.type]);
+    });
+    var byId = {}; c.edges.forEach(function (e) { byId[e.id] = e; });
+    c.edges.forEach(function (e) {
+      if (!isDependent(e.type)) return;
+      if (!(e.value !== 0 && isFinite(e.value))) throw new Error('edge ' + e.id + ' needs a non-zero gain');
+      var ctrl = byId[e.control];
+      if (!ctrl) throw new Error('edge ' + e.id + ' names a missing control edge ' + e.control);
+      if (ctrl === e) throw new Error('edge ' + e.id + ' controls itself');
+      if (ctrl.type !== 'R') throw new Error('edge ' + e.id + ' must be controlled by a resistor, not ' + ctrl.type);
     });
     return c;
   }
@@ -66,20 +100,25 @@
   }
 
   /* Same topology, different problem: random source polarity and now and then one resistor
-     replaced by a short, so a template rewards reading the circuit over recalling it. */
+     replaced by a short, so a template rewards reading the circuit over recalling it.
+     A resistor that some dependent source reads (its control edge) is never shorted away —
+     the control variable has to keep existing. */
   function flavour(specs) {
     specs = specs.map(function (s) {  // source polarity / current direction, both ways
-      return (s[0] === 'V' || s[0] === 'I') && Math.random() < 0.5 ? [s[0], s[2], s[1], s[3]] : s;
+      return isSource(s[0]) && Math.random() < 0.5 ? [s[0], s[2], s[1], s[3], s[4]] : s;
     });
+    var controlled = {};
+    specs.forEach(function (s) { if (isDependent(s[0]) && s[4] !== undefined) controlled[s[4]] = true; });
     var rs = [];
-    specs.forEach(function (s, i) { if (s[0] === 'R') rs.push(i); });
+    specs.forEach(function (s, i) { if (s[0] === 'R' && !controlled[i]) rs.push(i); });
     if (rs.length < 4 || Math.random() > 0.3) return specs;
     var k = pick(rs), t = specs.slice();
     t[k] = ['W', specs[k][1], specs[k][2]];
     return degenerate(t) ? specs : t;
   }
 
-  /* Build helper: nodes as [[x,y],...], edges as [type,a,b] (indices), values auto.
+  /* Build helper: nodes as [[x,y],...], edges as [type,a,b,value?,controlIndex?] (indices),
+     values auto. A dependent source's 5th field is the INDEX of the resistor spec it reads.
      opts.flavour === false keeps the topology exactly as written. */
   function build(nodeCoords, edgeSpecs, opts) {
     if (!opts || opts.flavour !== false) edgeSpecs = flavour(edgeSpecs);
@@ -93,6 +132,7 @@
       if (s[0] === 'R') e.value = pickR();
       if (s[0] === 'V') e.value = pickV();
       if (s[0] === 'I') e.value = pickI();
+      if (isDependent(s[0])) { e.value = pickGain(s[0]); e.control = 'e' + s[4]; }
       if (s[3] !== undefined) e.value = s[3]; // explicit value wins
       return e;
     });
@@ -136,6 +176,146 @@
       }
     }
     return validate(circuit);
+  }
+
+  /* A dependent source can be given a gain that makes its circuit degenerate — the classic case
+     is a controlled voltage source whose gain cancels the loop resistance, leaving a singular
+     system, or one that lands just short of it and drives the answers to absurd magnitudes.
+     There is no cheap algebraic test for it, so a generator that places one just SOLVES the
+     candidate and keeps it only if it comes out sane. Uses the solver if it is loaded; in a
+     model-only context (circuit.test.html) there is nothing to check and everything passes. */
+  function solvable(c) {
+    var S = window.Solve;
+    if (!S) return true;
+    try {
+      var sol = S.nodeVoltages(c);
+      var br = S.branches(c, sol);
+      if (!S.powerCheck(br).ok) return false;
+      if (!br.every(function (r) { return isFinite(r.current) && Math.abs(r.current) < 10; })) return false;
+      if (!Object.keys(sol.v).every(function (g) { return isFinite(sol.v[g]) && Math.abs(sol.v[g]) < 1000; })) return false;
+      // a control variable that came out at zero means the controlled source is dead — the
+      // problem would look like it has a dependent source and behave as if it had none
+      if (!(sol.deps || []).every(function (e) { return Math.abs(sol.ctrl[e.id]) > 1e-9; })) return false;
+      S.meshCurrents(c);                 // both techniques are offered, so both must solve
+      return true;
+    } catch (err) { return false; }
+  }
+
+  /* Retry wrapper for generators that place dependent sources: build, check, build again.
+     ponytail: after 30 random tries the gains are halved instead — a small enough gain is always
+     a perturbation of the underlying resistive circuit, so this terminates; the label just gets
+     less pretty. In practice the random tries succeed on the first or second go. */
+  function attempt(make) {
+    var last;
+    for (var k = 0; k < 30; k++) {
+      try { last = make(); } catch (err) { last = null; }
+      if (last && solvable(last)) return last;
+    }
+    for (var h = 0; h < 12 && last; h++) {
+      last.edges.forEach(function (e) { if (isDependent(e.type)) e.value /= 2; });
+      if (solvable(last)) return last;
+    }
+    return last;
+  }
+
+  /* ---------- control variables ----------
+     Names the quantity each dependent source reads, once per (control edge, kind) pair, so the
+     renderer's marker, the step text and the equations all say the same thing. The slides' own
+     symbols come first (iφ, vΔ), then plain letters.
+     Returns { list, of: {depEdgeId -> entry}, marks: [{ctrl, kind, sym, plain}] } where an entry
+     is { e, kind, out, ctrl, sym, symHtml, label, labelHtml } — `label` is plain text for the
+     SVG, `labelHtml` carries <sub> for the workbench. */
+  var SYMS = ['φ', 'Δ', 'x', 'y', 'z', 'w'];
+  function num(x) { var r = Math.round(x * 1000) / 1000; return String(Math.abs(r)); }
+  function controls(c) {
+    var byId = {}; c.edges.forEach(function (e) { byId[e.id] = e; });
+    var marks = [], markOf = {}, list = [], of = {};
+    c.edges.forEach(function (e) {
+      if (!isDependent(e.type)) return;
+      var kind = DEP[e.type], key = kind + ':' + e.control, mk = markOf[key];
+      if (!mk) {
+        mk = markOf[key] = { ctrl: byId[e.control], kind: kind, sym: SYMS[marks.length] || ('s' + marks.length) };
+        mk.plain = kind + mk.sym;
+        marks.push(mk);
+      }
+      var v = e.value, neg = v < 0, mag = num(v);
+      var lead = neg ? '−' : '';
+      var label, labelHtml;
+      var symHtml = kind + '<sub>' + mk.sym + '</sub>';
+      if (e.type === 'G' && Math.abs(1 / v) >= 1 && Math.abs(Math.round(1 / v) - 1 / v) < 1e-9) {
+        // written as a division, so a transconductance never has to be read in siemens
+        var d = Math.abs(Math.round(1 / v));
+        label = lead + mk.plain + '/' + d;
+        labelHtml = lead + symHtml + '/' + d;
+      } else {
+        var k = mag === '1' ? '' : mag;
+        label = lead + k + (k ? ' ' : '') + mk.plain;
+        labelHtml = lead + k + (k ? '·' : '') + symHtml;
+      }
+      var entry = { e: e, kind: kind, out: DEP_OUT[e.type], ctrl: mk.ctrl, sym: mk.sym,
+        symPlain: mk.plain, symHtml: symHtml, label: label, labelHtml: labelHtml };
+      list.push(entry); of[e.id] = entry;
+    });
+    return { list: list, of: of, marks: marks };
+  }
+
+  /* Turn a resistor or two already on the circuit into DEPENDENT sources, each reading another
+     resistor — `currentify()`'s sibling, used by the dependent-sources page's "All topologies"
+     set so §3/§4's shapes can be drilled with controlled sources instead of only the templates
+     written for them. The independent sources are never touched, so the circuit always keeps at
+     least one (a network of controlled sources alone solves to all zeros).
+     Same cut-safety rule as `currentify()` for the current-type ones (GENERATORS.md #7), and a
+     control resistor is never a dead-end branch — its current would be zero and the controlled
+     source with it. Works on a copy per attempt and returns the first candidate that solves;
+     if none does, the original circuit comes back untouched. */
+  function pickDepType(out) { return out === 'v' ? pick(['E', 'H']) : pick(['F', 'G']); }
+
+  function dependify(circuit, opts) {
+    opts = opts || {};
+    var want = opts.count || (Math.random() < 0.3 ? 2 : 1);
+    for (var k = 0; k < 25; k++) {
+      var c = JSON.parse(JSON.stringify(circuit));
+      if (place(c, want) && solvable(c)) return c;
+    }
+    return circuit;
+
+    function place(c, n) {
+      var edges = c.edges, chosen = {}, placed = 0;
+      var deg = {};
+      edges.forEach(function (e) { deg[e.a] = (deg[e.a] || 0) + 1; deg[e.b] = (deg[e.b] || 0) + 1; });
+      function isR(e) { return e.type === 'R'; }
+      function liveR(e) { return isR(e) && deg[e.a] > 1 && deg[e.b] > 1; }   // carries current
+      function wouldCut(skip) {
+        var p = {};
+        function find(x) { if (p[x] === undefined) p[x] = x; while (p[x] !== x) { p[x] = p[p[x]]; x = p[x]; } return x; }
+        edges.forEach(function (e, j) { if (chosen[j] || j === skip || e.type === 'F' || e.type === 'G') return; p[find(e.a)] = find(e.b); });
+        var root = find(c.nodes[0].id);
+        return !c.nodes.every(function (x) { return find(x.id) === root; });
+      }
+      for (var t = 0; t < n; t++) {
+        var out = Math.random() < 0.5 ? 'v' : 'i', type = pickDepType(out);
+        var cands = [];
+        edges.forEach(function (e, j) {
+          if (chosen[j] || !isR(e)) return;
+          if (out === 'i' && wouldCut(j)) return;              // a current source in a cut branch
+          cands.push(j);
+        });
+        if (!cands.length) break;
+        var j = pick(cands);
+        // the control resistor must survive this pass and actually carry current
+        var ctrls = [];
+        edges.forEach(function (e, q) { if (q !== j && !chosen[q] && liveR(e)) ctrls.push(q); });
+        if (!ctrls.length) break;
+        var q = pick(ctrls);
+        chosen[j] = true;
+        edges[j] = { id: edges[j].id, type: type, a: edges[j].a, b: edges[j].b,
+          value: pickGain(type), control: edges[q].id };
+        placed++;
+      }
+      if (!placed) return false;
+      try { validate(c); } catch (err) { return false; }
+      return true;
+    }
   }
 
   /* ---------- generator registry ----------
@@ -203,22 +383,45 @@
 
     var byId = {};
     circuit.nodes.forEach(function (n) { byId[n.id] = { x: n.x * PX, y: n.y * PX }; });
+    var ctl = controls(circuit);
 
     function line(x1, y1, x2, y2, parent) {
       el('line', { x1: x1, y1: y1, x2: x2, y2: y2, stroke: 'var(--ink)', 'stroke-width': 2 }, parent);
+    }
+    // geometry every edge-drawing pass needs: unit vector along a→b, midpoint, and which
+    // perpendicular side faces away from the middle of the drawing
+    function geom(e) {
+      var a = byId[e.a], b = byId[e.b];
+      var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+      var ux = dx / len, uy = dy / len, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      return { a: a, b: b, ux: ux, uy: uy, mx: mx, my: my, vx: -uy, vy: ux,
+        side: ((mx - midX) * -uy + (my - midY) * ux) >= 0 ? 1 : -1 };
+    }
+    function arrowAt(x, y, ux, uy, vx, vy, colour, parent) {
+      el('polygon', { points:
+        x + ',' + y + ' ' +
+        (x - ux * 7 + vx * 4) + ',' + (y - uy * 7 + vy * 4) + ' ' +
+        (x - ux * 7 - vx * 4) + ',' + (y - uy * 7 - vy * 4),
+        fill: colour }, parent);
+    }
+    function label(x, y, text, parent, opts) {
+      opts = opts || {};
+      el('text', { x: x, y: y, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        fill: opts.fill || 'var(--ink-soft)', 'font-size': opts.size || 14,
+        'font-weight': opts.weight || 400,
+        'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': opts.halo || 5 }, parent)
+        .textContent = text;
+      fit(x, y, text);
     }
 
     // Each edge is wrapped in a <g class="edge" data-eid> so a solver step can highlight it
     // (add a CSS class); presentation attributes below sit under any stylesheet rule.
     circuit.edges.forEach(function (e) {
-      var a = byId[e.a], b = byId[e.b];
-      var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
-      var ux = dx / len, uy = dy / len;
-      var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      var G = geom(e), a = G.a, b = G.b, ux = G.ux, uy = G.uy, mx = G.mx, my = G.my;
       // label sits perpendicular to the element, on whichever side points away from the middle
       // of the drawing — a fixed side lands inside the loop half the time (and the source
       // symbols, whose a/b order is randomised, flipped sides at random)
-      var side = ((mx - midX) * -uy + (my - midY) * ux) >= 0 ? 1 : -1;
+      var side = G.side;
       // 46 clears the r=16 source circle even for the widest label ("100 mA", "4.7 kΩ") — 38
       // cleared shorter R/V labels but let a 6-char current-source reading overlap its own circle
       var lx = mx - uy * 46 * side, ly = my + ux * 46 * side;
@@ -226,41 +429,80 @@
 
       if (e.type === 'W') { line(a.x, a.y, b.x, b.y, eg); return; }
 
-      var gap = e.type === 'R' ? 20 : 17;
-      var vx = -uy, vy = ux;                      // unit vector across the element (for arrowheads)
+      var dep = ctl.of[e.id];
+      // the diamond a dependent source is drawn as is wider than the circle, so its leads stop
+      // further out; the resistor's rect is 40 long, so 20 either way
+      var gap = e.type === 'R' ? 20 : (dep ? 21 : 17);
+      var vx = G.vx, vy = G.vy;                   // unit vector across the element (for arrowheads)
       line(a.x, a.y, mx - ux * gap, my - uy * gap, eg);
       line(mx + ux * gap, my + uy * gap, b.x, b.y, eg);
 
       if (e.type === 'R') {
-        var deg = Math.atan2(dy, dx) * 180 / Math.PI;
+        var deg = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
         var g = el('g', { transform: 'translate(' + mx + ',' + my + ') rotate(' + deg + ')' }, eg);
         el('rect', { x: -20, y: -8, width: 40, height: 16, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, rx: 2 }, g);
-        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
-          .textContent = fmtR(e.value);
-        fit(lx, ly, fmtR(e.value));
-      } else if (e.type === 'I') {
-        // current source — same circle as a voltage source but with an arrow through it,
-        // pointing a → b: the direction the source pushes current out of its b terminal.
+        label(lx, ly, fmtR(e.value), eg);
+        return;
+      }
+
+      // source body: a circle for an independent source, a diamond for a controlled one —
+      // the standard symbol, and the only thing on the drawing that says "this value is not a
+      // number you were given, it is read off somewhere else in the circuit".
+      var r = dep ? 20 : 16;
+      if (dep) {
+        el('polygon', { 'class': 'dep-body', points:
+          (mx + ux * r) + ',' + (my + uy * r) + ' ' + (mx + vx * r) + ',' + (my + vy * r) + ' ' +
+          (mx - ux * r) + ',' + (my - uy * r) + ' ' + (mx - vx * r) + ',' + (my - vy * r),
+          fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
+      } else {
         el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
-        var tx = mx + ux * 10, ty = my + uy * 10;   // arrow tip, inside the circle
-        el('line', { x1: mx - ux * 10, y1: my - uy * 10, x2: tx, y2: ty, stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
-        el('polygon', { points:
-          tx + ',' + ty + ' ' +
-          (tx - ux * 7 + vx * 4) + ',' + (ty - uy * 7 + vy * 4) + ' ' +
-          (tx - ux * 7 - vx * 4) + ',' + (ty - uy * 7 - vy * 4),
-          fill: 'var(--accent-deep)' }, eg);
-        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
-          .textContent = fmtI(e.value);
-        fit(lx, ly, fmtI(e.value));
-      } else { // V — b is the + terminal
-        el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
-        var plus = el('text', { x: mx + ux * 7, y: my + uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, eg);
-        plus.textContent = '+';
-        var minus = el('text', { x: mx - ux * 7, y: my - uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, eg);
-        minus.textContent = '−';
-        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
-          .textContent = e.value + ' V';
-        fit(lx, ly, e.value + ' V');
+      }
+
+      if (e.type === 'I' || e.type === 'F' || e.type === 'G') {
+        // current source — an arrow through the body pointing a → b: the direction the source
+        // pushes current out of its b terminal.
+        var reach = dep ? 12 : 10;
+        var tx = mx + ux * reach, ty = my + uy * reach;   // arrow tip, inside the body
+        el('line', { x1: mx - ux * reach, y1: my - uy * reach, x2: tx, y2: ty, stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
+        arrowAt(tx, ty, ux, uy, vx, vy, 'var(--accent-deep)', eg);
+      } else {
+        // V / E / H — b is the + terminal
+        var off = dep ? 10 : 7;
+        label(mx + ux * off, my + uy * off, '+', eg, { fill: 'var(--accent-deep)', size: 13, weight: 700, halo: 0 });
+        label(mx - ux * off, my - uy * off, '−', eg, { fill: 'var(--accent-deep)', size: 13, weight: 700, halo: 0 });
+      }
+      label(lx, ly, dep ? dep.label : (e.type === 'I' ? fmtI(e.value) : e.value + ' V'), eg);
+    });
+
+    // ---- control-variable markers, drawn on the resistor each dependent source READS.
+    // Hidden at render (like the node letters) and revealed by highlight({ marks: [key] }) at
+    // the step that first names the variable, so the drawing gains notation as the method does.
+    // They sit on the far side of the element from its value label; a resistor read both ways
+    // (a current AND a voltage) pushes the second marker further out.
+    var markSeen = {};
+    ctl.marks.forEach(function (mk) {
+      var e = mk.ctrl, G = geom(e), ux = G.ux, uy = G.uy, mx = G.mx, my = G.my;
+      var s = -G.side;                                   // opposite side to the value label
+      var tier = (markSeen[e.id] = (markSeen[e.id] || 0) + 1) - 1;
+      function at(alongF, acrossF) {
+        return { x: mx + ux * alongF - uy * acrossF * s, y: my + uy * alongF + ux * acrossF * s };
+      }
+      var mg = el('g', { 'class': 'ctrl-mark', 'data-mark': mk.kind + ':' + e.id }, svg);
+      if (mk.kind === 'i') {
+        // a current arrow beside the resistor, running the control edge's own a → b sense
+        var base = 24 + tier * 22;
+        var p0 = at(-14, base), p1 = at(14, base);
+        el('line', { x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: 'var(--accent-hover)', 'stroke-width': 2 }, mg);
+        arrowAt(p1.x, p1.y, ux, uy, G.vx, G.vy, 'var(--accent-hover)', mg);
+        var it = at(0, base + 15);
+        label(it.x, it.y, mk.plain, mg, { fill: 'var(--accent-hover)', size: 13, weight: 700, halo: 4 });
+      } else {
+        // + … − across the resistor, in the control edge's own a → b sense (v = v_a − v_b)
+        var lvl = 20 + tier * 22;
+        var pp = at(-30, lvl), pm = at(30, lvl), vt = at(0, lvl);
+        label(pp.x, pp.y, '+', mg, { fill: 'var(--accent-hover)', size: 13, weight: 700, halo: 4 });
+        label(pm.x, pm.y, '−', mg, { fill: 'var(--accent-hover)', size: 13, weight: 700, halo: 4 });
+        label(vt.x, vt.y, mk.plain, mg, { fill: 'var(--accent-hover)', size: 13, weight: 700, halo: 4 });
       }
     });
 
@@ -319,14 +561,20 @@
   }
 
   /* Toggle a 'hl' class on the edges/nodes a solver step wants to emphasise.
-     spec = { edges:[edgeId], nodes:[nodeId], labels:[nodeId], loops:[...], ground:[nodeId],
-     volts:{nodeId:text} }; anything not listed is un-highlighted. `labels` reveals the node
-     letters (hidden at render) for the step that introduces them onward. `ground` draws the
+     spec = { edges:[edgeId], nodes:[nodeId], labels:[nodeId], marks:[markKey], loops:[...],
+     ground:[nodeId], volts:{nodeId:text} }; anything not listed is un-highlighted. `labels`
+     reveals the node letters (hidden at render) for the step that introduces them onward;
+     `marks` does the same for the control-variable notation a dependent source reads, keyed
+     'i:<edgeId>' / 'v:<edgeId>' (Circuit.controls().marks gives the keys). `ground` draws the
      earth symbol under the chosen reference node(s); `volts` writes a solved/known voltage
      reading above a node. */
   function highlight(svg, spec) {
     spec = spec || {};
     var edges = spec.edges || [], nodes = spec.nodes || [], labels = spec.labels || [];
+    var marks = spec.marks || [];
+    Array.prototype.forEach.call(svg.querySelectorAll('.ctrl-mark'), function (g) {
+      g.classList.toggle('show', marks.indexOf(g.getAttribute('data-mark')) >= 0);
+    });
     Array.prototype.forEach.call(svg.querySelectorAll('[data-eid]'), function (g) {
       g.classList.toggle('hl', edges.indexOf(g.getAttribute('data-eid')) >= 0);
     });
@@ -432,12 +680,20 @@
     isConnected: isConnected,
     build: build,
     currentify: currentify,
+    dependify: dependify,
     degenerate: degenerate,
+    controls: controls,
+    solvable: solvable,
+    attempt: attempt,
+    isDependent: isDependent,
+    isSource: isSource,
     // value pickers, for generator files
     pick: pick,
     pickR: pickR,
     pickV: pickV,
     pickI: pickI,
+    pickGain: pickGain,
+    pickDepType: pickDepType,
     // registry
     register: register,
     list: list,
