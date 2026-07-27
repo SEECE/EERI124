@@ -44,11 +44,47 @@ Element type codes:
 | `V` | independent voltage source (V), `b` is **+** | done |
 | `W` | plain wire, no value | done |
 | `I` | independent current source (A), flows `a` → `b` | done |
-| `E` `F` `G` `H` | dependent V/I sources (VCVS, CCCS, VCCS, CCVS) | planned |
+| `E` | VCVS — `v = value·v_ctrl`, `b` is **+** | done |
+| `F` | CCCS — `i = value·i_ctrl`, flows `a` → `b` | done |
+| `G` | VCCS — `i = value·v_ctrl`, flows `a` → `b` | done |
+| `H` | CCVS — `v = value·i_ctrl`, `b` is **+** | done |
 
 Adding a type means: a `VALUED` entry in `circuit.js` if it carries a value, a render
 branch, and — for dependent sources — a `control` field naming the edge it depends on.
 **Do not** invent a parallel shape for a new element; extend the edge object.
+
+## Dependent sources
+
+A controlled source carries its gain in `value` and names the edge it reads in `control`:
+
+```js
+{ id: 'e4', type: 'H', a: 'n2', b: 'n3', value: 470, control: 'e1' }   // v = 470·i(e1)
+```
+
+Rules, all enforced by `validate()`:
+
+- **The control edge is always a resistor.** That is what the lecture slides use, and it keeps
+  the control variable readable straight off Ohm's law — which is exactly what makes the whole
+  thing solvable without a new method (see SOLVER.md).
+- The sense comes from the **control edge's own `a`/`b`**: `v_ctrl = v(a) − v(b)`,
+  `i_ctrl = ` current `a` → `b`.
+- A gain may be **negative** (the slides' `−30·iΔ`); it may not be zero or non-finite. The
+  self-check allows negative gains and positive everything else.
+- **At least one independent source must survive.** A network of controlled sources alone
+  solves to all zeros. Generators never convert a `V` or `I`, only resistors.
+
+`Circuit.controls(circuit)` names each control variable once per (control edge, kind) — the
+slides' `iφ`, `vΔ` first, then plain letters — and builds the gain labels. Renderer, step text
+and equations all read from it, so the symbol on the drawing and the symbol in the equation are
+always the same one. A transconductance is written as a **division** (`vΔ/500`), never in
+siemens, matching the Ohm's-law-only pedagogy.
+
+**A random gain can make a circuit degenerate** — the classic case is a controlled voltage
+source whose gain cancels the loop resistance, leaving a singular system, or one that lands just
+short and drives the answers absurd. There is no cheap algebraic test for it, so a generator that
+places one just **solves the candidate**: `Circuit.solvable(c)` checks node voltages, power
+balance, magnitude sanity, a non-zero control variable and a solvable mesh system, and
+`Circuit.attempt(make)` retries until one passes. Wrap every dependent-source generator in it.
 
 ## Writing a generator
 
@@ -70,7 +106,8 @@ branch, and — for dependent sources — a `control` field naming the edge it d
 Rules:
 
 1. **One file per topology family**, not per template. `basic.js`, `bridge-ladder.js`,
-   `grid.js`, `random-grid.js`. Group by what a student would call the shape.
+   `grid.js`, `random-grid.js`, `current-source.js`, `dependent.js`. Group by what a student
+   would call the shape.
 2. **Register, don't export.** The file's only side effect is `C.register()` calls.
 3. **Everything shared goes through `C`** — `C.build`, `C.pick`, `C.pickR`, `C.pickV`,
    `C.degenerate`. Never re-declare the E12 value list or re-implement union-find locally.
@@ -93,6 +130,11 @@ Rules:
    does `Circuit.currentify()`, the same idea applied to an already-built circuit rather than
    at generation time — used by the current-sources page's "All topologies" set to turn some
    of §3's resistors into current sources (see SOLVER.md's `SolverPage({ sets })`).
+   `Circuit.dependify()` is the same function for controlled sources, used by the
+   dependent-sources page's "All topologies" set: it converts resistors only, applies the same
+   cut rule to the current-type ones (`F`/`G`), never reads a **dead-end** resistor (its current
+   is zero, which would kill the source), works on a copy per attempt and returns the first
+   candidate that `solvable()` accepts — or the original circuit untouched if none does.
 8. **A generator returns a valid circuit or `undefined`.** `build()` already validates;
    retry loops belong inside the generator (see `random-grid.js`).
 
@@ -129,9 +171,9 @@ element, nothing shorted by wires, and no element type outside the generator's d
 
 ## Planned direction (not built yet)
 
-- `js/generators/dependent.js` — the four controlled sources, same registry, same `build()`.
-  The dependent-sources page will load it on top of the current-source set.
 - Solver (`js/solve.js`) consumes `{nodes, edges}` and is generator-agnostic. Keep
   generation free of any solving concern — no precomputed answers stored on the circuit.
+  (`Circuit.solvable()` is the one exception, and it is a *rejection* test, not an answer: it
+  throws the candidate away, it never stores anything on it.)
 - If a generator ever needs a seed for reproducible problems, it goes in as an argument to
   `generate(opts)`, not as global state.
