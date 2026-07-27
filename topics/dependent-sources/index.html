@@ -45,6 +45,14 @@
         <div class="control-group">
           <button id="generate">Generate</button>
         </div>
+        <div class="control-group">
+          <h3>Import / Export</h3>
+          <button id="export-circuit">Export JSON</button>
+          <label class="file-label">Import JSON
+            <input type="file" id="import-circuit" accept="application/json" hidden />
+          </label>
+          <div class="import-error" id="import-error"></div>
+        </div>
         <div class="control-group step-control">
           <h3>Steps</h3>
           <div class="step-count" id="step-count"></div>
@@ -96,6 +104,7 @@
     // uses: this topic's own circuits, and every other topology run through dependify() so §3's
     // and §4's shapes get drilled with controlled sources too.
     SolverPage({
+      elements: ['R', 'V', 'I', 'W', 'E', 'F', 'G', 'H'],
       sets: [
         { value: 'dependent', label: 'Dependent-source circuits', filter: { tags: ['dependent-source'] } },
         {

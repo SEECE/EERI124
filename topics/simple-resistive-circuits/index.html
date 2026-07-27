@@ -51,6 +51,14 @@
         <div class="control-group">
           <button id="generate">Generate</button>
         </div>
+        <div class="control-group">
+          <h3>Import / Export</h3>
+          <button id="export-circuit">Export JSON</button>
+          <label class="file-label">Import JSON
+            <input type="file" id="import-circuit" accept="application/json" hidden />
+          </label>
+          <div class="import-error" id="import-error"></div>
+        </div>
         <div class="control-group step-control">
           <h3>Steps</h3>
           <div class="step-count" id="step-count"></div>
@@ -96,7 +104,7 @@
   <script src="../../js/solver-page.js"></script>
   <script>
     // this topic covers independent voltage sources + resistors only
-    SolverPage({ filter: { elements: ['R', 'V', 'W'] } });
+    SolverPage({ filter: { elements: ['R', 'V', 'W'] }, elements: ['R', 'V', 'W'] });
   </script>
 </body>
 
