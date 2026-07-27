@@ -284,22 +284,45 @@
 
     var byId = {};
     circuit.nodes.forEach(function (n) { byId[n.id] = { x: n.x * PX, y: n.y * PX }; });
+    var ctl = controls(circuit);
 
     function line(x1, y1, x2, y2, parent) {
       el('line', { x1: x1, y1: y1, x2: x2, y2: y2, stroke: 'var(--ink)', 'stroke-width': 2 }, parent);
+    }
+    // geometry every edge-drawing pass needs: unit vector along a→b, midpoint, and which
+    // perpendicular side faces away from the middle of the drawing
+    function geom(e) {
+      var a = byId[e.a], b = byId[e.b];
+      var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+      var ux = dx / len, uy = dy / len, mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      return { a: a, b: b, ux: ux, uy: uy, mx: mx, my: my, vx: -uy, vy: ux,
+        side: ((mx - midX) * -uy + (my - midY) * ux) >= 0 ? 1 : -1 };
+    }
+    function arrowAt(x, y, ux, uy, vx, vy, colour, parent) {
+      el('polygon', { points:
+        x + ',' + y + ' ' +
+        (x - ux * 7 + vx * 4) + ',' + (y - uy * 7 + vy * 4) + ' ' +
+        (x - ux * 7 - vx * 4) + ',' + (y - uy * 7 - vy * 4),
+        fill: colour }, parent);
+    }
+    function label(x, y, text, parent, opts) {
+      opts = opts || {};
+      el('text', { x: x, y: y, 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        fill: opts.fill || 'var(--ink-soft)', 'font-size': opts.size || 14,
+        'font-weight': opts.weight || 400,
+        'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': opts.halo || 5 }, parent)
+        .textContent = text;
+      fit(x, y, text);
     }
 
     // Each edge is wrapped in a <g class="edge" data-eid> so a solver step can highlight it
     // (add a CSS class); presentation attributes below sit under any stylesheet rule.
     circuit.edges.forEach(function (e) {
-      var a = byId[e.a], b = byId[e.b];
-      var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
-      var ux = dx / len, uy = dy / len;
-      var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      var G = geom(e), a = G.a, b = G.b, ux = G.ux, uy = G.uy, mx = G.mx, my = G.my;
       // label sits perpendicular to the element, on whichever side points away from the middle
       // of the drawing — a fixed side lands inside the loop half the time (and the source
       // symbols, whose a/b order is randomised, flipped sides at random)
-      var side = ((mx - midX) * -uy + (my - midY) * ux) >= 0 ? 1 : -1;
+      var side = G.side;
       // 46 clears the r=16 source circle even for the widest label ("100 mA", "4.7 kΩ") — 38
       // cleared shorter R/V labels but let a 6-char current-source reading overlap its own circle
       var lx = mx - uy * 46 * side, ly = my + ux * 46 * side;
@@ -307,41 +330,80 @@
 
       if (e.type === 'W') { line(a.x, a.y, b.x, b.y, eg); return; }
 
-      var gap = e.type === 'R' ? 20 : 17;
-      var vx = -uy, vy = ux;                      // unit vector across the element (for arrowheads)
+      var dep = ctl.of[e.id];
+      // the diamond a dependent source is drawn as is wider than the circle, so its leads stop
+      // further out; the resistor's rect is 40 long, so 20 either way
+      var gap = e.type === 'R' ? 20 : (dep ? 21 : 17);
+      var vx = G.vx, vy = G.vy;                   // unit vector across the element (for arrowheads)
       line(a.x, a.y, mx - ux * gap, my - uy * gap, eg);
       line(mx + ux * gap, my + uy * gap, b.x, b.y, eg);
 
       if (e.type === 'R') {
-        var deg = Math.atan2(dy, dx) * 180 / Math.PI;
+        var deg = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
         var g = el('g', { transform: 'translate(' + mx + ',' + my + ') rotate(' + deg + ')' }, eg);
         el('rect', { x: -20, y: -8, width: 40, height: 16, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, rx: 2 }, g);
-        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
-          .textContent = fmtR(e.value);
-        fit(lx, ly, fmtR(e.value));
-      } else if (e.type === 'I') {
-        // current source — same circle as a voltage source but with an arrow through it,
-        // pointing a → b: the direction the source pushes current out of its b terminal.
+        label(lx, ly, fmtR(e.value), eg);
+        return;
+      }
+
+      // source body: a circle for an independent source, a diamond for a controlled one —
+      // the standard symbol, and the only thing on the drawing that says "this value is not a
+      // number you were given, it is read off somewhere else in the circuit".
+      var r = dep ? 20 : 16;
+      if (dep) {
+        el('polygon', { 'class': 'dep-body', points:
+          (mx + ux * r) + ',' + (my + uy * r) + ' ' + (mx + vx * r) + ',' + (my + vy * r) + ' ' +
+          (mx - ux * r) + ',' + (my - uy * r) + ' ' + (mx - vx * r) + ',' + (my - vy * r),
+          fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
+      } else {
         el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
-        var tx = mx + ux * 10, ty = my + uy * 10;   // arrow tip, inside the circle
-        el('line', { x1: mx - ux * 10, y1: my - uy * 10, x2: tx, y2: ty, stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
-        el('polygon', { points:
-          tx + ',' + ty + ' ' +
-          (tx - ux * 7 + vx * 4) + ',' + (ty - uy * 7 + vy * 4) + ' ' +
-          (tx - ux * 7 - vx * 4) + ',' + (ty - uy * 7 - vy * 4),
-          fill: 'var(--accent-deep)' }, eg);
-        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
-          .textContent = fmtI(e.value);
-        fit(lx, ly, fmtI(e.value));
-      } else { // V — b is the + terminal
-        el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
-        var plus = el('text', { x: mx + ux * 7, y: my + uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, eg);
-        plus.textContent = '+';
-        var minus = el('text', { x: mx - ux * 7, y: my - uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, eg);
-        minus.textContent = '−';
-        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
-          .textContent = e.value + ' V';
-        fit(lx, ly, e.value + ' V');
+      }
+
+      if (e.type === 'I' || e.type === 'F' || e.type === 'G') {
+        // current source — an arrow through the body pointing a → b: the direction the source
+        // pushes current out of its b terminal.
+        var reach = dep ? 12 : 10;
+        var tx = mx + ux * reach, ty = my + uy * reach;   // arrow tip, inside the body
+        el('line', { x1: mx - ux * reach, y1: my - uy * reach, x2: tx, y2: ty, stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
+        arrowAt(tx, ty, ux, uy, vx, vy, 'var(--accent-deep)', eg);
+      } else {
+        // V / E / H — b is the + terminal
+        var off = dep ? 10 : 7;
+        label(mx + ux * off, my + uy * off, '+', eg, { fill: 'var(--accent-deep)', size: 13, weight: 700, halo: 0 });
+        label(mx - ux * off, my - uy * off, '−', eg, { fill: 'var(--accent-deep)', size: 13, weight: 700, halo: 0 });
+      }
+      label(lx, ly, dep ? dep.label : (e.type === 'I' ? fmtI(e.value) : e.value + ' V'), eg);
+    });
+
+    // ---- control-variable markers, drawn on the resistor each dependent source READS.
+    // Hidden at render (like the node letters) and revealed by highlight({ marks: [key] }) at
+    // the step that first names the variable, so the drawing gains notation as the method does.
+    // They sit on the far side of the element from its value label; a resistor read both ways
+    // (a current AND a voltage) pushes the second marker further out.
+    var markSeen = {};
+    ctl.marks.forEach(function (mk) {
+      var e = mk.ctrl, G = geom(e), ux = G.ux, uy = G.uy, mx = G.mx, my = G.my;
+      var s = -G.side;                                   // opposite side to the value label
+      var tier = (markSeen[e.id] = (markSeen[e.id] || 0) + 1) - 1;
+      function at(alongF, acrossF) {
+        return { x: mx + ux * alongF - uy * acrossF * s, y: my + uy * alongF + ux * acrossF * s };
+      }
+      var mg = el('g', { 'class': 'ctrl-mark', 'data-mark': mk.kind + ':' + e.id }, svg);
+      if (mk.kind === 'i') {
+        // a current arrow beside the resistor, running the control edge's own a → b sense
+        var base = 24 + tier * 22;
+        var p0 = at(-14, base), p1 = at(14, base);
+        el('line', { x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: 'var(--accent-hover)', 'stroke-width': 2 }, mg);
+        arrowAt(p1.x, p1.y, ux, uy, G.vx, G.vy, 'var(--accent-hover)', mg);
+        var it = at(0, base + 15);
+        label(it.x, it.y, mk.plain, mg, { fill: 'var(--accent-hover)', size: 13, weight: 700, halo: 4 });
+      } else {
+        // + … − across the resistor, in the control edge's own a → b sense (v = v_a − v_b)
+        var lvl = 20 + tier * 22;
+        var pp = at(-30, lvl), pm = at(30, lvl), vt = at(0, lvl);
+        label(pp.x, pp.y, '+', mg, { fill: 'var(--accent-hover)', size: 13, weight: 700, halo: 4 });
+        label(pm.x, pm.y, '−', mg, { fill: 'var(--accent-hover)', size: 13, weight: 700, halo: 4 });
+        label(vt.x, vt.y, mk.plain, mg, { fill: 'var(--accent-hover)', size: 13, weight: 700, halo: 4 });
       }
     });
 
@@ -400,14 +462,20 @@
   }
 
   /* Toggle a 'hl' class on the edges/nodes a solver step wants to emphasise.
-     spec = { edges:[edgeId], nodes:[nodeId], labels:[nodeId], loops:[...], ground:[nodeId],
-     volts:{nodeId:text} }; anything not listed is un-highlighted. `labels` reveals the node
-     letters (hidden at render) for the step that introduces them onward. `ground` draws the
+     spec = { edges:[edgeId], nodes:[nodeId], labels:[nodeId], marks:[markKey], loops:[...],
+     ground:[nodeId], volts:{nodeId:text} }; anything not listed is un-highlighted. `labels`
+     reveals the node letters (hidden at render) for the step that introduces them onward;
+     `marks` does the same for the control-variable notation a dependent source reads, keyed
+     'i:<edgeId>' / 'v:<edgeId>' (Circuit.controls().marks gives the keys). `ground` draws the
      earth symbol under the chosen reference node(s); `volts` writes a solved/known voltage
      reading above a node. */
   function highlight(svg, spec) {
     spec = spec || {};
     var edges = spec.edges || [], nodes = spec.nodes || [], labels = spec.labels || [];
+    var marks = spec.marks || [];
+    Array.prototype.forEach.call(svg.querySelectorAll('.ctrl-mark'), function (g) {
+      g.classList.toggle('show', marks.indexOf(g.getAttribute('data-mark')) >= 0);
+    });
     Array.prototype.forEach.call(svg.querySelectorAll('[data-eid]'), function (g) {
       g.classList.toggle('hl', edges.indexOf(g.getAttribute('data-eid')) >= 0);
     });
