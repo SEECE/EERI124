@@ -1,22 +1,25 @@
 /* Circuit builder — click-grid editor for hand-built circuits, saved/loaded as the same JSON
    Circuit.exportJSON/importJSON use on the solver pages (see structure/GENERATORS.md for the
-   model). Deliberately basic: a fixed-size dot grid, orthogonal edges only (no diagonals, no
-   free-form lengths) — same constraint the generators build under. One global, no ES modules
-   (site must open over file://). */
+   model). Deliberately basic: a dot grid, orthogonal edges only (no diagonals, no free-form
+   lengths) — same constraint the generators build under. One global, no ES modules (site must
+   open over file://). */
 (function () {
   'use strict';
 
   var LEVELS = {
-    basic: { label: 'Resistive (R, V, wire)', elements: ['R', 'V', 'W'] },
-    current: { label: '+ Current sources', elements: ['R', 'V', 'I', 'W'] },
-    dependent: { label: '+ Dependent sources', elements: ['R', 'V', 'I', 'W', 'E', 'F', 'G', 'H'] },
+    basic: { label: 'Resistive (R, V, wire)', palette: ['W', 'R', 'V'] },
+    current: { label: '+ Current sources', palette: ['W', 'R', 'V', 'I'] },
+    dependent: { label: '+ Dependent sources', palette: ['W', 'R', 'V', 'I', 'DEP'] },
   };
-  var TYPE_LABEL = { W: 'Wire', R: 'Resistor', V: 'Voltage source', I: 'Current source',
-    E: 'VCVS (E)', F: 'CCCS (F)', G: 'VCCS (G)', H: 'CCVS (H)' };
+  var TYPE_LABEL = { W: 'Wire', R: 'Resistor', V: 'Voltage source', I: 'Current source', DEP: 'Dependent source' };
   var DEFAULT_VALUE = { R: 220, V: 12, I: 0.05, E: 2, F: 2, G: 1 / 500, H: 220 };
   var UNIT = { R: 'Ω', V: 'V', I: 'A', E: '(gain)', F: '(gain)', G: 'S', H: 'Ω' };
+  // control kind × output kind -> the four textbook controlled-source types (GENERATORS.md):
+  // VCVS (v reads v), CCCS (i reads i), VCCS (i reads v), CCVS (v reads i).
+  var DEP_TYPE = { v: { v: 'E', i: 'G' }, i: { v: 'H', i: 'F' } };
 
-  var GRID_COLS = 6, GRID_ROWS = 5, PX = 80, PAD = 40;
+  var GRID_COLS = 6, GRID_ROWS = 5, PAD = 40, PX_BASE = 70;
+  var ZOOM_MIN = 0.4, ZOOM_MAX = 2.5;
 
   window.CircuitBuilder = function (opts) {
     var svg = document.getElementById(opts.canvas);
@@ -25,14 +28,17 @@
     var valueRow = document.getElementById(opts.valueRow);
     var valueInput = document.getElementById(opts.valueInput);
     var unitEl = document.getElementById(opts.unit);
+    var depToggles = document.getElementById(opts.depToggles);
     var ctrlRow = document.getElementById(opts.controlRow);
     var ctrlSel = document.getElementById(opts.controlSelect);
     var errorEl = document.getElementById(opts.error);
     var clearBtn = document.getElementById(opts.clear);
     var exportBtn = document.getElementById(opts.exportBtn);
     var importInput = document.getElementById(opts.importInput);
+    var zoomInBtn = document.getElementById(opts.zoomIn);
+    var zoomOutBtn = document.getElementById(opts.zoomOut);
 
-    var circuit, nodeAt, nextN, nextE, pending, currentType;
+    var circuit, nodeAt, nextN, nextE, pending, currentType, zoom = 1;
 
     function reset() {
       circuit = { nodes: [], edges: [] };
@@ -45,7 +51,7 @@
 
     function setError(msg) { errorEl.textContent = msg || ''; }
 
-    function allowedTypes() { return LEVELS[levelSel.value].elements; }
+    function allowedTypes() { return LEVELS[levelSel.value].palette; }
 
     function buildPalette() {
       paletteEl.innerHTML = '';
@@ -53,24 +59,37 @@
         var b = document.createElement('button');
         b.type = 'button';
         b.textContent = TYPE_LABEL[t];
-        b.className = 'palette-btn' + (t === currentType ? ' active' : '');
+        var isActive = t === currentType;
+        b.className = 'palette-btn' + (isActive ? ' active' : '');
+        b.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         b.addEventListener('click', function () { currentType = t; pending = null; buildPalette(); refreshFormForType(); render(); });
         paletteEl.appendChild(b);
       });
       if (allowedTypes().indexOf(currentType) < 0) currentType = allowedTypes()[0];
     }
 
+    /* the actual edge type currently selected — 'DEP' plus its two toggles resolve to one of
+       the four controlled-source codes; every other palette button already IS its type */
+    function selectedType() {
+      if (currentType !== 'DEP') return currentType;
+      var ctrlKind = depToggles.querySelector('input[name="dep-ctrl"]:checked').value;
+      var outKind = depToggles.querySelector('input[name="dep-out"]:checked').value;
+      return DEP_TYPE[ctrlKind][outKind];
+    }
+
     function refreshFormForType() {
-      var needsValue = currentType !== 'W';
+      var t = selectedType();
+      var needsValue = t !== 'W';
       valueRow.style.display = needsValue ? '' : 'none';
       if (needsValue) {
-        unitEl.textContent = UNIT[currentType];
-        if (!valueInput.dataset.touched || valueInput.dataset.forType !== currentType) {
-          valueInput.value = DEFAULT_VALUE[currentType];
-          valueInput.dataset.forType = currentType;
+        unitEl.textContent = UNIT[t];
+        if (valueInput.dataset.forType !== t) {
+          valueInput.value = DEFAULT_VALUE[t];
+          valueInput.dataset.forType = t;
         }
       }
-      var dep = Circuit.isDependent(currentType);
+      depToggles.style.display = currentType === 'DEP' ? '' : 'none';
+      var dep = Circuit.isDependent(t);
       ctrlRow.style.display = dep ? '' : 'none';
       if (dep) refreshControlOptions();
     }
@@ -123,9 +142,10 @@
         dropNodeIfUnused(p1.r, p1.c); dropNodeIfUnused(p2.r, p2.c);
         render(); return;
       }
-      var edge = { id: 'e' + (nextE++), type: currentType, a: a, b: b };
-      if (currentType !== 'W') edge.value = parseFloat(valueInput.value) || DEFAULT_VALUE[currentType];
-      if (Circuit.isDependent(currentType)) {
+      var t = selectedType();
+      var edge = { id: 'e' + (nextE++), type: t, a: a, b: b };
+      if (t !== 'W') edge.value = parseFloat(valueInput.value) || DEFAULT_VALUE[t];
+      if (Circuit.isDependent(t)) {
         if (!ctrlSel.value) {
           setError('add a resistor first, then pick it as the control');
           dropNodeIfUnused(p1.r, p1.c); dropNodeIfUnused(p2.r, p2.c);
@@ -153,12 +173,22 @@
       render();
     }
 
+    /* ---------- zoom ---------- */
+    function setZoom(z) {
+      zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+      render();
+    }
+
     /* ---------- rendering ---------- */
-    function coord(r, c) { return { x: PAD + c * PX, y: PAD + r * PX }; }
+    function coord(r, c) { var px = PX_BASE * zoom; return { x: PAD + c * px, y: PAD + r * px }; }
 
     function render() {
       while (svg.firstChild) svg.removeChild(svg.firstChild);
-      svg.setAttribute('viewBox', '0 0 ' + (PAD * 2 + (GRID_COLS - 1) * PX) + ' ' + (PAD * 2 + (GRID_ROWS - 1) * PX));
+      var px = PX_BASE * zoom;
+      var w = PAD * 2 + (GRID_COLS - 1) * px, h = PAD * 2 + (GRID_ROWS - 1) * px;
+      svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+      svg.setAttribute('width', w);
+      svg.setAttribute('height', h);
 
       var byId = {};
       circuit.nodes.forEach(function (n) { byId[n.id] = coord(n.y, n.x); });
@@ -228,6 +258,7 @@
           nextN = 1 + Math.max.apply(null, circuit.nodes.map(function (n) { return +n.id.replace(/\D/g, '') || 0; }).concat([-1]));
           nextE = 1 + Math.max.apply(null, circuit.edges.map(function (e) { return +e.id.replace(/\D/g, '') || 0; }).concat([-1]));
           pending = null;
+          zoom = Math.max(ZOOM_MIN, Math.min(1, 8 / Math.max(GRID_COLS, GRID_ROWS))); // fit a big import on screen
           setError('');
           render();
         } catch (err) { setError(err.message); }
@@ -237,6 +268,9 @@
 
     clearBtn.addEventListener('click', reset);
     levelSel.addEventListener('change', function () { buildPalette(); refreshFormForType(); });
+    depToggles.addEventListener('change', function () { refreshFormForType(); render(); });
+    zoomInBtn.addEventListener('click', function () { setZoom(zoom * 1.25); });
+    zoomOutBtn.addEventListener('click', function () { setZoom(zoom / 1.25); });
 
     currentType = 'R';
     Object.keys(LEVELS).forEach(function (k) {

@@ -34,6 +34,18 @@
         <div class="control-group">
           <h3>Element</h3>
           <div class="palette" id="palette"></div>
+          <div class="dep-toggles" id="dep-toggles">
+            <div class="toggle-group">
+              <span>Controlled by</span>
+              <label><input type="radio" name="dep-ctrl" value="v" checked /> Voltage</label>
+              <label><input type="radio" name="dep-ctrl" value="i" /> Current</label>
+            </div>
+            <div class="toggle-group">
+              <span>Delivers</span>
+              <label><input type="radio" name="dep-out" value="v" checked /> Voltage</label>
+              <label><input type="radio" name="dep-out" value="i" /> Current</label>
+            </div>
+          </div>
           <div class="value-row" id="value-row">
             <input type="number" id="value-input" step="any" />
             <span id="value-unit"></span>
@@ -46,6 +58,13 @@
         <div class="control-group">
           <p class="builder-hint">Click a grid dot, then an adjacent dot to add the selected
             element between them. Click an existing element to remove it.</p>
+        </div>
+        <div class="control-group">
+          <h3>Zoom</h3>
+          <div class="zoom-row">
+            <button id="zoom-out">−</button>
+            <button id="zoom-in">+</button>
+          </div>
         </div>
         <div class="control-group">
           <button id="clear">Clear</button>
@@ -76,12 +95,15 @@
       valueRow: 'value-row',
       valueInput: 'value-input',
       unit: 'value-unit',
+      depToggles: 'dep-toggles',
       controlRow: 'control-row',
       controlSelect: 'control-select',
       error: 'builder-error',
       clear: 'clear',
       exportBtn: 'export-circuit',
       importInput: 'import-circuit',
+      zoomIn: 'zoom-in',
+      zoomOut: 'zoom-out',
     });
   </script>
 </body>
