@@ -125,6 +125,27 @@
       assert(keys.length === keys.filter(function (k, i) { return keys.indexOf(k) === i; }).length, 'duplicate marker key');
     });
 
+    check('exportJSON/importJSON round-trip', function () {
+      all.forEach(function (g) {
+        var c = g.generate();
+        var round = Circuit.importJSON(Circuit.exportJSON(c));
+        assert(round.nodes.length === c.nodes.length && round.edges.length === c.edges.length, 'round-trip lost elements for ' + g.name);
+        assert(Circuit.exportJSON(c).meta.elements.every(function (t) { return g.elements.indexOf(t) >= 0; }), 'meta.elements has an undeclared type for ' + g.name);
+      });
+      // a page that doesn't teach current sources must reject one
+      var basic = Circuit.get(all.filter(function (g) { return g.elements.indexOf('I') < 0 && g.elements.indexOf('E') < 0; })[0].name).generate();
+      var withCurrent = JSON.parse(JSON.stringify(basic));
+      withCurrent.edges[0] = { id: withCurrent.edges[0].id, type: 'I', a: withCurrent.edges[0].a, b: withCurrent.edges[0].b, value: 0.05 };
+      var threw = false;
+      try { Circuit.importJSON(withCurrent, ['R', 'V', 'W']); } catch (err) { threw = true; }
+      assert(threw, 'importJSON did not reject an unsupported element type');
+      // no independent source at all must be rejected
+      var noSource = { nodes: [{ id: 'n0', x: 0, y: 0 }, { id: 'n1', x: 1, y: 0 }], edges: [{ id: 'e0', type: 'R', a: 'n0', b: 'n1', value: 100 }] };
+      threw = false;
+      try { Circuit.importJSON(noSource); } catch (err) { threw = true; }
+      assert(threw, 'importJSON accepted a circuit with no independent source');
+    });
+
     check('render smoke', function () {
       var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
       Circuit.render(Circuit.get('Wheatstone bridge').generate(), svg);
