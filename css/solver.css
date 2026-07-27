@@ -178,10 +178,10 @@
 .circuit-canvas svg .node-label { opacity: 0; }
 .circuit-canvas svg .node-label.show { opacity: 1; }
 
-/* likewise a dependent source's control variable (the iφ arrow / the + vΔ − pair drawn on the
-   resistor it reads): notation appears on the drawing when the method names it (highlight marks:) */
-.circuit-canvas svg .ctrl-mark { opacity: 0; }
-.circuit-canvas svg .ctrl-mark.show { opacity: 1; }
+/* a dependent source's control variable (the iφ arrow / the + vΔ − pair drawn on the resistor it
+   reads) is shown from the start: the student sees exactly which measured current/voltage the
+   source is a multiple of, and in which direction, the moment the circuit is drawn. */
+.circuit-canvas svg .ctrl-mark { opacity: 1; }
 
 /* a controlled source's diamond gets the same emphasis as a circle or a resistor box */
 .circuit-canvas svg .edge.hl polygon.dep-body { stroke: var(--accent-hover); stroke-width: 3; }

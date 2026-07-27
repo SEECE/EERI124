@@ -291,7 +291,7 @@
         (CV.any ? ', plus ' + CV.all.length + ' <b>dependent</b> source' + (CV.all.length === 1 ? '' : 's') + ' (' +
           CV.all.map(function (e) { return CV.short(e) + ', ' + CV.gain(e); }).join('; ') +
           ') — drawn as a diamond, because ' + (CV.all.length === 1 ? 'its value is' : 'their values are') +
-          ' not a number you were given but a multiple of something measured elsewhere in this same circuit' : '') +
+          ' not a number you were given but a multiple of something measured elsewhere in this same circuit, already marked on the drawing (the arrow / the + − pair on the resistor it reads)' : '') +
         '. Nothing to simplify — we analyse it as drawn.',
       hl: CV.any ? { edges: CV.all.map(function (e) { return e.id; }) } : {},
     });
@@ -353,8 +353,8 @@
           hl: { edges: [e.id], nodes: nodeIdsOf(a).concat(nodeIdsOf(b)), volts: voltsFor(order.filter(function (g) { return P.fixed[g]; })) },
         };
       })).concat(CV.all.map(function (e) {
-        // Naming the control variable is the whole content of this substep: the symbol appears
-        // on the drawing (on the resistor it is read from) at the same moment it appears here.
+        // Naming the control variable is the whole content of this substep: the symbol has been
+        // marked on the drawing (on the resistor it is read from) since step 1 — here we name it.
         var a = of[e.a], b = of[e.b], ce = CV.ctrlEdge(e), reads = CV.kind(e) === 'i' ? 'current through' : 'voltage across';
         var delivers = CV.out(e) === 'v'
           ? 'It is a voltage source of ' + CV.gain(e) + ' volts, + at node <b>' + L(b) + '</b>'
@@ -362,7 +362,7 @@
         return {
           title: CV.short(e) + ' ' + CV.gain(e),
           body: 'This diamond is a <b>' + CV.long(e) + '</b>. Call the ' + reads + ' the ' + si(ce.value, 'Ω') +
-            ' resistor <b>' + CV.sym(e) + '</b> — that is the quantity it reads, and it is now marked on the drawing. ' +
+            ' resistor <b>' + CV.sym(e) + '</b> — that is the quantity it reads, marked on the drawing from the start. ' +
             delivers + '. Neither number is known yet, because ' + CV.sym(e) +
             ' is not known yet — but ' + CV.sym(e) + ' is made of node voltages like everything else here, and step 7 writes it as such.',
           eq: [(CV.out(e) === 'v' ? vsub(L(b)) + ' − ' + vsub(L(a)) : 'i (from ' + L(a) + ' to ' + L(b) + ')') + ' = ' + CV.gain(e)],
@@ -408,7 +408,7 @@
       body: supers.length
         ? 'A voltage source between two non-reference nodes forms a supernode — <b>any</b> voltage source, independent or dependent, because what matters is that its own branch current is unknown, not where its value comes from. Enclose both nodes, write KCL for the enclosure (the source’s current cancels inside it) and add the source voltage as a constraint. ' +
           supers.length + ' here: ' + supers.map(function (e) { return L(of[e.a]) + '–' + L(of[e.b]); }).join(', ') + '.' +
-          (supers.some(isDepV) ? ' The controlled one’s constraint is its gain equation, so it lands in step 7 with the other control variables.' : '')
+          (supers.some(isDepV) ? ' The controlled one’s constraint is the equation that gives its value, so it lands in step 7 with the other control variables.' : '')
         : 'A supernode forms when a voltage source — independent or dependent — connects two non-reference nodes. ' +
           (CV.volt.length ? 'Every voltage source here has a terminal at a node we already know, so no supernode forms.'
             : 'Every source here has a terminal at the reference, so no supernode forms.'),
@@ -466,7 +466,7 @@
         body: nEq ? 'One equation per unknown node — assume every current leaves the node and set the sum to zero. That is <b>' + nEq + '</b> equation' + (nEq === 1 ? '' : 's') +
           (P.supernodes.length ? ' plus ' + P.supernodes.length + ' source constraint' + (P.supernodes.length === 1 ? '' : 's') : '') +
           (P.pins.length ? ' (node' + (P.pins.length === 1 ? '' : 's') + ' ' + P.pins.map(function (p) { return L(p.to); }).join(', ') +
-            ' get no KCL — a controlled source pins ' + (P.pins.length === 1 ? 'it' : 'them') + ' to a known node, and its gain equation is step 7)' : '') +
+            ' get no KCL — a controlled source pins ' + (P.pins.length === 1 ? 'it' : 'them') + ' to a known node, and the equation that gives its value is step 7)' : '') +
           ' to build. Step through each node to see how its equation is put together; the solving is step 8.'
           : 'No node needs a KCL equation here: every node voltage is either fixed by a source or pinned by a controlled one.',
         eq: P.kclNodes.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }),

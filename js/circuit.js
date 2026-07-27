@@ -63,7 +63,7 @@
     var byId = {}; c.edges.forEach(function (e) { byId[e.id] = e; });
     c.edges.forEach(function (e) {
       if (!isDependent(e.type)) return;
-      if (!(e.value !== 0 && isFinite(e.value))) throw new Error('edge ' + e.id + ' needs a non-zero gain');
+      if (!(e.value !== 0 && isFinite(e.value))) throw new Error('edge ' + e.id + ' needs a non-zero multiplier');
       var ctrl = byId[e.control];
       if (!ctrl) throw new Error('edge ' + e.id + ' names a missing control edge ' + e.control);
       if (ctrl === e) throw new Error('edge ' + e.id + ' controls itself');
@@ -508,8 +508,9 @@
     });
 
     // ---- control-variable markers, drawn on the resistor each dependent source READS.
-    // Hidden at render (like the node letters) and revealed by highlight({ marks: [key] }) at
-    // the step that first names the variable, so the drawing gains notation as the method does.
+    // Shown from the start (CSS keeps .ctrl-mark visible): the student sees which measured
+    // current/voltage the source is a multiple of, and its direction, the moment the circuit is
+    // drawn — the source value is not a mystery, only the number it works out to.
     // They sit on the far side of the element from its value label; a resistor read both ways
     // (a current AND a voltage) pushes the second marker further out.
     var markSeen = {};

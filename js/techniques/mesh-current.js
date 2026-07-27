@@ -269,7 +269,7 @@
         (CV.any ? ', plus ' + CV.all.length + ' <b>dependent</b> source' + (CV.all.length === 1 ? '' : 's') + ' (' +
           CV.all.map(function (e) { return CV.short(e) + ', ' + CV.gain(e); }).join('; ') +
           ') — drawn as a diamond, because ' + (CV.all.length === 1 ? 'its value is' : 'their values are') +
-          ' read off another element in this same circuit rather than given' : '') +
+          ' read off another element in this same circuit rather than given, already marked on the drawing (the arrow / the + − pair on the resistor it reads)' : '') +
         '. Ignore branch currents for now.',
       hl: CV.any ? { edges: CV.all.map(function (e) { return e.id; }) } : {},
     });

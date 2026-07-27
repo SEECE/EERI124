@@ -13,17 +13,22 @@
   };
   var TYPE_LABEL = { W: 'Wire', R: 'Resistor', V: 'Voltage source', I: 'Current source', DEP: 'Dependent source' };
   var DEFAULT_VALUE = { R: 220, V: 12, I: 0.05, E: 2, F: 2, G: 1 / 500, H: 220 };
-  var UNIT = { R: 'Ω', V: 'V', I: 'A', E: '(gain)', F: '(gain)', G: 'S', H: 'Ω' };
+  var UNIT = { R: 'Ω', V: 'V', I: 'A', E: '×', F: '×', G: 'Ω', H: 'Ω' };
   var TYPE_DESC = {
     W: 'Plain wire — no value, ties two nodes to the same potential.',
     R: 'Resistor — Ohm’s law drop, value in Ω.',
     V: 'Independent voltage source — the second node clicked is the + terminal.',
     I: 'Independent current source — current flows from the first node clicked to the second.',
-    E: 'VCVS — v = gain · v(control resistor). Second node clicked is +.',
-    H: 'CCVS — v = gain · i(control resistor). Second node clicked is +.',
-    F: 'CCCS — i = gain · i(control resistor). Flows first → second node clicked.',
-    G: 'VCCS — i = gain · v(control resistor). Flows first → second node clicked.',
+    E: 'Dependent voltage source — its volts are this number times the voltage across the control resistor. Second node clicked is +.',
+    H: 'Dependent voltage source — its volts are this many ohms times the current through the control resistor. Second node clicked is +.',
+    F: 'Dependent current source — its amps are this number times the current through the control resistor. Flows first → second node clicked.',
+    G: 'Dependent current source — its amps are the voltage across the control resistor divided by this many ohms. Flows first → second node clicked.',
   };
+  // G (a current read off a voltage) is written to students as a division by an ohm-like number,
+  // never in siemens — so the builder takes/shows that number and stores its reciprocal.
+  function toStored(t, x) { return t === 'G' ? 1 / x : x; }
+  function toShown(t, v) { return t === 'G' ? 1 / v : v; }
+  var DEFAULT_SHOWN = { R: 220, V: 12, I: 0.05, E: 2, F: 2, G: 500, H: 220 };
   // control kind × output kind -> the four textbook controlled-source types (GENERATORS.md):
   // VCVS (v reads v), CCCS (i reads i), VCCS (i reads v), CCVS (v reads i).
   var DEP_TYPE = { v: { v: 'E', i: 'G' }, i: { v: 'H', i: 'F' } };
@@ -41,6 +46,7 @@
     var depToggles = document.getElementById(opts.depToggles);
     var ctrlRow = document.getElementById(opts.controlRow);
     var ctrlSel = document.getElementById(opts.controlSelect);
+    var ctrlDirSel = document.getElementById(opts.controlDir);
     var typeDesc = document.getElementById(opts.typeDesc);
     var errorEl = document.getElementById(opts.error);
     var clearBtn = document.getElementById(opts.clear);
@@ -99,7 +105,7 @@
       if (needsValue) {
         unitEl.textContent = UNIT[t];
         if (valueInput.dataset.forType !== t) {
-          valueInput.value = DEFAULT_VALUE[t];
+          valueInput.value = DEFAULT_SHOWN[t];
           valueInput.dataset.forType = t;
         }
       }
@@ -109,6 +115,9 @@
       if (dep) refreshControlOptions();
       typeDesc.textContent = TYPE_DESC[t] || '';
     }
+
+    // 'v' or 'i' — the kind of quantity the dependent source being placed reads
+    function ctrlKind() { return depToggles.querySelector('input[name="dep-ctrl"]:checked').value; }
 
     function refreshControlOptions() {
       var keep = ctrlSel.value;
@@ -120,6 +129,27 @@
         ctrlSel.appendChild(o);
       });
       if ([].slice.call(ctrlSel.options).some(function (o) { return o.value === keep; })) ctrlSel.value = keep;
+      refreshDirOptions();
+    }
+
+    /* Which way the control quantity is read along the chosen resistor. Its two nodes give two
+       references: for a voltage the "from" node is +, for a current the "from" node is where the
+       current enters. The picked "from" node is applied by orienting the resistor's own a/b at
+       placement (see clickDot), which is the single source of truth the solver and renderer read. */
+    function refreshDirOptions() {
+      var r = circuit.edges.filter(function (e) { return e.id === ctrlSel.value; })[0];
+      var keep = ctrlDirSel.value;
+      ctrlDirSel.innerHTML = '';
+      if (!r) return;
+      var v = ctrlKind() === 'v';
+      [[r.a, r.b], [r.b, r.a]].forEach(function (pair) {
+        var o = document.createElement('option');
+        o.value = pair[0];
+        o.textContent = v ? '+ ' + pair[0] + ' → − ' + pair[1] : pair[0] + ' → ' + pair[1];
+        ctrlDirSel.appendChild(o);
+      });
+      // default the picker to the resistor's current a→b sense, unless the user already chose one
+      ctrlDirSel.value = (keep === r.a || keep === r.b) ? keep : r.a;
     }
 
     /* generator circuits use arbitrary real x/y (halves, negatives) with no relation to this
@@ -180,7 +210,7 @@
       }
       var t = selectedType();
       var edge = { id: 'e' + (nextE++), type: t, a: a, b: b };
-      if (t !== 'W') edge.value = parseFloat(valueInput.value) || DEFAULT_VALUE[t];
+      if (t !== 'W') edge.value = toStored(t, parseFloat(valueInput.value)) || DEFAULT_VALUE[t];
       if (Circuit.isDependent(t)) {
         if (!ctrlSel.value) {
           setError('add a resistor first, then pick it as the control');
@@ -188,6 +218,12 @@
           render(); return;
         }
         edge.control = ctrlSel.value;
+        // orient the control resistor's a/b to the direction the user picked — that a/b is the
+        // sense the solver/renderer read (v = v_a − v_b, i flows a → b). ponytail: mutating the
+        // resistor is the whole model change; if two dependent sources read one resistor with the
+        // same kind they share this one sense, which is correct for a single reference direction.
+        var ctrlR = circuit.edges.filter(function (x) { return x.id === edge.control; })[0];
+        if (ctrlR && ctrlDirSel.value === ctrlR.b) { var t = ctrlR.a; ctrlR.a = ctrlR.b; ctrlR.b = t; }
       }
       circuit.edges.push(edge);
       render();
@@ -305,7 +341,7 @@
     }
 
     function fmtVal(e) {
-      if (Circuit.isDependent(e.type)) return String(e.value);
+      if (Circuit.isDependent(e.type)) return String(toShown(e.type, e.value));
       return e.value + (UNIT[e.type] || '');
     }
 
@@ -352,6 +388,7 @@
     clearBtn.addEventListener('click', reset);
     levelSel.addEventListener('change', function () { buildPalette(); refreshFormForType(); });
     depToggles.addEventListener('change', function () { refreshFormForType(); render(); });
+    ctrlSel.addEventListener('change', refreshDirOptions);
     colsMinus.addEventListener('click', function () { setCols(cols - 1); });
     colsPlus.addEventListener('click', function () { setCols(cols + 1); });
     rowsMinus.addEventListener('click', function () { setRows(rows - 1); });
