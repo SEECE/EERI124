@@ -73,7 +73,10 @@
     Object.keys(e.t).forEach(function (k) {
       var r = round(e.t[k]); if (r === 0) return;
       var mag = Math.abs(r);
-      parts.push((r < 0 ? '− ' : '+ ') + (mag === 1 ? '' : mag + '·') + (cfg.value ? si(cfg.value(k), cfg.unit) : cfg.name(k)));
+      // a substituted negative needs its brackets: "0.313·(−2.07 V)", never "0.313·−2.07 V"
+      var sym = cfg.value ? si(cfg.value(k), cfg.unit) : cfg.name(k);
+      if (cfg.value && sym.charAt(0) === '−' && mag !== 1) sym = '(' + sym + ')';
+      parts.push((r < 0 ? '− ' : '+ ') + (mag === 1 ? '' : mag + '·') + sym);
     });
     if (!cfg.dropZero || round(e.c) !== 0 || !parts.length) parts.unshift(si(e.c, cfg.unit));
     var s = parts.join(' ');

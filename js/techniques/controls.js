@@ -90,6 +90,29 @@
         var p = gainParts(e);
         return ((sign < 0) !== p.neg ? ' − ' : ' + ') + p.mag;
       },
+      // The denominator this source's expanded term is written over, so the technique's
+      // "multiply through by everything underneath" really does clear every fraction: a
+      // current control divides by its resistor, a transconductance written as ÷D by D.
+      denom: function (e) {
+        if (KIND[e.type] === 'i') return { key: 'R' + e.control, value: ctrlEdge(e).value };
+        var d = 1 / Math.abs(e.value);
+        if (d >= 1 && Math.abs(Math.round(d) - d) < 1e-9) return { key: 'D' + Math.round(d), value: Math.round(d) };
+        return null;
+      },
+      // the gain with its symbol replaced by what the symbol actually is — `pair` is the control
+      // resistor's "(v_x − v_y)". Unsigned: the caller owns the sign, as it does for `term`.
+      // Mirrors the label's own shape, so a transconductance stays a division rather than
+      // turning into siemens the moment it is expanded.
+      expandGain: function (e, pair) {
+        var K = window.StepKit, v = Math.abs(e.value), ce = ctrlEdge(e);
+        if (KIND[e.type] === 'i') {                     // reads a current: the pair over its R
+          var f = K.frac(pair, ce.value);
+          return v === 1 ? f : K.round(v) + '·' + f;
+        }
+        var d = 1 / v;                                  // reads a voltage: keep 1/D as ÷D
+        if (d >= 1 && Math.abs(Math.round(d) - d) < 1e-9) return K.frac(pair, Math.round(d));
+        return (v === 1 ? '' : K.round(v) + '·') + '(' + pair + ')';
+      },
       // the drawing's marker for this source's control variable (Circuit.highlight marks:)
       markKey: function (e) { var x = entry(e); return x.kind + ':' + x.ctrl.id; },
       marks: CT.marks.map(function (m) { return m.kind + ':' + m.ctrl.id; }),
