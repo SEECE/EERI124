@@ -41,6 +41,7 @@
     var depToggles = document.getElementById(opts.depToggles);
     var ctrlRow = document.getElementById(opts.controlRow);
     var ctrlSel = document.getElementById(opts.controlSelect);
+    var ctrlDirSel = document.getElementById(opts.controlDir);
     var typeDesc = document.getElementById(opts.typeDesc);
     var errorEl = document.getElementById(opts.error);
     var clearBtn = document.getElementById(opts.clear);
@@ -110,6 +111,9 @@
       typeDesc.textContent = TYPE_DESC[t] || '';
     }
 
+    // 'v' or 'i' — the kind of quantity the dependent source being placed reads
+    function ctrlKind() { return depToggles.querySelector('input[name="dep-ctrl"]:checked').value; }
+
     function refreshControlOptions() {
       var keep = ctrlSel.value;
       ctrlSel.innerHTML = '';
@@ -120,6 +124,27 @@
         ctrlSel.appendChild(o);
       });
       if ([].slice.call(ctrlSel.options).some(function (o) { return o.value === keep; })) ctrlSel.value = keep;
+      refreshDirOptions();
+    }
+
+    /* Which way the control quantity is read along the chosen resistor. Its two nodes give two
+       references: for a voltage the "from" node is +, for a current the "from" node is where the
+       current enters. The picked "from" node is applied by orienting the resistor's own a/b at
+       placement (see clickDot), which is the single source of truth the solver and renderer read. */
+    function refreshDirOptions() {
+      var r = circuit.edges.filter(function (e) { return e.id === ctrlSel.value; })[0];
+      var keep = ctrlDirSel.value;
+      ctrlDirSel.innerHTML = '';
+      if (!r) return;
+      var v = ctrlKind() === 'v';
+      [[r.a, r.b], [r.b, r.a]].forEach(function (pair) {
+        var o = document.createElement('option');
+        o.value = pair[0];
+        o.textContent = v ? '+ ' + pair[0] + ' → − ' + pair[1] : pair[0] + ' → ' + pair[1];
+        ctrlDirSel.appendChild(o);
+      });
+      // default the picker to the resistor's current a→b sense, unless the user already chose one
+      ctrlDirSel.value = (keep === r.a || keep === r.b) ? keep : r.a;
     }
 
     /* generator circuits use arbitrary real x/y (halves, negatives) with no relation to this
@@ -188,6 +213,12 @@
           render(); return;
         }
         edge.control = ctrlSel.value;
+        // orient the control resistor's a/b to the direction the user picked — that a/b is the
+        // sense the solver/renderer read (v = v_a − v_b, i flows a → b). ponytail: mutating the
+        // resistor is the whole model change; if two dependent sources read one resistor with the
+        // same kind they share this one sense, which is correct for a single reference direction.
+        var ctrlR = circuit.edges.filter(function (x) { return x.id === edge.control; })[0];
+        if (ctrlR && ctrlDirSel.value === ctrlR.b) { var t = ctrlR.a; ctrlR.a = ctrlR.b; ctrlR.b = t; }
       }
       circuit.edges.push(edge);
       render();
@@ -352,6 +383,7 @@
     clearBtn.addEventListener('click', reset);
     levelSel.addEventListener('change', function () { buildPalette(); refreshFormForType(); });
     depToggles.addEventListener('change', function () { refreshFormForType(); render(); });
+    ctrlSel.addEventListener('change', refreshDirOptions);
     colsMinus.addEventListener('click', function () { setCols(cols - 1); });
     colsPlus.addEventListener('click', function () { setCols(cols + 1); });
     rowsMinus.addEventListener('click', function () { setRows(rows - 1); });
