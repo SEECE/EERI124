@@ -122,6 +122,26 @@
       if ([].slice.call(ctrlSel.options).some(function (o) { return o.value === keep; })) ctrlSel.value = keep;
     }
 
+    /* generator circuits use arbitrary real x/y (halves, negatives) with no relation to this
+       builder's integer click-grid. Rescale each axis independently onto integer cells: the
+       grid step is the smallest gap between two distinct coordinates on that axis (so 0, 1.5, 3
+       becomes 0, 1, 2), then shift so the minimum lands on 0. Mutates nodes in place. */
+    function snapToGrid(nodes) {
+      function axis(get) {
+        var vals = nodes.map(get).filter(function (v, i, a) { return a.indexOf(v) === i; }).sort(function (a, b) { return a - b; });
+        var step = Infinity;
+        for (var i = 1; i < vals.length; i++) step = Math.min(step, vals[i] - vals[i - 1]);
+        if (!isFinite(step) || step === 0) step = 1;
+        var min = vals.length ? vals[0] : 0;
+        return { min: min, step: step };
+      }
+      var ax = axis(function (n) { return n.x; }), ay = axis(function (n) { return n.y; });
+      nodes.forEach(function (n) {
+        n.x = Math.round((n.x - ax.min) / ax.step);
+        n.y = Math.round((n.y - ay.min) / ay.step);
+      });
+    }
+
     /* ---------- grid model ---------- */
     function key(r, c) { return r + ',' + c; }
     function ensureNode(r, c) {
@@ -225,8 +245,27 @@
         var a = byId[e.a], b = byId[e.b], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
         var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         g.setAttribute('class', 'builder-edge');
+        var extra = '';
+        // direction/polarity was fixed by click order (a = first node clicked, b = second) —
+        // shown here, offset beside the value label so it stays visible after placement, same
+        // convention circuit.js draws (current source: arrow a→b; voltage source: b is +).
+        var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+        var ux = dx / len, uy = dy / len, vx = -uy, vy = ux;
+        var ox = mx + vx * 18, oy = my + vy * 18; // offset centre, clear of the label rect
+        if (e.type === 'I' || e.type === 'F' || e.type === 'G') {
+          var tx = ox + ux * 9, ty = oy + uy * 9;
+          extra += '<line x1="' + (ox - ux * 9) + '" y1="' + (oy - uy * 9) + '" x2="' + tx + '" y2="' + ty +
+            '" stroke="var(--accent-hover)" stroke-width="2"></line>' +
+            '<polygon points="' + tx + ',' + ty + ' ' + (tx - ux * 6 + vx * 4) + ',' + (ty - uy * 6 + vy * 4) + ' ' +
+            (tx - ux * 6 - vx * 4) + ',' + (ty - uy * 6 - vy * 4) + '" fill="var(--accent-hover)"></polygon>';
+        } else if (e.type === 'V' || e.type === 'E' || e.type === 'H') {
+          extra +=
+            '<text x="' + (ox - ux * 12) + '" y="' + (oy - uy * 12 + 4) + '" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent-hover)">−</text>' +
+            '<text x="' + (ox + ux * 12) + '" y="' + (oy + uy * 12 + 4) + '" text-anchor="middle" font-size="13" font-weight="700" fill="var(--accent-hover)">+</text>';
+        }
         g.innerHTML =
           '<line x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="var(--accent-deep)" stroke-width="2"></line>' +
+          extra +
           '<rect x="' + (mx - 22) + '" y="' + (my - 10) + '" width="44" height="20" rx="4" fill="var(--surface)" stroke="var(--accent-deep)"></rect>' +
           '<text x="' + mx + '" y="' + (my + 4) + '" text-anchor="middle" font-size="11" fill="var(--ink)">' +
             e.type + (e.value !== undefined ? ' ' + fmtVal(e) : '') + '</text>';
@@ -277,6 +316,7 @@
       reader.onload = function () {
         try {
           var loaded = Circuit.importJSON(JSON.parse(reader.result));
+          snapToGrid(loaded.nodes); // generator output uses arbitrary/negative/fractional x,y — not this grid's integer cells
           cols = Math.min(COLS_MAX, Math.max.apply(null, loaded.nodes.map(function (n) { return n.x; }).concat([cols - 1])) + 1);
           rows = Math.min(ROWS_MAX, Math.max.apply(null, loaded.nodes.map(function (n) { return n.y; }).concat([rows - 1])) + 1);
           circuit = loaded;

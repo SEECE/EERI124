@@ -1,14 +1,22 @@
 /* Circuit-builder page only — palette buttons and grid-dot styling, on top of
    circuit-page.css's sidebar/canvas layout. */
 
-/* wider than the solver pages' 240px sidebar — it holds two panes side by side */
-.builder-sidebar { flex-basis: 340px; }
+/* wider than the solver pages' 240px sidebar — it holds two panes side by side, and needs
+   room for the longest palette label ("Dependent source") on one line */
+.builder-sidebar { flex-basis: 420px; }
 
 .sidebar-split {
   display: flex;
-  gap: 12px;
+  gap: 14px;
 }
 .sidebar-pane { flex: 1 1 0; min-width: 0; }
+.pane-subhead {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-hover);
+  margin: 14px 0 8px;
+}
 .sidebar-divider {
   width: 1px;
   background: var(--ink-faint);
