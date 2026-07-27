@@ -99,6 +99,45 @@
     return validate({ nodes: nodes, edges: edges });
   }
 
+  /* Turn a resistor (or, occasionally, one of several voltage sources) already on the circuit
+     into a current source — lets the current-sources page's "all topologies" set reuse §3's
+     fixed templates for supermesh / known-mesh-current practice, instead of only ever seeing
+     random-grid.js's shapes. Same cut-safety rule as random-grid.js (see GENERATORS.md #7): a
+     current source may only replace an edge that is not a cut, or its current has nowhere to
+     go. opts.voltage also lets a voltage source convert, but only when at least one other
+     voltage source stays behind. */
+  function currentify(circuit, opts) {
+    opts = opts || {};
+    var edges = circuit.edges, chosen = {};
+    function wouldCut(skip) {
+      var p = {};
+      function find(x) { if (p[x] === undefined) p[x] = x; while (p[x] !== x) { p[x] = p[p[x]]; x = p[x]; } return x; }
+      edges.forEach(function (e, j) { if (chosen[j] || j === skip) return; p[find(e.a)] = find(e.b); });
+      var root = find(circuit.nodes[0].id);
+      return !circuit.nodes.every(function (n) { return find(n.id) === root; });
+    }
+    function convert(j) { edges[j] = { id: edges[j].id, type: 'I', a: edges[j].a, b: edges[j].b, value: pickI() }; }
+
+    var want = opts.count || (Math.random() < 0.35 ? 2 : 1);
+    for (var k = 0; k < want; k++) {
+      var cands = [];
+      edges.forEach(function (e, j) { if (!chosen[j] && e.type === 'R' && !wouldCut(j)) cands.push(j); });
+      if (!cands.length) break;
+      var j = pick(cands);
+      chosen[j] = true;
+      convert(j);
+    }
+    if (opts.voltage && Math.random() < 0.3) {
+      var vs = [];
+      edges.forEach(function (e, j) { if (!chosen[j] && e.type === 'V') vs.push(j); });
+      if (vs.length > 1) {
+        var v = pick(vs);
+        if (!wouldCut(v)) { chosen[v] = true; convert(v); }
+      }
+    }
+    return validate(circuit);
+  }
+
   /* ---------- generator registry ----------
      Generator files call Circuit.register(name, fn, meta) at load time.
      meta.elements — element types the generator can emit, so a page can ask for only
@@ -383,6 +422,7 @@
     validate: validate,
     isConnected: isConnected,
     build: build,
+    currentify: currentify,
     degenerate: degenerate,
     // value pickers, for generator files
     pick: pick,

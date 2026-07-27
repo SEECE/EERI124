@@ -10,9 +10,11 @@
    Usage:  SolverPage({ filter: { elements: ['R', 'V', 'W'] } });
    filter goes straight to Circuit.list() (see structure/GENERATORS.md). A page that offers
    more than one topology set (e.g. current-sources: its own circuits vs. all of §3's) instead
-   passes `sets: [{ value, label, filter }, …]` plus a #circuit-set <select> in its DOM; the
-   topology dropdown is rebuilt from the chosen set's filter. Plain script, one global, no ES
-   modules — the site must open over file://. */
+   passes `sets: [{ value, label, filter, transform? }, …]` plus a #circuit-set <select> in its
+   DOM; the topology dropdown is rebuilt from the chosen set's filter, and `transform(circuit)`
+   (optional) post-processes each generated circuit before it's solved/rendered — e.g. turning
+   some §3 resistors into current sources. Plain script, one global, no ES modules — the site
+   must open over file://. */
 (function () {
   'use strict';
 
@@ -33,10 +35,13 @@
         o.value = s.value; o.textContent = s.label; setSel.appendChild(o);
       });
     }
+    function currentSet() {
+      if (!opts.sets) return null;
+      return opts.sets.filter(function (s) { return s.value === setSel.value; })[0];
+    }
     function currentFilter() {
-      if (!opts.sets) return opts.filter;
-      var hit = opts.sets.filter(function (s) { return s.value === setSel.value; })[0];
-      return hit.filter;
+      var s = currentSet();
+      return s ? s.filter : opts.filter;
     }
 
     // the topic's slice of the generator registry — the page's safety net: a generator loaded
@@ -105,6 +110,8 @@
 
     function generate() {
       circuit = Circuit.get(topoSel.value).generate();
+      var s = currentSet();
+      if (s && s.transform) circuit = s.transform(circuit);
       runTechnique();
     }
 
