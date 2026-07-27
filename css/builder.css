@@ -3,7 +3,7 @@
 
 /* wider than the solver pages' 240px sidebar — it holds two panes side by side, and needs
    room for the longest palette label ("Dependent source") on one line */
-.builder-sidebar { flex-basis: 420px; }
+.builder-sidebar { flex-basis: 630px; overflow-y: auto; }
 
 .sidebar-split {
   display: flex;
@@ -83,6 +83,10 @@
   margin-top: 8px;
 }
 
+.grid-size-pair {
+  display: flex;
+  gap: 18px;
+}
 .grid-size-row {
   display: flex;
   align-items: center;

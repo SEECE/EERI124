@@ -241,6 +241,22 @@
       var byId = {};
       circuit.nodes.forEach(function (n) { byId[n.id] = coord(n.y, n.x); });
 
+      // grid dots drawn first so a placed element's line/label/marks always render on top of
+      // any (occupied or empty) dot, instead of a dot occasionally covering part of them.
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c < cols; c++) {
+          var p = coord(r, c);
+          var has = !!nodeAt[key(r, c)];
+          var isPending = pending && pending.r === r && pending.c === c;
+          var dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y);
+          dot.setAttribute('r', isPending ? 8 : (has ? 6 : 4));
+          dot.setAttribute('class', 'grid-dot' + (has ? ' has-node' : '') + (isPending ? ' pending' : ''));
+          dot.addEventListener('click', (function (r, c) { return function () { clickDot(r, c); }; })(r, c));
+          svg.appendChild(dot);
+        }
+      }
+
       circuit.edges.forEach(function (e) {
         var a = byId[e.a], b = byId[e.b], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
         var g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -272,20 +288,6 @@
         g.addEventListener('click', function (ev) { ev.stopPropagation(); removeEdge(e.id); });
         svg.appendChild(g);
       });
-
-      for (var r = 0; r < rows; r++) {
-        for (var c = 0; c < cols; c++) {
-          var p = coord(r, c);
-          var has = !!nodeAt[key(r, c)];
-          var isPending = pending && pending.r === r && pending.c === c;
-          var dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-          dot.setAttribute('cx', p.x); dot.setAttribute('cy', p.y);
-          dot.setAttribute('r', isPending ? 8 : (has ? 6 : 4));
-          dot.setAttribute('class', 'grid-dot' + (has ? ' has-node' : '') + (isPending ? ' pending' : ''));
-          dot.addEventListener('click', (function (r, c) { return function () { clickDot(r, c); }; })(r, c));
-          svg.appendChild(dot);
-        }
-      }
     }
 
     function fmtVal(e) {
