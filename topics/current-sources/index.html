@@ -45,6 +45,14 @@
         <div class="control-group">
           <button id="generate">Generate</button>
         </div>
+        <div class="control-group">
+          <h3>Import / Export</h3>
+          <button id="export-circuit">Export JSON</button>
+          <label class="file-label">Import JSON
+            <input type="file" id="import-circuit" accept="application/json" hidden />
+          </label>
+          <div class="import-error" id="import-error"></div>
+        </div>
         <div class="control-group step-control">
           <h3>Steps</h3>
           <div class="step-count" id="step-count"></div>
@@ -96,6 +104,7 @@
     // voltage source) into current sources so §3's shapes get supermesh / known-mesh-current
     // practice too, rather than only ever seeing random-grid.js's.
     SolverPage({
+      elements: ['R', 'V', 'I', 'W'],
       sets: [
         { value: 'current-source', label: 'Current-source circuits', filter: { tags: ['current-source'], elements: ['R', 'V', 'I', 'W'] } },
         {

@@ -14,7 +14,18 @@
    DOM; the topology dropdown is rebuilt from the chosen set's filter, and `transform(circuit)`
    (optional) post-processes each generated circuit before it's solved/rendered — e.g. turning
    some §3 resistors into current sources. Plain script, one global, no ES modules — the site
-   must open over file://. */
+   must open over file://.
+
+   opts.elements — the full set of element types this page's techniques understand (e.g.
+   ['R','V','I','W'] for current-sources). Only used to validate an imported file (see below);
+   unrelated to opts.filter/sets, which pick generators, not imports.
+
+   #export-circuit (button) and #import-circuit (file input), if present in the DOM, get
+   Export/Import wired automatically: Export downloads the current circuit as JSON
+   (Circuit.exportJSON); Import reads a chosen file, validates it (Circuit.importJSON,
+   rejecting element types outside opts.elements) and, on success, solves/renders it — same
+   circuit-builder JSON format topics/circuit-builder/ writes. Errors show in #import-error if
+   present, else alert(). */
 (function () {
   'use strict';
 
@@ -113,6 +124,39 @@
       var s = currentSet();
       if (s && s.transform) circuit = s.transform(circuit);
       runTechnique();
+    }
+
+    var exportBtn = document.getElementById('export-circuit');
+    var importInput = document.getElementById('import-circuit');
+    var importError = document.getElementById('import-error');
+    if (exportBtn) {
+      exportBtn.addEventListener('click', function () {
+        if (!circuit) return;
+        var blob = new Blob([JSON.stringify(Circuit.exportJSON(circuit), null, 2)], { type: 'application/json' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = (topoSel.value || 'circuit').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      });
+    }
+    if (importInput) {
+      importInput.addEventListener('change', function () {
+        var file = importInput.files[0];
+        importInput.value = '';
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          if (importError) importError.textContent = '';
+          try {
+            circuit = Circuit.importJSON(JSON.parse(reader.result), opts.elements);
+            runTechnique();
+          } catch (err) {
+            if (importError) importError.textContent = err.message; else alert(err.message);
+          }
+        };
+        reader.readAsText(file);
+      });
     }
 
     document.getElementById('generate').addEventListener('click', generate);
