@@ -24,13 +24,9 @@
 (function (S) {
   'use strict';
 
-  var si = S.si;
-  function vsub(letter) { return 'v<sub>' + letter + '</sub>'; }
-  // real stacked fraction (numerator over denominator) instead of a bare "/" — styled in solver.css
-  function frac(num, den) { return '<span class="frac"><span class="num">' + num + '</span><span class="den">' + den + '</span></span>'; }
-  function extend(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
-  // "a − b" that flips to "a + b" when b is a negative number, instead of the confusing "− -5"
-  function diff(base, val) { return (typeof val === 'number' && val < 0) ? base + ' + ' + (-val) : base + ' − ' + val; }
+  var si = S.si, K = window.StepKit;
+  var frac = K.frac, extend = K.extend, diff = K.diff, prod = K.prod, signed = K.signed, round = K.round;
+  function vsub(letter) { return K.sub('v', letter); }
 
   window.NodeVoltage = function (circuit) {
     var ln = S.letterNodes(circuit);
@@ -77,7 +73,6 @@
     function qOf(g) {                                             // net current LEAVING g through sources
       return isrcAt(g).reduce(function (a, e) { return a + leaveSign(e, g) * e.value; }, 0);
     }
-    function signed(x) { return (x >= 0 ? ' + ' : ' − ') + Math.abs(round(x)); }
 
     // =====================================================================
     // Equation-assembly engine: which nodes are source-fixed, the order the
@@ -143,7 +138,6 @@
     var P = plan();
     var m = P.unknown.length;
 
-    function round(x) { return Math.abs(x) < 1e-9 ? 0 : Math.round(x * 1000) / 1000; }
     // symbolic KCL (currents leaving g): fixed neighbours shown as their number, unknowns as v-letters
     function kclEq(g) {
       return resAt(g).map(function (e) {
@@ -172,6 +166,8 @@
       }).join('');
       return '<div class="kcl-status-wrap"><table class="kcl-status"><thead><tr><th>Node</th><th>Neighbours</th><th>Known</th><th>Unknown</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
     }
+    // this table alone stays local: it is the only one with per-node columns rather than the
+    // single-cell / two-column shapes StepKit renders
 
     // "current equation" board — one row per node, updated live as step 6 builds each
     // equation and step 8 folds unknowns down to numbers. Each substep snapshots this
@@ -180,11 +176,9 @@
     var board = {};
     order.forEach(function (g) { board[g] = P.fixed[g] ? si(V(g), 'V') : '?'; });
     function boardHtml() {
-      var rows = order.map(function (g) {
-        return '<tr' + (P.fixed[g] || board[g] === si(V(g), 'V') ? ' class="row-ready"' : '') +
-          '><td>' + L(g) + '</td><td>' + board[g] + '</td></tr>';
-      }).join('');
-      return '<div class="kcl-status-wrap"><table class="kcl-status eq-board"><thead><tr><th>Node</th><th>Current equation / value</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+      return K.board(order.map(function (g) {
+        return { name: L(g), value: board[g], ready: !!P.fixed[g] || board[g] === si(V(g), 'V') };
+      }), 'Node', 'Current equation / value');
     }
 
     // stamp the board as it stands AT THIS POINT in the build — the board panel is pinned, so a
@@ -365,12 +359,8 @@
     // out, collect the v-terms, divide. A leftover mutually-coupled core is solved by substituting
     // "v = (volts) + (ratio)·v_neighbour" expressions into each other — still only Ohm's law.
     // plan() gives the order, nodeVoltages() gives the authoritative answers; this narrates them.
-    function prod(a) { return a.reduce(function (x, y) { return x * y; }, 1); }
     // small table of the unknowns still to find (shrinks as nodes get solved)
-    function sysTable(list, header) {
-      return '<div class="kcl-status-wrap"><table class="kcl-status"><thead><tr><th>' + (header || 'Unknowns still to find') + ' (' + list.length +
-        ')</th></tr></thead><tbody><tr><td>' + (list.length ? list.map(L).join(', ') : '— none —') + '</td></tr></tbody></table></div>';
-    }
+    function sysTable(items, header) { return K.list(items.map(L), header || 'Unknowns still to find'); }
     var solveSubs = [];
     var boardAtStart = boardHtml();                 // snapshot before solving narrows the board down
     var voltsAtStart = voltsFor(order.filter(function (g) { return P.fixed[g]; }));
@@ -474,16 +464,10 @@
             terms.forEach(function (tm) { var ce = M / tm.R; if (cset[tm.n]) t[tm.n] = (t[tm.n] || 0) + ce / Csum; else c += ce * V(tm.n) / Csum; });
             expr[g] = { c: c, t: t };
           });
-          function cleanT(e) { Object.keys(e.t).forEach(function (n) { if (Math.abs(e.t[n]) < 1e-12) delete e.t[n]; }); }
-          function resolveSelf(e, g) { if (g in e.t) { var s = e.t[g]; delete e.t[g]; var d = 1 - s; e.c /= d; Object.keys(e.t).forEach(function (n) { e.t[n] /= d; }); } }
+          var cleanT = K.cleanT, resolveSelf = K.resolveSelf;
           // render v = volts + ratio·v… ; valueFn plugs known numbers for the back-substitution
           function fmtExpr(e, valueFn) {
-            var parts = [si(e.c, 'V')];
-            Object.keys(e.t).forEach(function (n) {
-              var r = round(e.t[n]); if (r === 0) return; var mag = Math.abs(r);
-              parts.push((r < 0 ? '− ' : '+ ') + (mag === 1 ? '' : mag + '·') + (valueFn ? si(valueFn(n), 'V') : vsub(L(n))));
-            });
-            return parts.join(' ');
+            return K.fmtExpr(e, { unit: 'V', name: function (n) { return vsub(L(n)); }, value: valueFn });
           }
 
           solveSubs.push({

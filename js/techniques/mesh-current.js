@@ -26,11 +26,9 @@
   'use strict';
 
   var SUB = '₀₁₂₃₄₅₆₇₈₉';
-  var si = S.si;
-  function isub(n) { return 'i<sub>' + n + '</sub>'; }
-  function frac(num, den) { return '<span class="frac"><span class="num">' + num + '</span><span class="den">' + den + '</span></span>'; }
-  function extend(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
-  function round(x) { return Math.abs(x) < 1e-9 ? 0 : Math.round(x * 1000) / 1000; }
+  var si = S.si, K = window.StepKit;
+  var frac = K.frac, extend = K.extend, round = K.round, num = K.num;
+  function isub(n) { return K.sub('i', n); }
 
   window.MeshCurrent = function (circuit) {
     var mc = S.meshCurrents(circuit);
@@ -165,19 +163,16 @@
     var board = {};
     mc.order.forEach(function (f) { board[f] = '?'; });
     function boardHtml() {
-      var rows = mc.order.map(function (f) {
-        return '<tr' + (board[f] === si(value[f], 'A') ? ' class="row-ready"' : '') +
-          '><td>' + name[f] + '</td><td>' + board[f] + '</td></tr>';
-      }).join('');
-      return '<div class="kcl-status-wrap"><table class="kcl-status eq-board"><thead><tr><th>Mesh</th><th>Current equation / value</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+      return K.board(mc.order.map(function (f) {
+        return { name: name[f], value: board[f], ready: board[f] === si(value[f], 'A') };
+      }), 'Mesh', 'Current equation / value');
     }
     // stamp the board as it stands AT THIS POINT in the build — the panel is pinned now, so a
     // view without a board would blank it out mid-walk. Must be called where the view is made,
     // never later: the board is time-varying.
     function WB(o) { if (o.board == null) o.board = boardHtml(); return o; }
-    function sysTable(list, header) {
-      return '<div class="kcl-status-wrap"><table class="kcl-status"><thead><tr><th>' + (header || 'Mesh currents still to find') + ' (' + list.length +
-        ')</th></tr></thead><tbody><tr><td>' + (list.length ? list.map(function (f) { return name[f]; }).join(', ') : '— none —') + '</td></tr></tbody></table></div>';
+    function sysTable(items, header) {
+      return K.list(items.map(function (f) { return name[f]; }), header || 'Mesh currents still to find');
     }
 
     // The voltage across a current source is whatever the rest of its loop makes it: walk that
@@ -484,26 +479,16 @@
     // another until one mesh falls out as a number, and back-substitute. Ratios are R/R —
     // dimensionless — so nothing beyond Ohm's law and grade-12 algebra appears.
     var expr = {};   // expr[f] = { c: amps, t: { neighbourFace: ratio } }
-    function num(x) { return x < 0 ? '−' + (-x) : '' + x; }   // typographic minus, never "-12"
+    // a 0 A constant is noise once there are ratio terms — dropZero hides it and unhides the
+    // first term's sign (KCL keeps its constant: a node's volts are the point of the line)
     function fmtExpr(e, valueFn) {
-      var parts = [];
-      Object.keys(e.t).forEach(function (g) {
-        var r = round(e.t[g]); if (r === 0) return; var mag = Math.abs(r);
-        parts.push((r < 0 ? '− ' : '+ ') + (mag === 1 ? '' : mag + '·') + (valueFn ? si(valueFn(g), 'A') : name[g]));
-      });
-      // a 0 A constant is noise once there are ratio terms — drop it and unhide the first term's sign
-      if (round(e.c) !== 0 || !parts.length) parts.unshift(si(e.c, 'A'));
-      return parts.join(' ').replace(/^\+ /, '');
+      return K.fmtExpr(e, { unit: 'A', name: function (g) { return name[g]; }, value: valueFn, dropZero: true });
     }
-    function cleanT(e) { Object.keys(e.t).forEach(function (g) { if (Math.abs(e.t[g]) < 1e-12) delete e.t[g]; }); }
-    function resolveSelf(e, f) { if (f in e.t) { var s = e.t[f]; delete e.t[f]; var d = 1 - s; e.c /= d; Object.keys(e.t).forEach(function (g) { e.t[g] /= d; }); } }
+    var cleanT = K.cleanT, resolveSelf = K.resolveSelf;
     // once a mesh's expression carries no unknown it IS that mesh's current — pin it to the
     // engine's value so accumulated float noise can't print a last digit that contradicts the
     // answer shown two views later.
-    function snap(f) {
-      var e = expr[f];
-      if (!Object.keys(e.t).length && Math.abs(e.c - value[f]) <= 1e-6 * (Math.abs(value[f]) + 1)) e.c = value[f];
-    }
+    function snap(f) { K.snap(expr[f], value[f]); }
 
     var solveSubs = [];
     var boardAtStart = boardHtml();
