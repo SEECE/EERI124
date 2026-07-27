@@ -53,6 +53,18 @@ Adding a type means: a `VALUED` entry in `circuit.js` if it carries a value, a r
 branch, and — for dependent sources — a `control` field naming the edge it depends on.
 **Do not** invent a parallel shape for a new element; extend the edge object.
 
+## Import/export
+
+`Circuit.exportJSON(circuit)` writes the model above verbatim, wrapped in `{ meta: { elements },
+nodes, edges }` — `meta.elements` is just the distinct type codes present, a cheap header a page
+can reject on before even validating. `Circuit.importJSON(data, allowedElements?)` is the
+reverse: parses, `validate()`s, requires the result connected and carrying at least one
+independent source (`V`/`I` — the same rule a generator's output must already satisfy), and,
+if `allowedElements` is given, rejects any type outside it. Every solver page's Import button
+calls this with its own element set (see `SolverPage`'s `opts.elements` in
+[SOLVER.md](SOLVER.md)); `topics/circuit-builder/` (`js/builder.js`) is what writes these files
+by hand, and calls the same function on its own Export to catch a bad circuit before saving it.
+
 ## Dependent sources
 
 A controlled source carries its gain in `value` and names the edge it reads in `control`:
