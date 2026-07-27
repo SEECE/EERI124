@@ -8,15 +8,18 @@
   /* ---------- values ---------- */
   var R_VALUES = [100, 220, 330, 470, 680, 1000, 1500, 2200, 3300, 4700];
   var V_VALUES = [5, 9, 12, 15];
+  var I_VALUES = [0.01, 0.02, 0.05, 0.1];   // 10–100 mA: same order as V/R above gives
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function pickR() { return pick(R_VALUES); }
   function pickV() { return pick(V_VALUES); }
+  function pickI() { return pick(I_VALUES); }
 
   /* ---------- model ----------
      circuit = { nodes: [{id,x,y}], edges: [{id,type,a,b,value?}] }
-     Element types: 'R' resistor, 'V' independent voltage source (b is +), 'W' plain wire.
-     Later phases add 'I' and the dependent sources — see structure/GENERATORS.md. */
-  var VALUED = { R: 'resistance', V: 'voltage' }; // types that need a positive value
+     Element types: 'R' resistor, 'V' independent voltage source (b is +), 'W' plain wire,
+     'I' independent current source (current flows a → b, i.e. out of the b terminal).
+     Later phases add the dependent sources — see structure/GENERATORS.md. */
+  var VALUED = { R: 'resistance', V: 'voltage', I: 'current' }; // types that need a positive value
 
   function validate(c) {
     var ids = {};
@@ -65,8 +68,8 @@
   /* Same topology, different problem: random source polarity and now and then one resistor
      replaced by a short, so a template rewards reading the circuit over recalling it. */
   function flavour(specs) {
-    specs = specs.map(function (s) {
-      return s[0] === 'V' && Math.random() < 0.5 ? ['V', s[2], s[1]] : s;
+    specs = specs.map(function (s) {  // source polarity / current direction, both ways
+      return (s[0] === 'V' || s[0] === 'I') && Math.random() < 0.5 ? [s[0], s[2], s[1], s[3]] : s;
     });
     var rs = [];
     specs.forEach(function (s, i) { if (s[0] === 'R') rs.push(i); });
@@ -89,10 +92,50 @@
       var e = { id: 'e' + i, type: s[0], a: 'n' + s[1], b: 'n' + s[2] };
       if (s[0] === 'R') e.value = pickR();
       if (s[0] === 'V') e.value = pickV();
+      if (s[0] === 'I') e.value = pickI();
       if (s[3] !== undefined) e.value = s[3]; // explicit value wins
       return e;
     });
     return validate({ nodes: nodes, edges: edges });
+  }
+
+  /* Turn a resistor (or, occasionally, one of several voltage sources) already on the circuit
+     into a current source — lets the current-sources page's "all topologies" set reuse §3's
+     fixed templates for supermesh / known-mesh-current practice, instead of only ever seeing
+     random-grid.js's shapes. Same cut-safety rule as random-grid.js (see GENERATORS.md #7): a
+     current source may only replace an edge that is not a cut, or its current has nowhere to
+     go. opts.voltage also lets a voltage source convert, but only when at least one other
+     voltage source stays behind. */
+  function currentify(circuit, opts) {
+    opts = opts || {};
+    var edges = circuit.edges, chosen = {};
+    function wouldCut(skip) {
+      var p = {};
+      function find(x) { if (p[x] === undefined) p[x] = x; while (p[x] !== x) { p[x] = p[p[x]]; x = p[x]; } return x; }
+      edges.forEach(function (e, j) { if (chosen[j] || j === skip) return; p[find(e.a)] = find(e.b); });
+      var root = find(circuit.nodes[0].id);
+      return !circuit.nodes.every(function (n) { return find(n.id) === root; });
+    }
+    function convert(j) { edges[j] = { id: edges[j].id, type: 'I', a: edges[j].a, b: edges[j].b, value: pickI() }; }
+
+    var want = opts.count || (Math.random() < 0.35 ? 2 : 1);
+    for (var k = 0; k < want; k++) {
+      var cands = [];
+      edges.forEach(function (e, j) { if (!chosen[j] && e.type === 'R' && !wouldCut(j)) cands.push(j); });
+      if (!cands.length) break;
+      var j = pick(cands);
+      chosen[j] = true;
+      convert(j);
+    }
+    if (opts.voltage && Math.random() < 0.3) {
+      var vs = [];
+      edges.forEach(function (e, j) { if (!chosen[j] && e.type === 'V') vs.push(j); });
+      if (vs.length > 1) {
+        var v = pick(vs);
+        if (!wouldCut(v)) { chosen[v] = true; convert(v); }
+      }
+    }
+    return validate(circuit);
   }
 
   /* ---------- generator registry ----------
@@ -138,16 +181,25 @@
     return e;
   }
   function fmtR(v) { return v >= 1000 ? (v / 1000) + ' kΩ' : v + ' Ω'; }
+  function fmtI(v) { return v >= 1 ? v + ' A' : Math.round(v * 1000) + ' mA'; }
 
   function render(circuit, svg) {
-    var PX = 90, PAD = 50;
+    var PX = 90, PAD = 34;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     var xs = circuit.nodes.map(function (n) { return n.x * PX; });
     var ys = circuit.nodes.map(function (n) { return n.y * PX; });
     var minX = Math.min.apply(null, xs), maxX = Math.max.apply(null, xs);
     var minY = Math.min.apply(null, ys), maxY = Math.max.apply(null, ys);
-    svg.setAttribute('viewBox',
-      (minX - PAD) + ' ' + (minY - PAD) + ' ' + (maxX - minX + 2 * PAD) + ' ' + (maxY - minY + 2 * PAD));
+    // the drawing's centre, so each element's value label can be pushed to the side facing
+    // AWAY from the circuit — inside a loop it would land on other elements or a mesh arrow
+    var midX = (minX + maxX) / 2, midY = (minY + maxY) / 2;
+    // value labels stick out past the nodes; the viewBox is widened to hold them (below) so
+    // nothing gets clipped at the edge of the canvas
+    function fit(x, y, text) {
+      var w = String(text).length * 7.2 / 2 + 4, h = 9;
+      minX = Math.min(minX, x - w); maxX = Math.max(maxX, x + w);
+      minY = Math.min(minY, y - h); maxY = Math.max(maxY, y + h);
+    }
 
     var byId = {};
     circuit.nodes.forEach(function (n) { byId[n.id] = { x: n.x * PX, y: n.y * PX }; });
@@ -163,12 +215,19 @@
       var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
       var ux = dx / len, uy = dy / len;
       var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      var lx = mx - uy * 34, ly = my + ux * 34; // label, perpendicular offset — clear of the symbol
+      // label sits perpendicular to the element, on whichever side points away from the middle
+      // of the drawing — a fixed side lands inside the loop half the time (and the source
+      // symbols, whose a/b order is randomised, flipped sides at random)
+      var side = ((mx - midX) * -uy + (my - midY) * ux) >= 0 ? 1 : -1;
+      // 46 clears the r=16 source circle even for the widest label ("100 mA", "4.7 kΩ") — 38
+      // cleared shorter R/V labels but let a 6-char current-source reading overlap its own circle
+      var lx = mx - uy * 46 * side, ly = my + ux * 46 * side;
       var eg = el('g', { 'class': 'edge edge-' + e.type, 'data-eid': e.id }, svg);
 
       if (e.type === 'W') { line(a.x, a.y, b.x, b.y, eg); return; }
 
       var gap = e.type === 'R' ? 20 : 17;
+      var vx = -uy, vy = ux;                      // unit vector across the element (for arrowheads)
       line(a.x, a.y, mx - ux * gap, my - uy * gap, eg);
       line(mx + ux * gap, my + uy * gap, b.x, b.y, eg);
 
@@ -178,6 +237,21 @@
         el('rect', { x: -20, y: -8, width: 40, height: 16, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, rx: 2 }, g);
         el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
           .textContent = fmtR(e.value);
+        fit(lx, ly, fmtR(e.value));
+      } else if (e.type === 'I') {
+        // current source — same circle as a voltage source but with an arrow through it,
+        // pointing a → b: the direction the source pushes current out of its b terminal.
+        el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
+        var tx = mx + ux * 10, ty = my + uy * 10;   // arrow tip, inside the circle
+        el('line', { x1: mx - ux * 10, y1: my - uy * 10, x2: tx, y2: ty, stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
+        el('polygon', { points:
+          tx + ',' + ty + ' ' +
+          (tx - ux * 7 + vx * 4) + ',' + (ty - uy * 7 + vy * 4) + ' ' +
+          (tx - ux * 7 - vx * 4) + ',' + (ty - uy * 7 - vy * 4),
+          fill: 'var(--accent-deep)' }, eg);
+        el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
+          .textContent = fmtI(e.value);
+        fit(lx, ly, fmtI(e.value));
       } else { // V — b is the + terminal
         el('circle', { cx: mx, cy: my, r: 16, fill: 'none', stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
         var plus = el('text', { x: mx + ux * 7, y: my + uy * 7, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 13, 'font-weight': 700 }, eg);
@@ -186,6 +260,7 @@
         minus.textContent = '−';
         el('text', { x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--ink-soft)', 'font-size': 14, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 5 }, eg)
           .textContent = e.value + ' V';
+        fit(lx, ly, e.value + ' V');
       }
     });
 
@@ -227,11 +302,20 @@
       var ldir = gaps.length > 1 ? gaps[1] : gaps[0];
       circleOf[n.id].setAttribute('data-ldir', (ldir * 180 / Math.PI).toFixed(1));
       var lx = p.x + Math.cos(ldir) * 20, ly = p.y + Math.sin(ldir) * 20;
+      fit(lx, ly, n.label);
+      // the voltage reading (drawn later, by highlight()) sits 60° off ldir at radius 44 —
+      // reserve that spot too so the viewBox never clips it once a step reveals it
+      var vrad = ldir + 60 * Math.PI / 180;
+      fit(p.x + Math.cos(vrad) * 44, p.y + Math.sin(vrad) * 44, '-99.9 mV');
       // hidden by default; a solver step reveals it via highlight({ labels: [nodeId] })
       // so letters appear when the method names them, not from the start
       el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, svg)
         .textContent = n.label;
     });
+
+    // set last: minX…maxY have grown to cover every label, so nothing is clipped
+    svg.setAttribute('viewBox',
+      (minX - PAD) + ' ' + (minY - PAD) + ' ' + (maxX - minX + 2 * PAD) + ' ' + (maxY - minY + 2 * PAD));
   }
 
   /* Toggle a 'hl' class on the edges/nodes a solver step wants to emphasise.
@@ -253,8 +337,12 @@
       t.classList.toggle('show', labels.indexOf(t.getAttribute('data-nlabel')) >= 0);
     });
 
-    // clockwise mesh loop-arrows (KVL). loops:[{nodes:[ids], label}] — centroid + radius
-    // are read from the rendered node circles so this stays in the svg's user space.
+    // clockwise mesh loop-arrows (KVL). loops:[{nodes:[ids], label, merged}] — the arc is an
+    // ELLIPSE fitted to the bounding box of the given nodes, read from the rendered node
+    // circles so this stays in the svg's user space. Fitting the box (rather than a circle on
+    // the centroid) is what lets a supermesh pass the nodes of BOTH its meshes and get one
+    // wide loop around the pair, exactly as the lecture slides draw it; `merged` lifts that
+    // loop's label off the shared branch it would otherwise sit on.
     Array.prototype.forEach.call(svg.querySelectorAll('.mesh-loop'), function (m) {
       m.parentNode.removeChild(m);
     });
@@ -264,27 +352,30 @@
         return c ? { x: +c.getAttribute('cx'), y: +c.getAttribute('cy') } : null;
       }).filter(Boolean);
       if (pts.length < 3) return;
-      var cx = 0, cy = 0;
-      pts.forEach(function (p) { cx += p.x; cy += p.y; });
-      cx /= pts.length; cy /= pts.length;
-      var r = Infinity;
-      pts.forEach(function (p) { r = Math.min(r, Math.hypot(p.x - cx, p.y - cy)); });
-      r *= 0.55;
+      var bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+      pts.forEach(function (p) {
+        bx0 = Math.min(bx0, p.x); bx1 = Math.max(bx1, p.x);
+        by0 = Math.min(by0, p.y); by1 = Math.max(by1, p.y);
+      });
+      var cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
+      var rx = Math.max(16, (bx1 - bx0) * 0.32), ry = Math.max(16, (by1 - by0) * 0.32);
       var g = el('g', { 'class': 'mesh-loop' }, svg);
       // ~320° arc, gap at the top, swept clockwise (SVG sweep-flag 1 with y down)
       var sa = -70 * Math.PI / 180, ea = 250 * Math.PI / 180;
-      var sx = cx + r * Math.cos(sa), sy = cy + r * Math.sin(sa);
-      var ex = cx + r * Math.cos(ea), ey = cy + r * Math.sin(ea);
-      el('path', { d: 'M ' + sx + ' ' + sy + ' A ' + r + ' ' + r + ' 0 1 1 ' + ex + ' ' + ey, fill: 'none', stroke: 'var(--accent-hover)', 'stroke-width': 2 }, g);
-      // arrowhead at the arc end, pointing along the clockwise tangent (ea + 90°)
-      var fwd = ea + Math.PI / 2, ah = 8;
+      var sx = cx + rx * Math.cos(sa), sy = cy + ry * Math.sin(sa);
+      var ex = cx + rx * Math.cos(ea), ey = cy + ry * Math.sin(ea);
+      el('path', { d: 'M ' + sx + ' ' + sy + ' A ' + rx + ' ' + ry + ' 0 1 1 ' + ex + ' ' + ey, fill: 'none', stroke: 'var(--accent-hover)', 'stroke-width': 2 }, g);
+      // arrowhead at the arc end, along the clockwise tangent of the ellipse at that angle
+      var fwd = Math.atan2(ry * Math.cos(ea), -rx * Math.sin(ea)), ah = 8;
       var c1 = fwd + Math.PI + 0.4, c2 = fwd + Math.PI - 0.4;
       el('polygon', { points:
         ex + ',' + ey + ' ' +
         (ex + ah * Math.cos(c1)) + ',' + (ey + ah * Math.sin(c1)) + ' ' +
         (ex + ah * Math.cos(c2)) + ',' + (ey + ah * Math.sin(c2)),
         fill: 'var(--accent-hover)' }, g);
-      if (loop.label) el('text', { x: cx, y: cy, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 15, 'font-weight': 700 }, g).textContent = loop.label;
+      // a merged (supermesh) loop is centred on the branch its two meshes share — lift the
+      // label off that element instead of printing it on top of the source symbol
+      if (loop.label) el('text', { x: cx, y: cy - (loop.merged ? ry * 0.55 : 0), 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 15, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, g).textContent = loop.label;
     });
 
     // earth symbol (stub + shrinking bars) under the chosen 0 V reference node(s) — aimed
@@ -308,9 +399,13 @@
     });
 
     // physical voltage reading once a node is known/solved (spec.volts = {nodeId: text}) —
-    // offset along the node's letter direction (data-ldir, the *second*-widest gap) at a
-    // bigger radius than the letter, so it clears both the wires and the ground symbol
-    // (which claims the widest gap) instead of sitting in a fixed spot above the node.
+    // offset from the node's letter direction (data-ldir, the *second*-widest gap), so it
+    // clears both the wires and the ground symbol (which claims the widest gap) instead of
+    // sitting in a fixed spot above the node. Rotated 60° off ldir and pushed to a bigger
+    // radius than the letter — sitting on the SAME ray as the letter (old: same angle, radius
+    // 36 vs the letter's 20) left only 16px of radial gap, not enough to clear either label's
+    // width or height, so the two almost always overlapped. The rotation buys real angular
+    // separation instead of relying on radius alone.
     Array.prototype.forEach.call(svg.querySelectorAll('.node-volt'), function (t) {
       t.parentNode.removeChild(t);
     });
@@ -320,8 +415,9 @@
       if (!c) return;
       var x = +c.getAttribute('cx'), y = +c.getAttribute('cy');
       var ldirAttr = c.getAttribute('data-ldir');
-      var rad = ldirAttr !== null ? (+ldirAttr * Math.PI / 180) : -Math.PI / 2;  // default: straight up
-      var vx = x + Math.cos(rad) * 36, vy = y + Math.sin(rad) * 36;
+      var ldir = ldirAttr !== null ? (+ldirAttr * Math.PI / 180) : -Math.PI / 2;  // default: straight up
+      var rad = ldir + 60 * Math.PI / 180;
+      var vx = x + Math.cos(rad) * 44, vy = y + Math.sin(rad) * 44;
       el('text', {
         'class': 'node-volt', x: vx, y: vy, 'text-anchor': 'middle', 'dominant-baseline': 'central',
         fill: 'var(--accent-hover)', 'font-size': 12, 'font-weight': 600,
@@ -335,11 +431,13 @@
     validate: validate,
     isConnected: isConnected,
     build: build,
+    currentify: currentify,
     degenerate: degenerate,
     // value pickers, for generator files
     pick: pick,
     pickR: pickR,
     pickV: pickV,
+    pickI: pickI,
     // registry
     register: register,
     list: list,

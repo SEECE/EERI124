@@ -14,6 +14,7 @@
   <script src="generators/bridge-ladder.js"></script>
   <script src="generators/grid.js"></script>
   <script src="generators/multi-source.js"></script>
+  <script src="generators/current-source.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -21,7 +22,7 @@
       catch (err) { out.push('FAIL ' + label + ' — ' + err.message); }
     }
     function assert(cond, msg) { if (!cond) throw new Error(msg); }
-    function hasSource(c) { return c.edges.some(function (e) { return e.type === 'V'; }); }
+    function hasSource(c) { return c.edges.some(function (e) { return e.type === 'V' || e.type === 'I'; }); }
     // no source or resistor may have both ends tied together by wires
     function shorted(c) {
       var p = {};
@@ -44,7 +45,7 @@
         for (var i = 0; i < 50; i++) { // ×50: build() randomises polarity and may short a resistor
           var c = g.generate();
           Circuit.validate(c); // ids unique, edges reference real nodes
-          assert(hasSource(c), 'no voltage source');
+          assert(hasSource(c), 'no source');
           assert(Circuit.isConnected(c), 'not connected');
           assert(c.edges.every(function (e) { return e.type === 'W' || e.value > 0; }), 'zero-value edge');
           assert(!shorted(c), 'shorted source or resistor');
@@ -56,9 +57,12 @@
     });
 
     check('list filters', function () {
-      assert(Circuit.list({ elements: ['R', 'V', 'W'] }).length === all.length, 'R/V/W filter dropped a generator');
+      var rvw = Circuit.list({ elements: ['R', 'V', 'W'] });
+      assert(rvw.length > 0 && rvw.length < all.length, 'R/V/W filter should keep the voltage-only generators and drop the current-source ones');
+      assert(rvw.every(function (g) { return g.elements.indexOf('I') < 0; }), 'R/V/W filter kept a current-source generator');
+      assert(Circuit.list({ elements: ['R', 'V', 'I', 'W'] }).length === all.length, 'full filter dropped a generator');
       assert(Circuit.list({ elements: ['R', 'W'] }).length === 0, 'sourceless filter kept a generator');
-      assert(Circuit.list({ tags: ['random'] }).length === 1, 'expected exactly one random generator');
+      assert(Circuit.list({ tags: ['random'] }).length === 2, 'expected the two random generators');
     });
 
     check('render smoke', function () {

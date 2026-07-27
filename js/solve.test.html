@@ -14,6 +14,7 @@
   <script src="generators/bridge-ladder.js"></script>
   <script src="generators/grid.js"></script>
   <script src="generators/multi-source.js"></script>
+  <script src="generators/current-source.js"></script>
   <script src="solve.js"></script>
   <script src="techniques/mesh-current.js"></script>
   <script src="techniques/node-voltage.js"></script>
@@ -96,8 +97,39 @@
       assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
     });
 
+    // ---- current source into two parallel 100 Ω: v = 0.1 × 50 = 5 V, 0.5 W generated ----
+    check('current source (parallel)', function () {
+      var c = C(2, [['I', 0, 1, 0.1], ['R', 0, 1, 100], ['R', 0, 1, 100]]);
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 1), 5), 'node voltage ' + v(sol, 1) + ' ≠ 5 V');
+      var pc = Solve.powerCheck(Solve.branches(c, sol));
+      assert(pc.ok && near(pc.generated, 0.5), 'power ' + JSON.stringify(pc));
+    });
+
+    // ---- a current source bordering one mesh fixes that mesh current outright (PPT step 3) ----
+    check('known mesh current', function () {
+      // one loop: 0.05 A source driving 100 Ω + 200 Ω in series
+      var c = C(3, [['I', 0, 1, 0.05], ['R', 1, 2, 100], ['R', 2, 0, 200]]);
+      var mc = Solve.meshCurrents(c);
+      assert(mc.groups.length === 1 && mc.groups[0].fixed, 'source against the outer face should fix its group');
+      assert(near(Math.abs(mc.i[0]), 0.05), 'mesh current ' + mc.i[0] + ' ≠ ±0.05 A');
+      assert(near(Math.abs(mc.edgeCurrent[c.edges[1].id]), 0.05), 'resistor current ≠ source current');
+    });
+
+    // ---- a current source shared by two meshes → supermesh + constraint (PPT steps 5 & 7) ----
+    check('supermesh', function () {
+      var c = Circuit.get('Supermesh (shared current source)').generate();
+      var mc = Solve.meshCurrents(c);
+      var sm = mc.groups.filter(function (g) { return g.meshes.length > 1; });
+      assert(sm.length === 1 && sm[0].meshes.length === 2, 'expected one 2-mesh supermesh');
+      assert(!sm[0].fixed, 'a shared source fixes nothing on its own');
+      var s = mc.iSources[0], i = mc.i;
+      assert(near(i[mc.meshOf[s.fa]] - i[mc.meshOf[s.fb]], s.e.value), 'constraint i_fa − i_fb = I not satisfied');
+      assert(Solve.powerCheck(Solve.branches(c, Solve.nodeVoltages(c))).ok, 'power imbalance');
+    });
+
     // ---- every generator: node-voltage solves, mesh agrees, power balances ----
-    Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
+    Circuit.list().forEach(function (g) {
       check('solve ' + g.name + ' ×30', function () {
         for (var i = 0; i < 30; i++) {
           var c = g.generate();
@@ -111,16 +143,16 @@
           var mc = Solve.meshCurrents(c);
           assert(mc.meshes.length === c.edges.length - c.nodes.length + 1, 'mesh count ≠ E−V+1');
           br.forEach(function (r) {
-            if (r.edge.type !== 'R') return;
-            var im = Math.abs(mc.edgeCurrent[r.edge.id]), iv = Math.abs(r.current);
-            assert(Math.abs(im - iv) <= 1e-6 * (iv + 1), 'mesh current ≠ node-voltage current');
+            if (r.edge.type === 'W') return;
+            var im = mc.edgeCurrent[r.edge.id], iv = r.current;   // signed: the two methods must agree on direction too
+            assert(Math.abs(im - iv) <= 1e-6 * (Math.abs(iv) + 1), 'mesh current ≠ node-voltage current on ' + r.edge.type);
           });
         }
       });
     });
 
     // ---- KVL technique step list: loops persist, and the narrated algebra lands on the engine ----
-    Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
+    Circuit.list().forEach(function (g) {
       check('KVL steps ' + g.name + ' ×10', function () {
         for (var i = 0; i < 10; i++) {
           var c = g.generate(), mc = Solve.meshCurrents(c), steps = MeshCurrent(c);
@@ -129,7 +161,10 @@
             [s].concat(s.subs || []).forEach(function (view) {
               var loops = view.hl && view.hl.loops;
               if (k === 0) assert(!loops, 'step 1 draws loops too early');
-              else assert(loops && loops.length === mc.meshes.length, 'step ' + s.n + ' dropped the mesh loops');
+              // steps 5-8 draw a supermesh as ONE loop over its meshes, so there the count is
+              // the number of groups; everywhere else it is one arrow per mesh
+              else assert(loops && loops.length === (s.n >= 5 && s.n <= 8 ? mc.groups.length : mc.meshes.length),
+                'step ' + s.n + ' dropped the mesh loops');
             });
           });
           assert(!/undefined|NaN/.test(JSON.stringify(steps)), 'step text has undefined/NaN');
@@ -142,7 +177,9 @@
           assert(bothWays === shared, shared + ' shared resistors but ' + bothWays + ' both-ways views in step 4');
           // the running board is a pinned panel field, never baked into the body text, and from
           // step 6 (first equation written) on it must never blank out — in either technique
-          [steps, NodeVoltage(c)].forEach(function (list) {
+          var kcl = NodeVoltage(c);
+          assert(!/undefined|NaN/.test(JSON.stringify(kcl)), 'KCL step text has undefined/NaN');
+          [steps, kcl].forEach(function (list) {
             list.forEach(function (s2) {
               [s2].concat(s2.subs || []).forEach(function (view) {
                 assert(!/eq-board/.test(view.body || ''), 'step ' + s2.n + ' still has the board inside its body');

@@ -43,7 +43,7 @@ Element type codes:
 | `R` | resistor (Ω) | done |
 | `V` | independent voltage source (V), `b` is **+** | done |
 | `W` | plain wire, no value | done |
-| `I` | independent current source (A), flows `a` → `b` | planned |
+| `I` | independent current source (A), flows `a` → `b` | done |
 | `E` `F` `G` `H` | dependent V/I sources (VCVS, CCCS, VCCS, CCVS) | planned |
 
 Adding a type means: a `VALUED` entry in `circuit.js` if it carries a value, a render
@@ -78,12 +78,22 @@ Rules:
    current source must say so, or pages that only teach voltage sources will offer it. The
    self-check enforces this.
 5. **`tags` are for pages to filter on** (`series`, `parallel`, `divider`, `bridge`,
-   `ladder`, `grid`, `mesh`, `random`). Add tags freely; they cost nothing.
-6. **`C.build` applies `flavour()`** — random source polarity, occasional resistor replaced
+   `ladder`, `grid`, `mesh`, `random`, `current-source`, `supermesh`, `multi-source`). Add
+   tags freely; they cost nothing. The current-sources page's own circuit set filters on
+   `current-source`, because "circuits with an `I` in them" is exactly what that topic is; its
+   other circuit set (the §3 topologies) filters on `elements` only, same as §3 itself — see
+   `SolverPage({ sets })` in SOLVER.md.
+6. **`C.build` applies `flavour()`** — random source polarity / current direction, occasional resistor replaced
    by a short — so a fixed topology is still a fresh problem each press. Pass
    `{ flavour: false }` as the third argument only when a template's teaching point depends
    on its exact wiring.
-7. **A generator returns a valid circuit or `undefined`.** `build()` already validates;
+7. **A current source may only sit on an edge that is not a cut.** A source in a bridge branch
+   (or two in series) has nowhere to send its current — unsolvable, not hard. `random-grid.js`
+   checks connectivity with the chosen source edges removed before converting a resistor; so
+   does `Circuit.currentify()`, the same idea applied to an already-built circuit rather than
+   at generation time — used by the current-sources page's "All topologies" set to turn some
+   of §3's resistors into current sources (see SOLVER.md's `SolverPage({ sets })`).
+8. **A generator returns a valid circuit or `undefined`.** `build()` already validates;
    retry loops belong inside the generator (see `random-grid.js`).
 
 ## Consuming generators from a page
@@ -119,9 +129,8 @@ element, nothing shorted by wires, and no element type outside the generator's d
 
 ## Planned direction (not built yet)
 
-- `js/generators/current-source.js`, `js/generators/dependent.js` — new element types,
-  same registry, same `build()`. The node-voltage and mesh-current pages will load these
-  on top of the resistive set.
+- `js/generators/dependent.js` — the four controlled sources, same registry, same `build()`.
+  The dependent-sources page will load it on top of the current-source set.
 - Solver (`js/solve.js`) consumes `{nodes, edges}` and is generator-agnostic. Keep
   generation free of any solving concern — no precomputed answers stored on the circuit.
 - If a generator ever needs a seed for reproducible problems, it goes in as an argument to

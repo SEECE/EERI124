@@ -4,8 +4,14 @@
    (KCL): same substep rhythm, same live board, same "clear it, collect it, divide it, then
    substitute" algebra — a student who learned one method reads the other for free.
 
-   The PPT's 10 steps. Steps 3 (known currents), 5 (supermesh) and 7 (constraints) only fire
-   with current/dependent sources, so here they render "Nothing to do" — shown, never skipped.
+   The PPT's 10 steps. Steps 3 (known currents), 5 (supermesh) and 7 (constraints) carry real
+   content as soon as the circuit has a CURRENT source: a source on a mesh's outer boundary
+   fixes that mesh current outright (step 3), a source shared by two meshes makes them one
+   supermesh walked as a single loop (step 5) with the source's own current as the constraint
+   that links them (step 7). Without current sources all three say "Nothing to do" — shown,
+   never skipped. Everything from step 6 on works per **group** (a lone mesh, or a supermesh of
+   several) rather than per mesh; a lone mesh is just a group of one, so the voltage-source-only
+   circuits on the §3 page take exactly the path they always did.
 
    Step 2 draws the clockwise loop-arrows and every later step KEEPS them (hl helper `H`
    re-attaches `loops:` to every spec) — the loops are the frame the whole method is read in,
@@ -31,6 +37,7 @@
     var F = mc.F;
     var m = mc.meshes.length;
     var srcs = circuit.edges.filter(function (e) { return e.type === 'V'; });
+    var isrcs = circuit.edges.filter(function (e) { return e.type === 'I'; });
 
     // name each bounded face i1, i2 … in reading order; value from the solved row
     var name = {}, plainName = {}, value = {};
@@ -44,8 +51,12 @@
     var loops = mc.order.map(function (f) { return { nodes: faceNodeIds(f), label: plainName[f] }; });
 
     // Once the loops are drawn (step 2) they stay for the rest of the method — every hl spec
-    // from there on goes through H() so nothing ever removes them.
-    function H(spec) { return extend(spec || {}, { loops: loops }); }
+    // from there on goes through H() so nothing ever removes them. `curLoops` is what H()
+    // stamps at the moment a view is built: steps 2–4 draw one arrow per mesh, but from the
+    // supermesh step (5) through the solve (8) a supermesh is drawn as ONE loop around both
+    // its meshes — that is the whole idea of a supermesh, and it is how the slides draw it.
+    var curLoops = loops;
+    function H(spec) { return extend(spec || {}, { loops: curLoops }); }
 
     var Redges = circuit.edges.filter(function (e) { return e.type === 'R'; });
     var nonWireIds = circuit.edges.filter(function (e) { return e.type !== 'W'; }).map(function (e) { return e.id; });
@@ -63,31 +74,89 @@
     // kept here in element form so the derivation can be written out term by term.
     var T = {};
     mc.order.forEach(function (f) {
-      var t = { self: 0, shared: {}, srcDrop: 0, parts: [], srcs: [] };
+      var t = { self: 0, shared: {}, srcDrop: 0, parts: [], srcs: [], isrcs: [] };
       F.faceList[f].forEach(function (h) {
         var e = circuit.edges[F.H[h].edge], g = F.faceOf[h ^ 1];
         if (e.type === 'R') {
           if (g === f) return;                                   // dead-end/bridge edge inside one mesh → no drop
           t.self += e.value;
-          if (g === F.outer) t.parts.push({ R: e.value, g: null, e: e });
-          else { t.shared[g] = (t.shared[g] || 0) + e.value; t.parts.push({ R: e.value, g: g, e: e }); }
+          if (g === F.outer) t.parts.push({ R: e.value, g: null, e: e, f: f });
+          else { t.shared[g] = (t.shared[g] || 0) + e.value; t.parts.push({ R: e.value, g: g, e: e, f: f }); }
         } else if (e.type === 'V') {
           var drop = (F.H[h].tail === e.a) ? -e.value : e.value;  // a→b is −→+ = a rise (−drop)
           t.srcDrop += drop;
           t.srcs.push({ e: e, drop: drop });
+        } else if (e.type === 'I') {
+          // the voltage across a current source is unknown, so it contributes no term — that
+          // is exactly what step 3 (known current) or step 5 (supermesh) exists to work around.
+          t.isrcs.push({ e: e, g: g === F.outer ? null : g, dir: (F.H[h].tail === e.a) ? 1 : -1 });
         }
       });
       T[f] = t;
     });
 
-    // KVL for one mesh, symbolic: Σ resistor drops (clockwise) + source drop = 0
-    function kvl(f) {
-      var t = T[f];
-      var terms = t.parts.map(function (p) {
-        return p.g === null ? name[f] + '·' + p.R : '(' + name[f] + '−' + name[p.g] + ')·' + p.R;
+    // ---- groups: a lone mesh, or the meshes a shared current source welds into a supermesh.
+    // Everything from step 6 on is written per group; a group of one is an ordinary mesh.
+    var groupOf = {};
+    var G = mc.groups.map(function (grp) {
+      var members = grp.meshes.slice().sort(function (a, b) { return mc.order.indexOf(a) - mc.order.indexOf(b); });
+      var lead = members[0];
+      // each member's current relative to the lead's, walked out along the shared sources
+      var delta = {}; delta[lead] = 0;
+      var guard = 0, changed = true;
+      while (changed && guard++ < 50) {
+        changed = false;
+        grp.srcs.forEach(function (s) {
+          if (s.fa === F.outer || s.fb === F.outer) return;       // boundary source: fixes, links nothing
+          if (delta[s.fa] !== undefined && delta[s.fb] === undefined) { delta[s.fb] = delta[s.fa] - s.e.value; changed = true; }
+          else if (delta[s.fb] !== undefined && delta[s.fa] === undefined) { delta[s.fa] = delta[s.fb] + s.e.value; changed = true; }
+        });
+      }
+      var inside = {}; members.forEach(function (f) { inside[f] = true; });
+      // walking the supermesh means going round the OUTSIDE of the pair: a resistor shared by
+      // two members appears in both walks with opposite signs and cancels, so drop both copies.
+      var parts = [], srcDrop = 0, gsrcs = [];
+      members.forEach(function (f) {
+        T[f].parts.forEach(function (p) { if (!(p.g !== null && inside[p.g])) parts.push(p); });
+        srcDrop += T[f].srcDrop;
+        T[f].srcs.forEach(function (s) { gsrcs.push(s); });
+      });
+      var self = parts.reduce(function (a, p) { return a + p.R; }, 0);
+      var ext = {};   // external mesh → resistance shared with this group
+      parts.forEach(function (p) { if (p.g !== null) ext[p.g] = (ext[p.g] || 0) + p.R; });
+      var o = { meshes: members, lead: lead, delta: delta, fixed: grp.fixed, srcs: grp.srcs,
+        parts: parts, srcDrop: srcDrop, vsrcs: gsrcs, self: self, ext: ext, super: members.length > 1 };
+      members.forEach(function (f) { groupOf[f] = o; });
+      return o;
+    }).sort(function (a, b) { return mc.order.indexOf(a.lead) - mc.order.indexOf(b.lead); });
+
+    function gname(grp) { return grp.meshes.map(function (f) { return name[f]; }).join(' + '); }
+    // one arrow per group: a supermesh gets a single loop spanning both meshes' nodes
+    var groupLoops = G.map(function (grp) {
+      return grp.super
+        ? { nodes: grp.meshes.reduce(function (a, f) { return a.concat(faceNodeIds(f)); }, []),
+          label: grp.meshes.map(function (f) { return plainName[f]; }).join('+'), merged: true }
+        : { nodes: faceNodeIds(grp.lead), label: plainName[grp.lead] };
+    });
+    // a boundary current source fixes its mesh: i_f − 0 = I one way round, 0 − i_f = I the other
+    function fixedSign(f) {
+      var s = groupOf[f].srcs.filter(function (s) { return s.fa === F.outer || s.fb === F.outer; })[0];
+      return s ? { s: s, sign: s.fa === f ? 1 : -1 } : null;
+    }
+    function constraintTxt(s) {
+      var lhs = (s.fa === F.outer ? '0' : name[s.fa]) + ' − ' + (s.fb === F.outer ? '0' : name[s.fb]);
+      return lhs + ' = ' + si(s.e.value, 'A');
+    }
+
+    // KVL around one group, symbolic: Σ resistor drops (clockwise, each written from the member
+    // whose walk meets it) + source drops = 0. For a lone mesh this is the plain mesh equation.
+    function kvl(f) { return kvlG(groupOf[f]); }
+    function kvlG(grp) {
+      var terms = grp.parts.map(function (p) {
+        return p.g === null ? name[p.f] + '·' + p.R : '(' + name[p.f] + '−' + name[p.g] + ')·' + p.R;
       });
       var s = terms.join(' + ');
-      if (t.srcDrop) s += (t.srcDrop > 0 ? ' + ' : ' − ') + Math.abs(t.srcDrop);
+      if (grp.srcDrop) s += (grp.srcDrop > 0 ? ' + ' : ' − ') + Math.abs(grp.srcDrop);
       return s + ' = 0';
     }
 
@@ -111,12 +180,26 @@
         ')</th></tr></thead><tbody><tr><td>' + (list.length ? list.map(function (f) { return name[f]; }).join(', ') : '— none —') + '</td></tr></tbody></table></div>';
     }
 
-    // power from mesh currents (independent of the node-voltage path). Each source delivers
-    // V·I out of its + terminal; summed over all sources this equals Σi²R (energy balance).
+    // The voltage across a current source is whatever the rest of its loop makes it: walk that
+    // loop, add up every other drop, and the source must supply the negative of the total (KVL) —
+    // the PPT's step 9. Only decidable when the loop holds a single current source.
+    function iSrcVoltage(s) {
+      var f = s.fa !== F.outer ? s.fa : s.fb;
+      if (f === F.outer || T[f].isrcs.length !== 1) return null;
+      var sum = T[f].srcDrop;
+      T[f].parts.forEach(function (p) { sum += p.R * (value[f] - (p.g === null ? 0 : value[p.g])); });
+      var dir = T[f].isrcs[0].dir;             // +1 when the clockwise walk crosses the source a→b
+      return { f: f, v: -sum, power: -sum * dir * s.e.value };   // power absorbed, negative ⇒ generating
+    }
+
+    // power from mesh currents (independent of the node-voltage path). A voltage source delivers
+    // V·I out of its + terminal, a current source I·v across itself; summed over every source
+    // this equals Σi²R (energy balance).
     var diss = 0;
     Redges.forEach(function (e) { diss += Math.pow(mc.edgeCurrent[e.id], 2) * e.value; });
     var gen = 0;
     srcs.forEach(function (e) { gen += e.value * mc.edgeCurrent[e.id]; }); // a→b current out of + terminal (b)
+    mc.iSources.forEach(function (s) { var r = iSrcVoltage(s); if (r) gen += -r.power; });
     var pcOk = Math.abs(gen - diss) <= 1e-6 * (Math.abs(gen) + diss + 1);
 
     var steps = [];
@@ -126,7 +209,8 @@
       n: 1, title: 'Redraw the circuit',
       body: 'Identify every element and the ' + m + ' mesh' + (m === 1 ? '' : 'es') + ' — the “window-pane” loop' +
         (m === 1 ? '' : 's') + ' of the circuit as drawn. ' + Redges.length + ' resistor' + (Redges.length === 1 ? '' : 's') +
-        ' and ' + srcs.length + ' voltage source' + (srcs.length === 1 ? '' : 's') + '. Ignore branch currents for now.',
+        ', ' + srcs.length + ' voltage source' + (srcs.length === 1 ? '' : 's') +
+        ' and ' + isrcs.length + ' current source' + (isrcs.length === 1 ? '' : 's') + '. Ignore branch currents for now.',
       hl: {},
     });
 
@@ -145,15 +229,45 @@
           ? ' It shares ' + sh.map(function (g) { return T[f].shared[g] + ' Ω with ' + name[g]; }).join(' and ') +
             ' — those resistors carry the difference of the two loop currents.'
           : ' It shares no resistor with another mesh.';
+        if (T[f].isrcs.length) body += ' A <b>current source</b> sits on this loop, so its current is dictated, not free — that is what steps 3 and 5 are about.';
         return { title: 'mesh ' + name[f], body: body, hl: H({ edges: ids, nodes: faceNodeIds(f) }) };
       }),
     });
 
+    // Step 3 — a current source that borders one mesh only (its other side is outside the
+    // circuit) IS that mesh's current: nothing to solve for it, it goes straight on the board.
+    // one substep per mesh that a boundary source pins directly; any further meshes welded to
+    // it by another current source come along with it (same group, values from the engine).
+    var fixedMeshes = [];
+    G.forEach(function (grp) { if (grp.fixed) grp.meshes.forEach(function (f) { if (fixedSign(f)) fixedMeshes.push(f); }); });
     steps.push({
-      n: 3, title: 'Identify known currents', todo: true,
-      body: 'A mesh current is known outright when a current source borders only that mesh. This network has no current sources, so every mesh current is still unknown.',
-      hl: H({}),
+      n: 3, title: 'Identify known currents', todo: fixedMeshes.length === 0,
+      body: fixedMeshes.length
+        ? 'A current source on a mesh’s outer boundary dictates that whole loop current — no equation needed. ' +
+          fixedMeshes.length + ' mesh current' + (fixedMeshes.length === 1 ? ' is' : 's are') + ' known outright here. Step through each.'
+        : 'A mesh current is known outright when a current source borders only that mesh. This network has no current sources, so every mesh current is still unknown.',
+      eq: fixedMeshes.map(function (f) { return name[f] + ' = ' + si(value[f], 'A'); }),
+      hl: H({ edges: fixedMeshes.reduce(function (a, f) { return a.concat(faceEdgeIds(f)); }, []) }),
+      subs: fixedMeshes.map(function (f) {
+        var fs = fixedSign(f), s = fs && fs.s;
+        var body = 'The ' + si(s.e.value, 'A') + ' source lies on mesh <b>' + name[f] + '</b>’s boundary and on no other loop, so every bit of its current is ' +
+          name[f] + '. Its arrow runs ' + (fs.sign > 0 ? 'the same way as' : 'against') + ' the clockwise loop, so ' + name[f] + ' = ' +
+          (fs.sign > 0 ? '' : '−') + si(s.e.value, 'A') + '.' +
+          grpFixedNote(f);
+        groupOf[f].meshes.forEach(function (g) { board[g] = si(value[g], 'A'); });
+        return { title: 'mesh ' + name[f], body: body, board: boardHtml(),
+          eq: [constraintTxt(s), name[f] + ' = ' + si(value[f], 'A')],
+          hl: H({ edges: [s.e.id].concat(faceEdgeIds(f)), nodes: faceNodeIds(f) }) };
+      }),
     });
+    // a fixed group of more than one mesh is possible in principle (a chain of current sources
+    // hanging off a boundary one); the values still come from the engine, so just say so.
+    function grpFixedNote(f) {
+      var grp = groupOf[f];
+      return grp.meshes.length > 1 ? ' The other mesh' + (grp.meshes.length > 2 ? 'es' : '') + ' in this group (' +
+        grp.meshes.filter(function (g) { return g !== f; }).map(function (g) { return name[g]; }).join(', ') +
+        ') follow from the sources linking them.' : '';
+    }
 
     // Step 4 — polarities. Walked MESH BY MESH, then resistor by resistor inside that mesh, because
     // the whole difficulty of the method is that a shared resistor is written differently depending
@@ -194,6 +308,21 @@
         if (first === undefined) seenIn[p.e.id] = f;
         polSubs.push({ title: name[f] + ' · ' + si(p.R, 'Ω'), body: body, eq: eq, hl: H({ edges: [p.e.id], nodes: faceNodeIds(f) }) });
       });
+      // a current source met on the walk: no drop to mark, because its voltage is whatever the
+      // rest of the circuit makes it. Saying that here is what motivates steps 3 and 5.
+      t.isrcs.forEach(function (s) {
+        polSubs.push({
+          title: name[f] + ' · ' + si(s.e.value, 'A') + ' source',
+          body: 'The ' + si(s.e.value, 'A') + ' source on this loop has <b>no known voltage across it</b> — it forces its current and lets the circuit settle whatever voltage that takes. So there is no drop to write for it in mesh ' +
+            name[f] + '’s equation. ' + (s.g === null
+              ? 'It borders only this mesh, so instead it hands us ' + name[f] + ' directly (step 3).'
+              : 'It is shared with mesh ' + name[s.g] + ', so those two loops must be walked together as a supermesh (step 5).'),
+          eq: ['v across the source: unknown',
+            s.g === null ? name[f] + ' = ' + (fixedSign(f) && fixedSign(f).sign > 0 ? '' : '−') + si(s.e.value, 'A')
+              : name[f] + ' − ' + name[s.g] + ' = ' + (s.dir > 0 ? '' : '−') + si(s.e.value, 'A')],
+          hl: H({ edges: [s.e.id], nodes: faceNodeIds(f) }),
+        });
+      });
     });
     Redges.filter(function (e) { return !meshesOf(e).length; }).forEach(function (e) {
       polSubs.push({
@@ -211,74 +340,142 @@
       subs: polSubs,
     });
 
+    // Step 5 — two meshes sharing a current source can't be walked separately (its voltage is
+    // unknown), so they become ONE loop walked around the outside of the pair: the supermesh.
+    // From here to the end of the solve that is also what the drawing shows.
+    curLoops = groupLoops;
+    var supers = G.filter(function (grp) { return grp.super; });
     steps.push({
-      n: 5, title: 'Identify supermesh(es)', todo: true,
-      body: 'A supermesh forms when a current source is shared between two meshes — you then walk KVL around the pair and add the source as a constraint. There are no current sources here, so no supermesh forms.',
-      hl: H({}),
+      n: 5, title: 'Identify supermesh(es)', todo: supers.length === 0,
+      body: supers.length
+        ? 'A current source shared by two meshes belongs to both loops, and nobody knows the voltage across it — so neither mesh can be walked on its own. Enclose the pair and walk KVL around the <b>outside</b> of it: the shared branch is never crossed, so the unknown voltage never appears. ' +
+          supers.length + ' supermesh' + (supers.length === 1 ? '' : 'es') + ' here: ' + supers.map(gname).join(', ') +
+          '. The source itself comes back in step 7 as the constraint linking the two currents.'
+        : 'A supermesh forms when a current source is shared between two meshes — you then walk KVL around the pair and add the source as a constraint. No current source is shared between meshes here, so no supermesh forms.',
+      eq: supers.map(function (grp) { return 'supermesh ' + gname(grp) + ':  ' + kvlG(grp); }),
+      hl: H({ edges: supers.reduce(function (a, grp) { return a.concat(grp.meshes.reduce(function (b, f) { return b.concat(faceEdgeIds(f)); }, [])); }, []) }),
+      subs: supers.map(function (grp) {
+        var inner = grp.srcs.filter(function (s) { return s.fa !== F.outer && s.fb !== F.outer; });
+        return {
+          title: 'supermesh ' + gname(grp),
+          body: 'Meshes <b>' + grp.meshes.map(function (f) { return name[f]; }).join('</b> and <b>') + '</b> share ' +
+            (inner.length === 1 ? 'the ' + si(inner[0].e.value, 'A') + ' source' : inner.length + ' current sources') +
+            ', so they are treated as a single loop. Walk it clockwise around the outside — the shared branch drops out — and everything else is written exactly as before: ' +
+            grp.parts.length + ' resistor' + (grp.parts.length === 1 ? '' : 's') + ' and ' + grp.vsrcs.length + ' voltage source' + (grp.vsrcs.length === 1 ? '' : 's') + ' on the way round.',
+          eq: [kvlG(grp)].concat(inner.map(constraintTxt)),
+          hl: H({ edges: grp.meshes.reduce(function (a, f) { return a.concat(faceEdgeIds(f)); }, []),
+            nodes: grp.meshes.reduce(function (a, f) { return a.concat(faceNodeIds(f)); }, []) }),
+        };
+      }),
     });
 
     // Step 6 — BUILD the equations. No arithmetic here, and no equation appears whole out of
     // nowhere: each mesh's walk adds ONE term per substep — the same drops just marked in step 4,
     // in the order you meet them going clockwise — and only the last substep closes it with "= 0".
     var eqSubs = [];
-    mc.order.forEach(function (f) {
-      var t = T[f], sh = Object.keys(t.shared), run = [];
-      var hlF = H({ edges: faceEdgeIds(f), nodes: faceNodeIds(f) });
+    var eqGroups = G.filter(function (grp) { return !grp.fixed; });    // fixed ones need no equation
+    G.forEach(function (grp) {
+      var gn = gname(grp), what = grp.super ? 'supermesh' : 'mesh', run = [];
+      var gEdges = grp.meshes.reduce(function (a, f) { return a.concat(faceEdgeIds(f)); }, []);
+      var gNodes = grp.meshes.reduce(function (a, f) { return a.concat(faceNodeIds(f)); }, []);
+      var hlF = H({ edges: gEdges, nodes: gNodes });
       function partial() { return run.join(' + ') + ' …'; }
+
+      if (grp.fixed) {   // the PPT's "Mesh 1: i₁ = 30 A because the current in the branch is known"
+        grp.meshes.forEach(function (f) { board[f] = si(value[f], 'A'); });
+        eqSubs.push({
+          title: gn + ' — no equation needed',
+          body: 'Mesh <b>' + gn + '</b>’s current was handed to us by its current source in step 3, so it gets no KVL equation — the value itself is the equation.', board: boardHtml(),
+          eq: grp.meshes.map(function (f) { return name[f] + ' = ' + si(value[f], 'A'); }),
+          hl: hlF,
+        });
+        return;
+      }
+
       eqSubs.push({
-        title: name[f] + ' — start the walk',
-        body: 'Start anywhere on mesh <b>' + name[f] + '</b> and go <b>clockwise</b>, adding one term for every element you meet — exactly the drops marked in step 4. The equation is built one term at a time; it is only set to zero once the walk closes.', board: boardHtml(),
+        title: gn + ' — start the walk',
+        body: 'Start anywhere on ' + what + ' <b>' + gn + '</b> and go <b>clockwise</b>, adding one term for every element you meet — exactly the drops marked in step 4. The equation is built one term at a time; it is only set to zero once the walk closes.' +
+          (grp.super ? ' Because this is a supermesh, the walk goes round the <b>outside</b> of both loops: the shared current source is never crossed, so its unknown voltage never appears.' : ''), board: boardHtml(),
         hl: hlF,
       });
-      t.parts.forEach(function (p) {
-        run.push(p.g === null ? name[f] + '·' + p.R : '(' + name[f] + '−' + name[p.g] + ')·' + p.R);
+      grp.parts.forEach(function (p) {
+        var own = name[p.f];                       // which member's loop this drop belongs to
+        run.push(p.g === null ? own + '·' + p.R : '(' + own + '−' + name[p.g] + ')·' + p.R);
         eqSubs.push({
-          title: name[f] + ' · add ' + si(p.R, 'Ω'),
+          title: own + ' · add ' + si(p.R, 'Ω'),
           body: p.g === null
-            ? 'Next element: the ' + si(p.R, 'Ω') + ' resistor on the outside boundary. Only ' + name[f] + ' flows in it, so it adds a drop of ' + p.R + '·' + name[f] + '.'
-            : 'Next element: the ' + si(p.R, 'Ω') + ' resistor shared with mesh ' + name[p.g] + '. Walking <i>this</i> mesh, the current in it is ' + name[f] + ' − ' + name[p.g] +
-              ', so it adds (' + name[f] + '−' + name[p.g] + ')·' + p.R + '. Mesh ' + name[p.g] + '’s own equation will write the same resistor the other way round.',
-          eq: [partial()], hl: H({ edges: [p.e.id], nodes: faceNodeIds(f) }), board: boardHtml(),
+            ? 'Next element: the ' + si(p.R, 'Ω') + ' resistor on the outside boundary. Only ' + own + ' flows in it, so it adds a drop of ' + p.R + '·' + own + '.'
+            : 'Next element: the ' + si(p.R, 'Ω') + ' resistor shared with mesh ' + name[p.g] + '. Walking <i>this</i> loop, the current in it is ' + own + ' − ' + name[p.g] +
+              ', so it adds (' + own + '−' + name[p.g] + ')·' + p.R + '. Mesh ' + name[p.g] + '’s own equation will write the same resistor the other way round.',
+          eq: [partial()], hl: H({ edges: [p.e.id], nodes: gNodes }), board: boardHtml(),
         });
       });
-      t.srcs.forEach(function (s) {
+      grp.vsrcs.forEach(function (s) {
         run.push((s.drop > 0 ? '+ ' : '− ') + Math.abs(s.drop));
         eqSubs.push({
-          title: name[f] + ' · add ' + si(s.e.value, 'V') + ' source',
+          title: gn + ' · add ' + si(s.e.value, 'V') + ' source',
           body: 'Next element: the ' + si(s.e.value, 'V') + ' source. Going clockwise we cross it ' +
             (s.drop < 0 ? 'from − to +, which is a <b>rise</b>, so it enters the sum of drops as −' + Math.abs(s.drop)
               : 'from + to −, which is a <b>drop</b>, so it enters as +' + Math.abs(s.drop)) + '.', board: boardHtml(),
           eq: [run.slice(0, -1).join(' + ') + ' ' + run[run.length - 1] + ' …'],
-          hl: H({ edges: [s.e.id], nodes: faceNodeIds(f) }),
+          hl: H({ edges: [s.e.id], nodes: gNodes }),
         });
       });
+      var sh = Object.keys(grp.ext);
       var tail = sh.length
         ? ' ' + (sh.length === 1 ? 'Neighbour ' + name[sh[0]] + ' is' : 'Neighbours ' + sh.map(function (g) { return name[g]; }).join(', ') + ' are') +
-          ' still unknown too, so ' + (sh.length === 1 ? 'its symbol stays' : 'their symbols stay') + ' in the equation — mesh ' + name[f] +
+          ' still unknown too, so ' + (sh.length === 1 ? 'its symbol stays' : 'their symbols stay') + ' in the equation — ' + what + ' ' + gn +
           ' can’t be found on its own until we know ' + (sh.length === 1 ? 'that current' : 'those currents') + '.'
-        : ' Nothing else is unknown in it, so ' + name[f] + ' solves in one shot in step 8.';
-      board[f] = kvl(f);
+        : ' Nothing else is unknown in it, so ' + gn + ' solves in one shot in step 8.';
+      if (grp.super) tail += ' One equation for two loop currents is one short — step 7 supplies the missing one.';
+      board[grp.lead] = kvlG(grp);
       eqSubs.push({
-        title: name[f] + ' — close the loop',
-        body: 'The walk is back where it started, so every drop around mesh <b>' + name[f] +
-          '</b> has been counted — by KVL they sum to zero. That is ' + name[f] + '’s equation, and it goes on the board.' + tail, board: boardHtml(),
-        eq: [kvl(f)], hl: hlF,
+        title: gn + ' — close the loop',
+        body: 'The walk is back where it started, so every drop around ' + what + ' <b>' + gn +
+          '</b> has been counted — by KVL they sum to zero. That is its equation, and it goes on the board.' + tail, board: boardHtml(),
+        eq: [kvlG(grp)], hl: hlF,
       });
     });
 
     steps.push(WB({
       n: 6, title: 'Mesh-current equations  (Σ voltages = 0)',
-      body: 'One equation per mesh — walk clockwise around it, add up every voltage drop and set the total to zero (Kirchhoff’s voltage law). That is <b>' + m + '</b> equation' + (m === 1 ? '' : 's') +
-        ' to build. Step through each mesh to see how its equation is put together; the solving is step 8.',
-      eq: mc.order.map(function (f) { return name[f] + ':  ' + kvl(f); }),
+      body: 'One equation per loop that still has an unknown current — walk clockwise around it, add up every voltage drop and set the total to zero (Kirchhoff’s voltage law). That is <b>' + eqGroups.length + '</b> equation' + (eqGroups.length === 1 ? '' : 's') +
+        (fixedMeshes.length ? ' (the mesh' + (fixedMeshes.length === 1 ? '' : 'es') + ' fixed in step 3 need none)' : '') +
+        ' to build. Step through each loop to see how its equation is put together; the solving is step 8.',
+      eq: G.map(function (grp) {
+        return grp.fixed ? gname(grp) + ':  ' + grp.meshes.map(function (f) { return name[f] + ' = ' + si(value[f], 'A'); }).join(', ')
+          : (grp.super ? 'supermesh ' : '') + gname(grp) + ':  ' + kvlG(grp);
+      }),
       hl: H({ edges: nonWireIds }),
       subs: eqSubs,
     }));
 
+    // Step 7 — the current source left out of the supermesh walk comes back here: its own
+    // current is the difference of the two loop currents, which is the equation that makes the
+    // count add up again. (Dependent-source control variables land here too, later.)
+    var constraints = mc.iSources.filter(function (s) { return s.fa !== F.outer && s.fb !== F.outer; });
+    constraints.forEach(function (s) {
+      var other = groupOf[s.fa].lead === s.fa ? s.fb : s.fa;    // the member the lead is solved against
+      if (board[other] === '?') board[other] = constraintTxt(s);
+    });
     steps.push(WB({
-      n: 7, title: 'Constraint equations', todo: true,
-      body: 'Constraints link the currents of a supermesh and express dependent-source control variables. This network has neither.',
-      hl: H({}),
+      n: 7, title: 'Constraint equations', todo: constraints.length === 0,
+      body: constraints.length
+        ? 'Bring the shared current source back. Its current <i>is</i> the difference between the two loop currents it sits between, so it hands us one more equation — exactly the one the supermesh cost us. ' +
+          constraints.length + ' constraint' + (constraints.length === 1 ? '' : 's') + ' here.'
+        : 'Constraints link the currents of a supermesh and express dependent-source control variables. This network has neither.',
+      eq: constraints.map(constraintTxt),
+      hl: H({ edges: constraints.map(function (s) { return s.e.id; }) }),
+      subs: constraints.map(function (s) {
+        return {
+          title: si(s.e.value, 'A') + ' source constraint',
+          body: 'The ' + si(s.e.value, 'A') + ' source lies between meshes <b>' + name[s.fa] + '</b> and <b>' + name[s.fb] +
+            '</b>. Its arrow runs the way ' + name[s.fa] + ' does and against ' + name[s.fb] + ', so the current it forces is ' +
+            name[s.fa] + ' − ' + name[s.fb] + '. That is the second equation for the pair.', board: boardHtml(),
+          eq: [constraintTxt(s)],
+          hl: H({ edges: [s.e.id] }),
+        };
+      }),
     }));
 
     // ---- Step 8 — SOLVE. Same algebra as KCL step 8, one mesh at a time:
@@ -311,52 +508,122 @@
     var solveSubs = [];
     var boardAtStart = boardHtml();
     if (m) (function () {
-      // --- per-mesh derivation: the same four moves KCL uses on a node ---
-      mc.order.forEach(function (f) {
-        var t = T[f], nf = name[f], sh = Object.keys(t.shared);
-        var lineWrite = kvl(f);
-        var lineMult = t.parts.map(function (p) { return p.R + '·' + nf; }).join(' + ') +
-          t.parts.map(function (p) { return p.g === null ? '' : ' − ' + p.R + '·' + name[p.g]; }).join('') +
-          (t.srcDrop ? (t.srcDrop > 0 ? ' + ' : ' − ') + Math.abs(t.srcDrop) : '') + ' = 0';
-        var k = round(-t.srcDrop);
-        var rhs = sh.map(function (g) { return t.shared[g] + '·' + name[g]; });
+      // --- per-group derivation: the same four moves KCL uses on a node. A supermesh first
+      // uses its constraint to write both loop currents as one symbol, then rearranges
+      // identically — so the extra machinery is one line of algebra, not a second method. ---
+      G.forEach(function (grp) {
+        var gn = gname(grp), lead = grp.lead, nl = name[lead], sh = Object.keys(grp.ext);
+        var hl = H({ edges: grp.meshes.reduce(function (a, f) { return a.concat(faceEdgeIds(f)); }, []),
+          nodes: grp.meshes.reduce(function (a, f) { return a.concat(faceNodeIds(f)); }, []) });
+
+        if (grp.fixed) {   // step 3 already read these straight off the current source
+          grp.meshes.forEach(function (f) { expr[f] = { c: value[f], t: {} }; board[f] = si(value[f], 'A'); });
+          solveSubs.push(WB({
+            title: 'mesh ' + gn + ' — nothing to solve',
+            body: 'Mesh <b>' + gn + '</b> was fixed by its current source in step 3, so there is no equation to rearrange — it is already a number, and it feeds every equation that mentions it.',
+            eq: grp.meshes.map(function (f) { return name[f] + ' = ' + si(value[f], 'A'); }),
+            hl: hl,
+          }));
+          return;
+        }
+
+        var chain = [], what8 = grp.super ? 'supermesh ' : 'mesh ';
+        function step(title, body, line) { chain.push(line); solveSubs.push({ title: what8 + gn + ' — ' + title, body: body, board: boardHtml(), eq: chain.slice(), hl: hl }); }
+
+        // every member's current in terms of the lead's: i_member = i_lead + δ
+        function inTermsOfLead(f) {
+          var d = round(grp.delta[f]);
+          return d === 0 ? nl : '(' + nl + (d > 0 ? ' + ' : ' − ') + Math.abs(d) + ')';
+        }
+        var dsum = grp.parts.reduce(function (a, p) { return a + p.R * grp.delta[p.f]; }, 0);
+        var lineWrite = kvlG(grp);
+        var lineSub = grp.parts.map(function (p) {
+          return p.g === null ? inTermsOfLead(p.f) + '·' + p.R : '(' + inTermsOfLead(p.f) + '−' + name[p.g] + ')·' + p.R;
+        }).join(' + ') + (grp.srcDrop ? (grp.srcDrop > 0 ? ' + ' : ' − ') + Math.abs(grp.srcDrop) : '') + ' = 0';
+        var lineMult = grp.parts.map(function (p) { return p.R + '·' + nl; }).join(' + ') +
+          grp.parts.map(function (p) { return p.g === null ? '' : ' − ' + p.R + '·' + name[p.g]; }).join('') +
+          (round(dsum) ? (dsum > 0 ? ' + ' : ' − ') + Math.abs(round(dsum)) : '') +
+          (grp.srcDrop ? (grp.srcDrop > 0 ? ' + ' : ' − ') + Math.abs(grp.srcDrop) : '') + ' = 0';
+        var k = round(-grp.srcDrop - dsum);
+        var rhs = sh.map(function (g) { return grp.ext[g] + '·' + name[g]; });
         if (k || !rhs.length) rhs.unshift(num(k));
-        var lineCollect = t.self + '·' + nf + ' = ' + rhs.join(' + ');
+        var lineCollect = grp.self + '·' + nl + ' = ' + rhs.join(' + ');
 
-        expr[f] = { c: round(-t.srcDrop) / t.self, t: {} };
-        sh.forEach(function (g) { expr[f].t[g] = t.shared[g] / t.self; });
-
-        var hl = H({ edges: faceEdgeIds(f), nodes: faceNodeIds(f) });
-        var chain = [];
-        function step(title, body, line) { chain.push(line); solveSubs.push({ title: 'mesh ' + nf + ' — ' + title, body: body, board: boardHtml(), eq: chain.slice(), hl: hl }); }
+        expr[lead] = { c: k / grp.self, t: {} };
+        sh.forEach(function (g) { expr[lead].t[g] = grp.ext[g] / grp.self; });
 
         solveSubs.push(WB({
-          title: 'mesh ' + nf + (sh.length ? ' — linked to ' + sh.map(function (g) { return name[g]; }).join(', ') : ' — on its own'),
-          body: sh.length
-            ? 'Mesh <b>' + nf + '</b> shares a resistor with ' + sh.map(function (g) { return name[g]; }).join(' and ') +
-              ', so its equation still mentions another unknown — it can’t be finished on its own yet, but it rearranges the same way as any other. Each move stacks under the last.'
-            : 'Mesh <b>' + nf + '</b>’s equation has only one unknown in it, so it solves in one shot. Each move stacks under the last so you can watch it simplify.',
+          title: what8 + gn + (sh.length ? ' — linked to ' + sh.map(function (g) { return name[g]; }).join(', ') : ' — on its own'),
+          body: (grp.super
+            ? 'Supermesh <b>' + gn + '</b> has one equation but two loop currents, so start by using the constraint from step 7 to write both as ' + nl + '. '
+            : 'Mesh <b>' + gn + '</b>') +
+            (sh.length
+              ? (grp.super ? 'It' : '</b> shares a resistor with ' + sh.map(function (g) { return name[g]; }).join(' and ') + ', so its equation') +
+                ' still mentions another unknown — it can’t be finished on its own yet, but it rearranges the same way as any other. Each move stacks under the last.'
+              : (grp.super ? 'Nothing else in it is unknown, so it solves in one shot.' : '</b>’s equation has only one unknown in it, so it solves in one shot.') +
+                ' Each move stacks under the last so you can watch it simplify.'),
           hl: hl,
         }));
-        step('write the equation', 'Mesh ' + nf + '’s equation from step 6.', lineWrite);
-        step('multiply out', 'Multiply each bracket out — every drop becomes a resistance times a single loop current.', lineMult);
-        step('collect ' + nf, 'Gather the ' + nf + ' terms on the left (they add up to the mesh’s total resistance, ' + t.self + ' Ω) and move everything else to the right.', lineCollect);
-        if (sh.length) {
-          board[f] = nf + ' = ' + fmtExpr(expr[f]);
-          step('divide', 'Divide both sides by ' + t.self + ' — ' + nf + ' is now amps plus a plain ratio of its still-unknown neighbour' + (sh.length === 1 ? '' : 's') + ' (a resistance over a resistance, so the ratio has no units).', nf + ' = ' + fmtExpr(expr[f]));
-        } else {
-          step('divide', 'Divide both sides by ' + t.self + ' Ω.', nf + ' = ' + frac(num(k), t.self));
-          board[f] = si(value[f], 'A');
-          chain.push(nf + ' = ' + si(value[f], 'A'));
-          solveSubs.push({
-            title: 'mesh ' + nf + ' — answer', eq: chain.slice(), hl: hl,
-            body: 'That is mesh ' + nf + '’s current — a known value from here on.', board: boardHtml(),
+        step('write the equation', (grp.super ? 'Supermesh ' : 'Mesh ') + gn + '’s equation from step 6.', lineWrite);
+        if (grp.super) {
+          grp.meshes.filter(function (f) { return f !== lead; }).forEach(function (f) {
+            var d = round(grp.delta[f]);
+            step('use the constraint', 'The constraint says ' + name[f] + ' = ' + nl + (d > 0 ? ' + ' : ' − ') + Math.abs(d) +
+              ' (that is the ' + si(Math.abs(d), 'A') + ' the shared source forces). Put that in wherever ' + name[f] +
+              ' appears, and the whole supermesh is written in ' + nl + ' alone.', lineSub);
           });
         }
+        step('multiply out', 'Multiply each bracket out — every drop becomes a resistance times a single loop current.', lineMult);
+        step('collect ' + nl, 'Gather the ' + nl + ' terms on the left (they add up to the loop’s total resistance, ' + grp.self + ' Ω) and move everything else to the right.', lineCollect);
+        if (sh.length) {
+          board[lead] = nl + ' = ' + fmtExpr(expr[lead]);
+          step('divide', 'Divide both sides by ' + grp.self + ' — ' + nl + ' is now amps plus a plain ratio of its still-unknown neighbour' + (sh.length === 1 ? '' : 's') + ' (a resistance over a resistance, so the ratio has no units).', nl + ' = ' + fmtExpr(expr[lead]));
+        } else {
+          step('divide', 'Divide both sides by ' + grp.self + ' Ω.', nl + ' = ' + frac(num(k), grp.self));
+          board[lead] = si(value[lead], 'A');
+          chain.push(nl + ' = ' + si(value[lead], 'A'));
+          solveSubs.push({
+            title: 'mesh ' + nl + ' — answer', eq: chain.slice(), hl: hl,
+            body: 'That is mesh ' + nl + '’s current — a known value from here on.', board: boardHtml(),
+          });
+        }
+        // the other members of a supermesh ride on the lead, constraint by constraint
+        grp.meshes.filter(function (f) { return f !== lead; }).forEach(function (f) {
+          var d = round(grp.delta[f]);
+          expr[f] = { c: expr[lead].c + grp.delta[f], t: extend(expr[lead].t, {}) };
+          board[f] = name[f] + ' = ' + fmtExpr(expr[f]);
+          solveSubs.push({
+            title: 'mesh ' + name[f] + ' — from the constraint',
+            body: 'And ' + name[f] + ' follows from the same constraint: whatever ' + nl + ' turns out to be, ' + name[f] + ' is ' +
+              si(Math.abs(d), 'A') + (d > 0 ? ' more' : ' less') + '.', board: boardHtml(),
+            eq: [name[f] + ' = ' + nl + (d > 0 ? ' + ' : ' − ') + Math.abs(d), name[f] + ' = ' + fmtExpr(expr[f])],
+            hl: hl,
+          });
+        });
       });
 
-      // --- substitute the expressions into one another until one mesh falls out as a number ---
-      var pool = mc.order.filter(function (f) { return Object.keys(expr[f].t).length || m > 1; });
+      // --- a mesh already fixed by a current source is a number: put it into every line that
+      // mentions it before anything else (the PPT's 40·(i₂−i₁) with i₁ = 30 A) ---
+      mc.order.filter(function (f) { return groupOf[f].fixed; }).forEach(function (p) {
+        mc.order.forEach(function (q) {
+          if (q === p || !(p in expr[q].t)) return;
+          var beforeLine = fmtExpr(expr[q]);
+          var coef = expr[q].t[p]; delete expr[q].t[p];
+          expr[q].c += coef * expr[p].c;
+          cleanT(expr[q]); snap(q);
+          board[q] = name[q] + ' = ' + fmtExpr(expr[q]);
+          solveSubs.push({
+            title: 'put ' + name[p] + ' into ' + name[q],
+            body: 'Mesh <b>' + name[q] + '</b>’s line still mentions ' + name[p] + ', and that one is already known (' +
+              si(value[p], 'A') + ' from step 3) — put the number in.', board: boardHtml(),
+            eq: [name[q] + ' = ' + beforeLine, name[q] + ' = ' + fmtExpr(expr[q])],
+            hl: H({ edges: faceEdgeIds(q), nodes: faceNodeIds(q) }),
+          });
+        });
+      });
+
+      // --- substitute the remaining expressions into one another until one falls out ---
+      var pool = mc.order.filter(function (f) { return Object.keys(expr[f].t).length; });
       if (pool.length > 1) {
         solveSubs.push({
           title: 'a linked system',
@@ -445,7 +712,7 @@
 
     steps.push(WB({
       n: 8, title: 'Solve the equations',
-      body: (m ? 'Solve the ' + m + ' equation' + (m === 1 ? '' : 's') + ' from step 6 with Ohm’s law only — multiply out, collect the loop current, divide. ' +
+      body: (m ? 'Solve the ' + eqGroups.length + ' equation' + (eqGroups.length === 1 ? '' : 's') + ' from step 6 with Ohm’s law only — multiply out, collect the loop current, divide. ' +
         (m === 1 ? 'One mesh, one unknown: it falls straight out.'
           : 'That leaves each mesh as amps plus a ratio of its neighbours; substitute those into one another until one is a number, then work back.') + ' Step through mesh by mesh.'
         : 'Nothing to solve — this network has no mesh.'), board: boardAtStart,
@@ -453,13 +720,18 @@
       hl: H({}),
       subs: solveSubs,
     }));
+    curLoops = loops;      // back to one arrow per mesh: steps 9–10 are about branch currents
 
     // Step 9 — branch currents, one substep per element
     steps.push(WB({
       n: 9, title: 'Branch currents from mesh currents',
       body: 'A resistor between two meshes carries the difference of their currents; a boundary element carries its single mesh current. Step through every element.', board: boardHtml(),
       eq: Redges.map(function (e) { return 'i(' + si(e.value, 'Ω') + ') = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A'); })
-        .concat(srcs.map(function (e) { return 'i(' + si(e.value, 'V') + ' source) = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A'); })),
+        .concat(srcs.map(function (e) { return 'i(' + si(e.value, 'V') + ' source) = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A'); }))
+        .concat(mc.iSources.map(function (s) {
+          var r = iSrcVoltage(s);
+          return 'v(' + si(s.e.value, 'A') + ' source) = ' + (r ? si(Math.abs(r.v), 'V') : 'from the node voltages');
+        })),
       hl: H({ edges: nonWireIds }),
       subs: Redges.concat(srcs).map(function (e) {
         var fs = meshesOf(e), i = Math.abs(mc.edgeCurrent[e.id]);
@@ -477,7 +749,22 @@
           eq = ['i = 0 A'];
         }
         return { title: what, body: body, board: boardHtml(), eq: eq, hl: H({ edges: [e.id] }) };
-      }),
+      }).concat(mc.iSources.map(function (s) {
+        // a current source's current was never in doubt — its VOLTAGE is what the circuit
+        // decides, and KVL round its loop is the only way to get it (PPT step 9).
+        var r = iSrcVoltage(s), fs = meshesOf(s.e);
+        var body = 'The ' + si(s.e.value, 'A') + ' source carries its own current by definition — ' +
+          (fs.length === 2 ? 'and that current is the difference of meshes <b>' + name[fs[0]] + '</b> and <b>' + name[fs[1]] + '</b>, which is what the constraint in step 7 said. '
+            : 'it <i>is</i> mesh <b>' + name[fs[0]] + '</b>’s current. ') +
+          'What we do not know yet is the voltage across it: ' +
+          (r ? 'walk mesh ' + name[r.f] + ' with every mesh current now known, add up the other drops, and the source must supply the rest.'
+            : 'this loop holds more than one current source, so read its voltage off the node voltages instead.');
+        return {
+          title: si(s.e.value, 'A') + ' source', body: body, board: boardHtml(),
+          eq: ['i = ' + si(s.e.value, 'A')].concat(r ? ['v = ' + si(Math.abs(r.v), 'V')] : []),
+          hl: H({ edges: [s.e.id].concat(r ? faceEdgeIds(r.f) : []), nodes: r ? faceNodeIds(r.f) : [] }),
+        };
+      })),
     }));
 
     // Step 10 — power check, one substep per element then the balance
@@ -496,6 +783,15 @@
         body: (p >= 0 ? 'This source delivers' : 'This source absorbs') + ' power P = V·i.',
         eq: ['P = ' + si(e.value, 'V') + '·' + si(Math.abs(mc.edgeCurrent[e.id]), 'A') + ' = ' + si(Math.abs(p), 'W') + (p >= 0 ? ' delivered' : ' absorbed')],
         hl: H({ edges: [e.id] }),
+      });
+    })).concat(mc.iSources.map(function (s) {
+      var r = iSrcVoltage(s), p = r ? -r.power : 0;
+      return WB({
+        title: si(s.e.value, 'A') + ' source',
+        body: r ? (p >= 0 ? 'This source delivers' : 'This source absorbs') + ' power P = v·i, with the voltage found in step 9.'
+          : 'This source’s voltage needs the node voltages; its power is v·i once you have it.',
+        eq: r ? ['P = ' + si(Math.abs(r.v), 'V') + '·' + si(s.e.value, 'A') + ' = ' + si(Math.abs(p), 'W') + (p >= 0 ? ' delivered' : ' absorbed')] : [],
+        hl: H({ edges: [s.e.id] }),
       });
     })).concat([WB({
       title: 'balance',

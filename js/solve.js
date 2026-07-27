@@ -115,8 +115,11 @@
   function nodeVoltages(c) {
     var en = electricalNodes(c);
     var sources = c.edges.filter(function (e) { return e.type === 'V'; });
-    if (sources.length === 0) throw new Error('no voltage source');
-    var ref = en.of[sources[0].a];
+    var isources = c.edges.filter(function (e) { return e.type === 'I'; });
+    if (sources.length === 0 && isources.length === 0) throw new Error('no source');
+    // reference = the first voltage source's − terminal; with current sources only, the node
+    // the first one draws current FROM (its a terminal) — usually the bottom rail.
+    var ref = en.of[(sources[0] || isources[0]).a];
     sources.forEach(function (s) { if (en.of[s.a] === en.of[s.b]) throw new Error('source shorted by wires'); });
 
     var free = en.groups.filter(function (g) { return g !== ref; });
@@ -133,6 +136,13 @@
       if (p !== ref) { A[vidx[p]][vidx[p]] += g; if (q !== ref) A[vidx[p]][vidx[q]] -= g; }
       if (q !== ref) { A[vidx[q]][vidx[q]] += g; if (p !== ref) A[vidx[q]][vidx[p]] -= g; }
     });
+    // current-source stamp — a known current I leaves node a and enters node b, so it moves
+    // straight to the right-hand side of those two "Σ currents leaving = 0" rows.
+    isources.forEach(function (s) {
+      var a = en.of[s.a], b = en.of[s.b];
+      if (a !== ref) rhs[vidx[a]] -= s.value;
+      if (b !== ref) rhs[vidx[b]] += s.value;
+    });
     // source stamp — j = current a→b (− to +); incidence into KCL rows + the v_b − v_a = Vs row
     sources.forEach(function (s, k) {
       var a = en.of[s.a], b = en.of[s.b], jc = nV + k;
@@ -147,7 +157,8 @@
     var iSrc = {};
     sources.forEach(function (s, k) { iSrc[s.id] = x[nV + k]; });
 
-    return { of: en.of, v: v, ref: ref, known: en.of[sources[0].b], source: sources[0], sources: sources, iSrc: iSrc };
+    return { of: en.of, v: v, ref: ref, known: sources[0] ? en.of[sources[0].b] : ref,
+      source: sources[0], sources: sources, isources: isources, iSrc: iSrc };
   }
 
   /* ---------- branch currents + power ----------
@@ -164,6 +175,9 @@
         return { edge: e, current: i, drop: va - vb, power: (va - vb) * i };
       }
       if (e.type === 'W') return { edge: e, current: 0, drop: 0, power: 0 };
+      // I — the current is the source's own value (a→b); the voltage across it comes from the
+      // solved node voltages. Power absorbed (va−vb)·I, negative ⇒ generating, same as V.
+      if (e.type === 'I') return { edge: e, current: e.value, drop: va - vb, power: (va - vb) * e.value };
       // V — MNA branch current a→b; power absorbed (va−vb)·I, negative ⇒ generating
       var I = iSrc[e.id] || 0;
       return { edge: e, current: I, drop: vb - va, power: (va - vb) * I };
@@ -215,28 +229,82 @@
     return { H: H, pos: pos, faceList: faceList, faceOf: faceOf, areas: areas, outer: outer };
   }
 
-  /* ---------- mesh currents: KVL solve (single voltage source, no current sources) ----------
+  /* ---------- mesh currents: KVL solve (any number of voltage AND current sources) ----------
      One clockwise current per bounded face; Σ voltage drops around each mesh = 0. Wires drop 0.
+     A current source has an unknown voltage across it, so its mesh can't be walked on its own:
+     meshes joined by a shared current source are unioned into a **supermesh** (their KVL rows
+     are summed — the unknown source voltage cancels) and each source contributes a constraint
+     row i_fa − i_fb = I instead. A source against the outer face fixes its group outright (the
+     PPT's "known current" step), so that group needs no KVL row at all.
      Returns { F, meshes:[faceIdx], meshOf:{faceIdx->row}, i:[A], edgeCurrent:{edgeId->A (a→b)},
-     order:[faceIdx sorted top→bottom,left→right for i1,i2,…], A, rhs }. */
+     order:[faceIdx sorted top→bottom,left→right for i1,i2,…], A, rhs,
+     iSources:[{e,fa,fb}], groups:[{meshes:[faceIdx], srcs:[iSource], fixed:bool}] }. */
   function meshCurrents(c) {
     var F = faces(c);
     var meshes = [], meshOf = {};
     F.faceList.forEach(function (_, idx) { if (idx !== F.outer) { meshOf[idx] = meshes.length; meshes.push(idx); } });
     var m = meshes.length;
-    var A = [], rhs = [], r;
-    for (r = 0; r < m; r++) { A.push(new Array(m).fill(0)); rhs.push(0); }
-    meshes.forEach(function (f, k) {
+
+    // KVL around one mesh. Current sources are skipped — their voltage is the unknown that a
+    // supermesh (or a known mesh current) is there to work around.
+    function kvlRow(f) {
+      var row = new Array(m).fill(0), r = 0, k = meshOf[f];
       F.faceList[f].forEach(function (h) {
         var e = c.edges[F.H[h].edge], g = F.faceOf[h ^ 1];
         if (e.type === 'R') {
-          A[k][k] += e.value;
-          if (g !== F.outer) A[k][meshOf[g]] -= e.value;
+          row[k] += e.value;
+          if (g !== F.outer) row[meshOf[g]] -= e.value;
         } else if (e.type === 'V') {
-          rhs[k] += (F.H[h].tail === e.a) ? e.value : -e.value; // a→b crosses −→+ = a rise
+          r += (F.H[h].tail === e.a) ? e.value : -e.value;      // a→b crosses −→+ = a rise
         }
       });
+      return { row: row, rhs: r };
+    }
+
+    // the faces a current source separates: half-edge 2·idx is a→b, so its branch current
+    // (a→b) is i_fa − i_fb — the same convention edgeCurrent uses below.
+    var iSources = c.edges.map(function (e, idx) {
+      return e.type === 'I' ? { e: e, fa: F.faceOf[2 * idx], fb: F.faceOf[2 * idx + 1] } : null;
+    }).filter(Boolean);
+
+    var par = {};
+    meshes.forEach(function (f) { par[f] = f; });
+    function find(x) { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; }
+    iSources.forEach(function (s) {
+      if (s.fa !== F.outer && s.fb !== F.outer) par[find(s.fa)] = find(s.fb);   // supermesh
     });
+    var groupOf = {}, groups = [];
+    meshes.forEach(function (f) {
+      var g = find(f);
+      if (!groupOf[g]) { groupOf[g] = { meshes: [], srcs: [], fixed: false }; groups.push(groupOf[g]); }
+      groupOf[g].meshes.push(f);
+    });
+    iSources.forEach(function (s) {
+      var f = s.fa !== F.outer ? s.fa : s.fb;
+      if (f === F.outer) return;                       // a source enclosed by no mesh at all
+      var grp = groupOf[find(f)];
+      grp.srcs.push(s);
+      if (s.fa === F.outer || s.fb === F.outer) grp.fixed = true;  // current known outright
+    });
+
+    var A = [], rhs = [];
+    iSources.forEach(function (s) {                    // constraint: i_fa − i_fb = I
+      var row = new Array(m).fill(0);
+      if (s.fa !== F.outer) row[meshOf[s.fa]] += 1;
+      if (s.fb !== F.outer) row[meshOf[s.fb]] -= 1;
+      A.push(row); rhs.push(s.e.value);
+    });
+    groups.forEach(function (grp) {                    // one KVL row per group, summed
+      if (grp.fixed) return;                           // …unless the sources already fix it
+      var row = new Array(m).fill(0), r = 0;
+      grp.meshes.forEach(function (f) {
+        var kr = kvlRow(f);
+        kr.row.forEach(function (x, j) { row[j] += x; });
+        r += kr.rhs;
+      });
+      A.push(row); rhs.push(r);
+    });
+    if (A.length !== m) throw new Error('mesh system has ' + A.length + ' equations for ' + m + ' meshes');
     var i = m ? linsolve(A, rhs) : [];
     var edgeCurrent = {};
     c.edges.forEach(function (e, idx) {
@@ -245,7 +313,8 @@
     });
     function cen(f) { var w = F.faceList[f], xs = 0, ys = 0; w.forEach(function (h) { var t = F.pos[F.H[h].tail]; xs += t.x; ys += t.y; }); return { x: xs / w.length, y: ys / w.length }; }
     var order = meshes.slice().sort(function (a, b) { var ca = cen(a), cb = cen(b); return (ca.y - cb.y) || (ca.x - cb.x); });
-    return { F: F, meshes: meshes, meshOf: meshOf, i: i, edgeCurrent: edgeCurrent, order: order, A: A, rhs: rhs };
+    return { F: F, meshes: meshes, meshOf: meshOf, i: i, edgeCurrent: edgeCurrent, order: order,
+      A: A, rhs: rhs, kvlRow: kvlRow, iSources: iSources, groups: groups };
   }
 
   window.Solve = {

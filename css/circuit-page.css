@@ -63,6 +63,15 @@
   cursor: pointer;
 }
 
+.circuit-sidebar select {
+  /* long generator names ("Random (current sources)") otherwise clip mid-character
+     against the fixed 240px sidebar; ellipsis + a title tooltip keep it legible */
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .circuit-sidebar button {
   background: var(--accent);
   border-color: var(--accent);

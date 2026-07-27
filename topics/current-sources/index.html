@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Simple resistive circuits — EERI 124</title>
+  <title>Circuits with current sources — EERI 124</title>
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
   <link rel="stylesheet" href="../../css/circuit-page.css" />
@@ -21,8 +21,8 @@
 
   <main class="page circuit-page">
     <header class="circuit-topbar">
-      <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Simple resistive circuits</nav>
-      <h1>Simple resistive circuits</h1>
+      <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Circuits with current sources</nav>
+      <h1>Circuits with current sources</h1>
     </header>
 
     <div class="circuit-layout">
@@ -32,17 +32,11 @@
           <select id="technique">
             <option value="kcl">KCL — node-voltage</option>
             <option value="kvl">KVL — mesh-current</option>
-            <option value="req-source">Equivalent resistance — over source</option>
-            <option value="req-points">Equivalent resistance — over 2 points</option>
           </select>
         </div>
-        <div class="control-group" id="terminals" style="display:none;">
-          <h3>Terminals</h3>
-          <div class="terminal-row">
-            <select id="termA"></select>
-            <span class="terminal-sep">↔</span>
-            <select id="termB"></select>
-          </div>
+        <div class="control-group">
+          <h3>Circuit set</h3>
+          <select id="circuit-set"></select>
         </div>
         <div class="control-group">
           <h3>Topology</h3>
@@ -81,6 +75,7 @@
   <footer>EERI 124 — Electrotechnique 1</footer>
 
   <script src="../../js/circuit.js"></script>
+  <script src="../../js/generators/current-source.js"></script>
   <script src="../../js/generators/random-grid.js"></script>
   <script src="../../js/generators/basic.js"></script>
   <script src="../../js/generators/bridge-ladder.js"></script>
@@ -89,12 +84,29 @@
   <script src="../../js/solve.js"></script>
   <script src="../../js/techniques/node-voltage.js"></script>
   <script src="../../js/techniques/mesh-current.js"></script>
-  <script src="../../js/techniques/equivalent-resistance.js"></script>
   <script src="../../js/stepper.js"></script>
   <script src="../../js/solver-page.js"></script>
   <script>
-    // this topic covers independent voltage sources + resistors only
-    SolverPage({ filter: { elements: ['R', 'V', 'W'] } });
+    // this topic adds the independent current source; only KCL and KVL are taught on it
+    // (equivalent resistance needs a source to deactivate — a later topic). Two circuit sets:
+    // this topic's own I-bearing circuits, and the full §3 set for KCL/KVL practice on those
+    // shapes — currentify() below turns some of their resistors (and, sometimes, a spare
+    // voltage source) into current sources so §3's shapes get supermesh / known-mesh-current
+    // practice too, rather than only ever seeing random-grid.js's.
+    SolverPage({
+      sets: [
+        { value: 'current-source', label: 'Current-source circuits', filter: { tags: ['current-source'], elements: ['R', 'V', 'I', 'W'] } },
+        {
+          value: 'all', label: 'All topologies', filter: { elements: ['R', 'V', 'W'] },
+          // Wheatstone bridge opts out — its arms are the exact teaching point, flagged by
+          // its B/D node labels (see circuit.js's currentify() comment).
+          transform: function (c) {
+            var protectedWiring = c.nodes.some(function (n) { return n.label; });
+            return protectedWiring ? c : Circuit.currentify(c, { voltage: true });
+          },
+        },
+      ],
+    });
   </script>
 </body>
 

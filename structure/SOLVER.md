@@ -7,19 +7,36 @@ side is [GENERATORS.md](GENERATORS.md); this is the analysis side that consumes 
 
 ## Where solving lives
 
-All solving is on **`topics/simple-resistive-circuits/`** (study-guide §3). It teaches resistor
-networks with **one or more independent voltage sources**, and there a student can apply **KCL**,
-**KVL**, and **equivalent resistance**. A **Technique** dropdown in the left panel chooses between
-them.
+Topic pages are named after the **kind of circuit** they teach, not the technique — every page
+offers whichever techniques make sense for its circuits, through the same **Technique** dropdown.
 
-**Multiple sources live here now.** The engine moved to modified nodal analysis (see below), so
-two- and three-source templates (`js/generators/multi-source.js`) and multi-source random grids
-are solved in full — including the **supernode** case (a source between two non-reference nodes).
-This deliberately overrides the earlier "§4 owns supernodes" plan: supernodes for *independent
-voltage sources* are taught on §3. The §4 pages (`node-voltage`, `mesh-current`,
-`thevenin-norton`) **stay placeholders** until **current and dependent sources** arrive — those
-(supermesh, dependent-source constraints, the PPTs' step-7) are still the "extra steps" not yet
-built. Do not populate §4 until then.
+| Page | Circuits | Techniques |
+|---|---|---|
+| `topics/simple-resistive-circuits/` (§3) | resistors + one or more independent **voltage** sources | KCL, KVL, equivalent resistance (over the source / over 2 points) |
+| `topics/current-sources/` (§4) | the above **plus independent current sources** | KCL, KVL only |
+| `topics/dependent-sources/` (§4) | controlled sources | placeholder — not built |
+
+Both solver pages share **`js/solver-page.js`** (registry → topology dropdown, stepper wiring,
+technique switch). A page differs only in which generator files it loads, its `Circuit.list`
+filter(s), and which `<option>`s its Technique dropdown carries — never in logic. Equivalent
+resistance stays on §3: it needs sources to *deactivate*, and deactivating a current source
+(open circuit) is a Thévenin-era idea, not this page's.
+
+`topics/current-sources/` loads §3's generator files too and offers a **Circuit set** dropdown
+(`#circuit-set`) alongside Topology: its own I-bearing circuits (`tags: ['current-source']`),
+or the full §3 topology family (`elements: ['R','V','W']`, same filter as the §3 page) — but
+run through `Circuit.currentify()` (GENERATORS.md #7), which turns some of the generated
+circuit's resistors (and, sometimes, a spare voltage source) into current sources, so §3's
+shapes drill supermesh / known-mesh-current too instead of always being voltage-source-only.
+`SolverPage({ sets: [...] })` — see `js/solver-page.js`'s header comment — rebuilds the
+Topology dropdown from whichever set is selected and runs the set's optional `transform`
+(here, `currentify`) on each freshly generated circuit; a page with one filter and no transform
+still just passes `{ filter }`.
+
+**Supernodes and supermeshes are real content, not "later".** The engine is modified nodal
+analysis plus a supermesh-aware mesh solve, so a voltage source between two non-reference nodes
+(supernode, §3) and a current source shared between two meshes (supermesh, §4) both solve and
+are both narrated. Only the **dependent** sources are still unbuilt.
 
 ## Layers
 
@@ -28,7 +45,8 @@ built. Do not populate §4 until then.
 | **Engine** | `js/solve.js` | `si` (SI/engineering value formatting), `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (**MNA**, any number of sources), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
 | **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — sets up equations in step 6, hand-works the solve in step 8), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
 | **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view, highlights the circuit via `Circuit.highlight`. |
-| **Page** | `topics/simple-resistive-circuits/index.html` | loads the above, maps the dropdown to a builder, renders the circuit + drives the stepper. |
+| **Page wiring** | `js/solver-page.js` | shared by every solver page: fills the topology dropdown from the registry, maps the technique dropdown to a builder, renders the circuit + drives the stepper. |
+| **Page** | `topics/<slug>/index.html` | picks generator files, the registry filter(s) and the technique options, then calls `SolverPage({ filter })` or, for a page with more than one topology set, `SolverPage({ sets })`. No logic of its own. |
 
 No ES modules (site opens over `file://`) — plain `<script>` globals, same as `circuit.js`.
 
@@ -66,18 +84,25 @@ A technique returns an array of steps:
 
 The two PPTs in the repo root give the **exact** step order — node-voltage **9 steps**, mesh
 **10 steps**. Steps that only fire for special cases are **shown, never skipped**. For KCL the
-**supernode step 5** now carries **real content** when a source floats between two non-reference
+**supernode step 5** carries **real content** when a source floats between two non-reference
 nodes (it says "Nothing to do" only when every source is pinned by the reference — the usual
-single-source and ref-chained case). Steps that still need current/dependent sources (mesh
-known-current step 3, supermesh step 5, constraint step 7) remain **"Nothing to do"** here.
+single-source and ref-chained case). For mesh, **step 3** (known current), **step 5** (supermesh)
+and **step 7** (constraint) fire the moment the circuit holds a current source, and say "Nothing
+to do" otherwise. Only the dependent-source half of KCL's step 7 is still always "Nothing to do".
 
 ## KCL — node-voltage
 
 `electricalNodes` contracts wire (`W`) edges into electrical nodes; `nodeVoltages` runs **modified
 nodal analysis** — unknowns are the non-reference node voltages **plus one branch current per
-voltage source**, so any number of sources (and supernodes) solve with no special-casing. Reference
-= the **first** source's − terminal (0 V). `branches` reads each source current from the MNA
-solution; `powerCheck` finishes.
+voltage source**, so any number of sources (and supernodes) solve with no special-casing. A
+**current source** needs no unknown at all: its known current moves straight to the right-hand
+side of the two nodes it touches. Reference = the **first voltage source's** − terminal (0 V), or,
+in a circuit with only current sources, the node the first one draws from. `branches` reads each
+source current from the MNA solution; `powerCheck` finishes.
+
+In the technique, a current source is one extra **known term** in a node's "Σ currents leaving = 0"
+sum (`+I` when it draws out of the node, `−I` when it pushes in). It rides through clearing the
+fractions and collecting like any other constant — no new algebra, which is the point.
 
 The `node-voltage` technique owns the **equation-assembly engine** (`plan()`): it propagates
 source-fixed voltages out from the reference, works out the order unknown nodes become
@@ -118,11 +143,33 @@ This ordering is pedagogy — the displayed values always come from `nodeVoltage
 `faces` extracts the planar faces from node `x,y` (rotation system + half-edge walk); the bounded
 faces are the meshes (Euler: `E − V + 1`), the outer face encloses the most area. `meshCurrents`
 writes Σ voltages = 0 per mesh (wires drop 0) and solves with `linsolve`. **Cross-checked against
-node-voltage** — per-resistor currents must agree (see the self-check).
+node-voltage** — per-element currents must agree in sign and size (see the self-check).
+
+**Current sources restructure the system**, and `meshCurrents` returns the structure so the
+technique can narrate it (`iSources`, `groups`):
+
+- a current source's voltage is unknown, so its edge contributes **no term** to any KVL row;
+- meshes joined by a **shared** current source are unioned into one **group** (a supermesh) whose
+  single KVL row is the **sum** of its members' rows — the shared branch cancels, which is the
+  algebraic form of "walk around the outside of the pair";
+- each current source instead contributes one **constraint** row `i_fa − i_fb = I`;
+- a group touched by a source on the **outer boundary** is `fixed`: its currents are known
+  outright and it gets **no** KVL row (the PPT's step 3).
+
+The technique works **per group** from step 6 on — a lone mesh is a group of one, so
+voltage-source-only circuits follow exactly the path they always did. Inside a supermesh, each
+member is written as `i_lead + δ` (δ from the constraint) before the usual multiply-out / collect /
+divide, so the extra machinery is one line of algebra rather than a second method. A mesh already
+fixed in step 3 is substituted into every line that mentions it before the general
+expression-substitution round begins.
 
 The technique is **deliberately the mirror image of KCL** — same substep rhythm, same live board,
 same algebra — so a student who learned one reads the other for free:
 
+- **Steps 5–8 draw a supermesh as ONE loop** around both its meshes (the slides' picture), then
+  steps 9–10 go back to one arrow per mesh. `Circuit.highlight` fits the loop arc to the bounding
+  box of the node ids it is given, so passing both meshes' nodes is all it takes; the technique
+  swaps the loop set it stamps (`curLoops`) at those two points.
 - **The loop-arrows are drawn in step 2 and never removed.** Every `hl` from step 2 on (steps *and*
   substeps) goes through the local `H()` helper, which re-attaches `loops:`. `Circuit.highlight`
   wipes `.mesh-loop` on every call, so a spec that omits `loops` erases them — never build an `hl`
@@ -159,7 +206,8 @@ is the pedagogy and is verified to match `V/I` for every generator.
 
 1. `js/techniques/<name>.js` exposing `window.<Name>(circuit[, opts]) → steps[]`; reuse
    `js/solve.js` — never re-implement the linear solve or node contraction.
-2. `<script>` it on the page, add a dropdown `<option>`, map it in `buildSteps()`.
+2. `<script>` it on the page, add a dropdown `<option>`, map it in `buildSteps()` in
+   `js/solver-page.js` (one switch, shared by every page).
 3. Add a case to `js/solve.test.html`.
 
 ## The self-check
@@ -173,5 +221,8 @@ only done when it has a case here.
 
 There is no headless browser in CI/dev here. The plain scripts run in **node** under a small
 `window` + `document` (`createElementNS`/`getElementById`) shim — enough to exercise the solver
-math, the renderer's grouping/highlight, and the full step pipeline. It does **not** check CSS
-layout; flag real-browser visual QA to the user.
+math, the renderer's grouping/highlight, and the full step pipeline. With `addEventListener` and
+`<option>` support added to that shim, a whole **page** can be driven the same way: load its
+`<script src>` list plus its inline script, then click through every topology × technique and
+assert no view renders "undefined"/"NaN". Do that for any new solver page. It does **not** check
+CSS layout; flag real-browser visual QA to the user.
