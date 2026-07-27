@@ -35,6 +35,10 @@
           </select>
         </div>
         <div class="control-group">
+          <h3>Circuit set</h3>
+          <select id="circuit-set"></select>
+        </div>
+        <div class="control-group">
           <h3>Topology</h3>
           <select id="topology"></select>
         </div>
@@ -73,6 +77,10 @@
   <script src="../../js/circuit.js"></script>
   <script src="../../js/generators/current-source.js"></script>
   <script src="../../js/generators/random-grid.js"></script>
+  <script src="../../js/generators/basic.js"></script>
+  <script src="../../js/generators/bridge-ladder.js"></script>
+  <script src="../../js/generators/grid.js"></script>
+  <script src="../../js/generators/multi-source.js"></script>
   <script src="../../js/solve.js"></script>
   <script src="../../js/techniques/node-voltage.js"></script>
   <script src="../../js/techniques/mesh-current.js"></script>
@@ -80,8 +88,15 @@
   <script src="../../js/solver-page.js"></script>
   <script>
     // this topic adds the independent current source; only KCL and KVL are taught on it
-    // (equivalent resistance needs a source to deactivate — a later topic)
-    SolverPage({ filter: { tags: ['current-source'], elements: ['R', 'V', 'I', 'W'] } });
+    // (equivalent resistance needs a source to deactivate — a later topic). Two circuit sets:
+    // this topic's own I-bearing circuits, and the full §3 set (voltage sources only) for
+    // KCL/KVL practice without a current source in the mix.
+    SolverPage({
+      sets: [
+        { value: 'current-source', label: 'Current-source circuits', filter: { tags: ['current-source'], elements: ['R', 'V', 'I', 'W'] } },
+        { value: 'all', label: 'All topologies (§3)', filter: { elements: ['R', 'V', 'W'] } },
+      ],
+    });
   </script>
 </body>
 
