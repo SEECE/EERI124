@@ -14,12 +14,22 @@
   var TYPE_LABEL = { W: 'Wire', R: 'Resistor', V: 'Voltage source', I: 'Current source', DEP: 'Dependent source' };
   var DEFAULT_VALUE = { R: 220, V: 12, I: 0.05, E: 2, F: 2, G: 1 / 500, H: 220 };
   var UNIT = { R: 'Ω', V: 'V', I: 'A', E: '(gain)', F: '(gain)', G: 'S', H: 'Ω' };
+  var TYPE_DESC = {
+    W: 'Plain wire — no value, ties two nodes to the same potential.',
+    R: 'Resistor — Ohm’s law drop, value in Ω.',
+    V: 'Independent voltage source — the second node clicked is the + terminal.',
+    I: 'Independent current source — current flows from the first node clicked to the second.',
+    E: 'VCVS — v = gain · v(control resistor). Second node clicked is +.',
+    H: 'CCVS — v = gain · i(control resistor). Second node clicked is +.',
+    F: 'CCCS — i = gain · i(control resistor). Flows first → second node clicked.',
+    G: 'VCCS — i = gain · v(control resistor). Flows first → second node clicked.',
+  };
   // control kind × output kind -> the four textbook controlled-source types (GENERATORS.md):
   // VCVS (v reads v), CCCS (i reads i), VCCS (i reads v), CCVS (v reads i).
   var DEP_TYPE = { v: { v: 'E', i: 'G' }, i: { v: 'H', i: 'F' } };
 
-  var GRID_COLS = 6, GRID_ROWS = 5, PAD = 40, PX_BASE = 70;
-  var ZOOM_MIN = 0.4, ZOOM_MAX = 2.5;
+  var PAD = 40, PX = 70;
+  var COLS_MIN = 2, COLS_MAX = 30, ROWS_MIN = 2, ROWS_MAX = 30;
 
   window.CircuitBuilder = function (opts) {
     var svg = document.getElementById(opts.canvas);
@@ -31,14 +41,19 @@
     var depToggles = document.getElementById(opts.depToggles);
     var ctrlRow = document.getElementById(opts.controlRow);
     var ctrlSel = document.getElementById(opts.controlSelect);
+    var typeDesc = document.getElementById(opts.typeDesc);
     var errorEl = document.getElementById(opts.error);
     var clearBtn = document.getElementById(opts.clear);
     var exportBtn = document.getElementById(opts.exportBtn);
     var importInput = document.getElementById(opts.importInput);
-    var zoomInBtn = document.getElementById(opts.zoomIn);
-    var zoomOutBtn = document.getElementById(opts.zoomOut);
+    var colsMinus = document.getElementById(opts.colsMinus);
+    var colsPlus = document.getElementById(opts.colsPlus);
+    var colsCount = document.getElementById(opts.colsCount);
+    var rowsMinus = document.getElementById(opts.rowsMinus);
+    var rowsPlus = document.getElementById(opts.rowsPlus);
+    var rowsCount = document.getElementById(opts.rowsCount);
 
-    var circuit, nodeAt, nextN, nextE, pending, currentType, zoom = 1;
+    var circuit, nodeAt, nextN, nextE, pending, currentType, cols = 6, rows = 5;
 
     function reset() {
       circuit = { nodes: [], edges: [] };
@@ -92,6 +107,7 @@
       var dep = Circuit.isDependent(t);
       ctrlRow.style.display = dep ? '' : 'none';
       if (dep) refreshControlOptions();
+      typeDesc.textContent = TYPE_DESC[t] || '';
     }
 
     function refreshControlOptions() {
@@ -173,19 +189,31 @@
       render();
     }
 
-    /* ---------- zoom ---------- */
-    function setZoom(z) {
-      zoom = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
-      render();
+    /* ---------- grid size — this IS the "zoom": more/fewer dots on the plane, not a visual
+       scale (the svg is always drawn at fixed PX spacing, and the canvas scrolls). ---------- */
+    function refreshGridCounts() { colsCount.textContent = cols; rowsCount.textContent = rows; }
+
+    function setCols(n) {
+      n = Math.max(COLS_MIN, Math.min(COLS_MAX, n));
+      if (n < cols && circuit.nodes.some(function (nd) { return nd.x >= n; })) {
+        setError('remove the nodes in the rightmost column first'); return;
+      }
+      cols = n; refreshGridCounts(); render();
+    }
+    function setRows(n) {
+      n = Math.max(ROWS_MIN, Math.min(ROWS_MAX, n));
+      if (n < rows && circuit.nodes.some(function (nd) { return nd.y >= n; })) {
+        setError('remove the nodes in the bottom row first'); return;
+      }
+      rows = n; refreshGridCounts(); render();
     }
 
     /* ---------- rendering ---------- */
-    function coord(r, c) { var px = PX_BASE * zoom; return { x: PAD + c * px, y: PAD + r * px }; }
+    function coord(r, c) { return { x: PAD + c * PX, y: PAD + r * PX }; }
 
     function render() {
       while (svg.firstChild) svg.removeChild(svg.firstChild);
-      var px = PX_BASE * zoom;
-      var w = PAD * 2 + (GRID_COLS - 1) * px, h = PAD * 2 + (GRID_ROWS - 1) * px;
+      var w = PAD * 2 + (cols - 1) * PX, h = PAD * 2 + (rows - 1) * PX;
       svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
       svg.setAttribute('width', w);
       svg.setAttribute('height', h);
@@ -206,8 +234,8 @@
         svg.appendChild(g);
       });
 
-      for (var r = 0; r < GRID_ROWS; r++) {
-        for (var c = 0; c < GRID_COLS; c++) {
+      for (var r = 0; r < rows; r++) {
+        for (var c = 0; c < cols; c++) {
           var p = coord(r, c);
           var has = !!nodeAt[key(r, c)];
           var isPending = pending && pending.r === r && pending.c === c;
@@ -249,17 +277,16 @@
       reader.onload = function () {
         try {
           var loaded = Circuit.importJSON(JSON.parse(reader.result));
-          var maxX = Math.max.apply(null, loaded.nodes.map(function (n) { return n.x; }).concat([GRID_COLS - 1]));
-          var maxY = Math.max.apply(null, loaded.nodes.map(function (n) { return n.y; }).concat([GRID_ROWS - 1]));
-          GRID_COLS = maxX + 1; GRID_ROWS = maxY + 1;
+          cols = Math.min(COLS_MAX, Math.max.apply(null, loaded.nodes.map(function (n) { return n.x; }).concat([cols - 1])) + 1);
+          rows = Math.min(ROWS_MAX, Math.max.apply(null, loaded.nodes.map(function (n) { return n.y; }).concat([rows - 1])) + 1);
           circuit = loaded;
           nodeAt = {};
           circuit.nodes.forEach(function (n) { nodeAt[key(n.y, n.x)] = n.id; });
           nextN = 1 + Math.max.apply(null, circuit.nodes.map(function (n) { return +n.id.replace(/\D/g, '') || 0; }).concat([-1]));
           nextE = 1 + Math.max.apply(null, circuit.edges.map(function (e) { return +e.id.replace(/\D/g, '') || 0; }).concat([-1]));
           pending = null;
-          zoom = Math.max(ZOOM_MIN, Math.min(1, 8 / Math.max(GRID_COLS, GRID_ROWS))); // fit a big import on screen
           setError('');
+          refreshGridCounts();
           render();
         } catch (err) { setError(err.message); }
       };
@@ -269,8 +296,10 @@
     clearBtn.addEventListener('click', reset);
     levelSel.addEventListener('change', function () { buildPalette(); refreshFormForType(); });
     depToggles.addEventListener('change', function () { refreshFormForType(); render(); });
-    zoomInBtn.addEventListener('click', function () { setZoom(zoom * 1.25); });
-    zoomOutBtn.addEventListener('click', function () { setZoom(zoom / 1.25); });
+    colsMinus.addEventListener('click', function () { setCols(cols - 1); });
+    colsPlus.addEventListener('click', function () { setCols(cols + 1); });
+    rowsMinus.addEventListener('click', function () { setRows(rows - 1); });
+    rowsPlus.addEventListener('click', function () { setRows(rows + 1); });
 
     currentType = 'R';
     Object.keys(LEVELS).forEach(function (k) {
@@ -278,6 +307,7 @@
     });
     buildPalette();
     refreshFormForType();
+    refreshGridCounts();
     reset();
   };
 })();

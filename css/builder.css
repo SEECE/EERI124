@@ -1,12 +1,26 @@
 /* Circuit-builder page only — palette buttons and grid-dot styling, on top of
    circuit-page.css's sidebar/canvas layout. */
+
+/* wider than the solver pages' 240px sidebar — it holds two panes side by side */
+.builder-sidebar { flex-basis: 340px; }
+
+.sidebar-split {
+  display: flex;
+  gap: 12px;
+}
+.sidebar-pane { flex: 1 1 0; min-width: 0; }
+.sidebar-divider {
+  width: 1px;
+  background: var(--ink-faint);
+  flex: none;
+}
+
 .palette {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
 }
 .palette-btn {
-  flex: 1 1 auto;
   font-size: 12px;
   padding: 0.5rem 0.6rem;
   border-radius: var(--radius-sm);
@@ -54,8 +68,22 @@
 }
 .control-row select { flex: 1; font: inherit; padding: 0.4rem; }
 
-.zoom-row { display: flex; gap: 6px; }
-.zoom-row button { width: auto; flex: 1; font-size: 16px; padding: 0.4rem; }
+.type-desc {
+  font-size: 11px;
+  color: var(--ink-soft);
+  line-height: 1.4;
+  margin-top: 8px;
+}
+
+.grid-size-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.grid-size-row span { font-size: 13px; color: var(--ink-soft); }
+.grid-size-row span:first-child { min-width: 34px; }
+.grid-size-row button { width: auto; padding: 0.3rem 0.7rem; }
 
 .builder-hint {
   font-size: 12px;
@@ -63,9 +91,9 @@
   line-height: 1.5;
 }
 
-/* the builder's canvas is a literal-pixel-sized grid that grows with zoom/import size, unlike
-   the solver pages' svg (which always scales to fit) — so it scrolls instead of shrinking
-   elements down to unreadable size. */
+/* the builder's canvas is a literal-pixel-sized grid that grows with the grid-size controls
+   (more/fewer dots, not a visual zoom) and on import, unlike the solver pages' svg (which
+   always scales to fit) — so it scrolls instead of shrinking elements unreadable. */
 .circuit-page .circuit-canvas { overflow: auto; }
 .circuit-page .circuit-canvas svg { width: auto; height: auto; flex: none; }
 

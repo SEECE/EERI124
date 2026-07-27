@@ -26,45 +26,63 @@
     </header>
 
     <div class="circuit-layout">
-      <aside class="circuit-sidebar">
+      <aside class="circuit-sidebar builder-sidebar">
         <div class="control-group">
           <h3>Complexity</h3>
           <select id="level"></select>
         </div>
-        <div class="control-group">
-          <h3>Element</h3>
-          <div class="palette" id="palette"></div>
-          <div class="dep-toggles" id="dep-toggles">
-            <div class="toggle-group">
-              <span>Controlled by</span>
-              <label><input type="radio" name="dep-ctrl" value="v" checked /> Voltage</label>
-              <label><input type="radio" name="dep-ctrl" value="i" /> Current</label>
-            </div>
-            <div class="toggle-group">
-              <span>Delivers</span>
-              <label><input type="radio" name="dep-out" value="v" checked /> Voltage</label>
-              <label><input type="radio" name="dep-out" value="i" /> Current</label>
-            </div>
+
+        <div class="sidebar-split">
+          <div class="sidebar-pane">
+            <h3>Element</h3>
+            <div class="palette" id="palette"></div>
           </div>
-          <div class="value-row" id="value-row">
-            <input type="number" id="value-input" step="any" />
-            <span id="value-unit"></span>
-          </div>
-          <div class="control-row" id="control-row">
-            <span>reads</span>
-            <select id="control-select"></select>
+          <div class="sidebar-divider"></div>
+          <div class="sidebar-pane">
+            <h3>Tune</h3>
+            <div class="dep-toggles" id="dep-toggles">
+              <div class="toggle-group">
+                <span>Controlled by</span>
+                <label><input type="radio" name="dep-ctrl" value="v" checked /> Voltage</label>
+                <label><input type="radio" name="dep-ctrl" value="i" /> Current</label>
+              </div>
+              <div class="toggle-group">
+                <span>Delivers</span>
+                <label><input type="radio" name="dep-out" value="v" checked /> Voltage</label>
+                <label><input type="radio" name="dep-out" value="i" /> Current</label>
+              </div>
+            </div>
+            <div class="value-row" id="value-row">
+              <input type="number" id="value-input" step="any" />
+              <span id="value-unit"></span>
+            </div>
+            <div class="control-row" id="control-row">
+              <span>reads</span>
+              <select id="control-select"></select>
+            </div>
+            <p class="type-desc" id="type-desc"></p>
           </div>
         </div>
+
+        <div class="control-group">
+          <h3>Grid size</h3>
+          <div class="grid-size-row">
+            <span>Cols</span>
+            <button id="cols-minus">−</button>
+            <span id="cols-count"></span>
+            <button id="cols-plus">+</button>
+          </div>
+          <div class="grid-size-row">
+            <span>Rows</span>
+            <button id="rows-minus">−</button>
+            <span id="rows-count"></span>
+            <button id="rows-plus">+</button>
+          </div>
+        </div>
+
         <div class="control-group">
           <p class="builder-hint">Click a grid dot, then an adjacent dot to add the selected
             element between them. Click an existing element to remove it.</p>
-        </div>
-        <div class="control-group">
-          <h3>Zoom</h3>
-          <div class="zoom-row">
-            <button id="zoom-out">−</button>
-            <button id="zoom-in">+</button>
-          </div>
         </div>
         <div class="control-group">
           <button id="clear">Clear</button>
@@ -98,12 +116,17 @@
       depToggles: 'dep-toggles',
       controlRow: 'control-row',
       controlSelect: 'control-select',
+      typeDesc: 'type-desc',
       error: 'builder-error',
       clear: 'clear',
       exportBtn: 'export-circuit',
       importInput: 'import-circuit',
-      zoomIn: 'zoom-in',
-      zoomOut: 'zoom-out',
+      colsMinus: 'cols-minus',
+      colsPlus: 'cols-plus',
+      colsCount: 'cols-count',
+      rowsMinus: 'rows-minus',
+      rowsPlus: 'rows-plus',
+      rowsCount: 'rows-count',
     });
   </script>
 </body>
