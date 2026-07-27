@@ -18,9 +18,16 @@ offers whichever techniques make sense for its circuits, through the same **Tech
 
 Both solver pages share **`js/solver-page.js`** (registry → topology dropdown, stepper wiring,
 technique switch). A page differs only in which generator files it loads, its `Circuit.list`
-filter, and which `<option>`s its Technique dropdown carries — never in logic. Equivalent
+filter(s), and which `<option>`s its Technique dropdown carries — never in logic. Equivalent
 resistance stays on §3: it needs sources to *deactivate*, and deactivating a current source
 (open circuit) is a Thévenin-era idea, not this page's.
+
+`topics/current-sources/` loads §3's generator files too and offers a **Circuit set** dropdown
+(`#circuit-set`) alongside Topology: its own I-bearing circuits (`tags: ['current-source']`),
+or the full §3 topology family (`elements: ['R','V','W']`, same filter as the §3 page) for
+KCL/KVL practice without a current source in the mix. `SolverPage({ sets: [...] })` — see
+`js/solver-page.js`'s header comment — rebuilds the Topology dropdown from whichever set is
+selected; a page with one filter still just passes `{ filter }`.
 
 **Supernodes and supermeshes are real content, not "later".** The engine is modified nodal
 analysis plus a supermesh-aware mesh solve, so a voltage source between two non-reference nodes
@@ -35,7 +42,7 @@ are both narrated. Only the **dependent** sources are still unbuilt.
 | **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — sets up equations in step 6, hand-works the solve in step 8), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
 | **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view, highlights the circuit via `Circuit.highlight`. |
 | **Page wiring** | `js/solver-page.js` | shared by every solver page: fills the topology dropdown from the registry, maps the technique dropdown to a builder, renders the circuit + drives the stepper. |
-| **Page** | `topics/<slug>/index.html` | picks generator files, the registry filter and the technique options, then calls `SolverPage({ filter })`. No logic of its own. |
+| **Page** | `topics/<slug>/index.html` | picks generator files, the registry filter(s) and the technique options, then calls `SolverPage({ filter })` or, for a page with more than one topology set, `SolverPage({ sets })`. No logic of its own. |
 
 No ES modules (site opens over `file://`) — plain `<script>` globals, same as `circuit.js`.
 

@@ -79,8 +79,10 @@ Rules:
    self-check enforces this.
 5. **`tags` are for pages to filter on** (`series`, `parallel`, `divider`, `bridge`,
    `ladder`, `grid`, `mesh`, `random`, `current-source`, `supermesh`, `multi-source`). Add
-   tags freely; they cost nothing. The current-sources page filters on `current-source`,
-   because "circuits with an `I` in them" is exactly what that topic is.
+   tags freely; they cost nothing. The current-sources page's own circuit set filters on
+   `current-source`, because "circuits with an `I` in them" is exactly what that topic is; its
+   other circuit set (the §3 topologies) filters on `elements` only, same as §3 itself — see
+   `SolverPage({ sets })` in SOLVER.md.
 6. **`C.build` applies `flavour()`** — random source polarity / current direction, occasional resistor replaced
    by a short — so a fixed topology is still a fresh problem each press. Pass
    `{ flavour: false }` as the third argument only when a template's teaching point depends
