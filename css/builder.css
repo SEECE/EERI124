@@ -1,0 +1,49 @@
+/* Circuit-builder page only — palette buttons and grid-dot styling, on top of
+   circuit-page.css's sidebar/canvas layout. */
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.palette-btn {
+  flex: 1 1 auto;
+  font-size: 12px;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ink-faint);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.palette-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.value-row, .control-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.value-row input {
+  width: 90px;
+  font: inherit;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ink-faint);
+}
+.control-row select { flex: 1; font: inherit; padding: 0.4rem; }
+
+.builder-hint {
+  font-size: 12px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+
+.grid-dot { fill: var(--ink-faint); cursor: pointer; }
+.grid-dot.has-node { fill: var(--accent-deep); }
+.grid-dot.pending { fill: var(--accent-hover); stroke: var(--accent-deep); stroke-width: 2; }
+.builder-edge { cursor: pointer; }
+.builder-edge:hover rect { stroke-width: 3; }
