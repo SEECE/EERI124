@@ -9,17 +9,42 @@
   var R_VALUES = [100, 220, 330, 470, 680, 1000, 1500, 2200, 3300, 4700];
   var V_VALUES = [5, 9, 12, 15];
   var I_VALUES = [0.01, 0.02, 0.05, 0.1];   // 10–100 mA: same order as V/R above gives
+  // dependent-source gains, sized so the controlled quantity lands in the same band as the
+  // independent ones above (volts of the order 1–50, currents of the order 10–100 mA).
+  var MU_VALUES = [0.5, 2, 3, 4];           // E — VCVS, v = μ·v_ctrl        (dimensionless)
+  var BETA_VALUES = [0.5, 2, 3, 4];         // F — CCCS, i = β·i_ctrl        (dimensionless)
+  var GM_DIVISORS = [200, 500, 1000, 2000]; // G — VCCS, i = v_ctrl / divisor (stored in siemens,
+  //                                             but written as a division so no siemens is shown)
+  var RM_VALUES = [100, 220, 470, 1000];    // H — CCVS, v = r·i_ctrl        (ohms)
   function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
   function pickR() { return pick(R_VALUES); }
   function pickV() { return pick(V_VALUES); }
   function pickI() { return pick(I_VALUES); }
+  // a gain may be negative — the slides' "−30 iΔ" is an ordinary case, not a trick
+  function sgn(x) { return Math.random() < 0.3 ? -x : x; }
+  function pickGain(type) {
+    if (type === 'E') return sgn(pick(MU_VALUES));
+    if (type === 'F') return sgn(pick(BETA_VALUES));
+    if (type === 'G') return sgn(1 / pick(GM_DIVISORS));
+    return sgn(pick(RM_VALUES));                    // H
+  }
 
   /* ---------- model ----------
-     circuit = { nodes: [{id,x,y}], edges: [{id,type,a,b,value?}] }
+     circuit = { nodes: [{id,x,y}], edges: [{id,type,a,b,value?,control?}] }
      Element types: 'R' resistor, 'V' independent voltage source (b is +), 'W' plain wire,
      'I' independent current source (current flows a → b, i.e. out of the b terminal).
-     Later phases add the dependent sources — see structure/GENERATORS.md. */
+     Dependent (controlled) sources carry a `control` field naming the edge they read:
+       'E' VCVS  v = value·v_ctrl   (b is +)      'H' CCVS  v = value·i_ctrl   (b is +)
+       'F' CCCS  i = value·i_ctrl   (a → b)       'G' VCCS  i = value·v_ctrl   (a → b)
+     The controlling edge is always a RESISTOR (that is what the lecture slides use, and it
+     keeps the control variable readable straight off Ohm's law). Its sense is fixed by the
+     control edge's own a/b: v_ctrl = v(ctrl.a) − v(ctrl.b), i_ctrl = current ctrl.a → ctrl.b.
+     See structure/GENERATORS.md. */
   var VALUED = { R: 'resistance', V: 'voltage', I: 'current' }; // types that need a positive value
+  var DEP = { E: 'v', F: 'i', G: 'v', H: 'i' };  // dependent type → what its control variable is
+  var DEP_OUT = { E: 'v', F: 'i', G: 'i', H: 'v' }; // …and what the source itself delivers
+  function isDependent(t) { return DEP[t] !== undefined; }
+  function isSource(t) { return t === 'V' || t === 'I' || isDependent(t); }
 
   function validate(c) {
     var ids = {};
@@ -34,6 +59,15 @@
       if (!ids[e.a] || !ids[e.b]) throw new Error('edge ' + e.id + ' references missing node');
       if (e.a === e.b) throw new Error('edge ' + e.id + ' is a self-loop');
       if (VALUED[e.type] && !(e.value > 0)) throw new Error('edge ' + e.id + ' needs a positive ' + VALUED[e.type]);
+    });
+    var byId = {}; c.edges.forEach(function (e) { byId[e.id] = e; });
+    c.edges.forEach(function (e) {
+      if (!isDependent(e.type)) return;
+      if (!(e.value !== 0 && isFinite(e.value))) throw new Error('edge ' + e.id + ' needs a non-zero gain');
+      var ctrl = byId[e.control];
+      if (!ctrl) throw new Error('edge ' + e.id + ' names a missing control edge ' + e.control);
+      if (ctrl === e) throw new Error('edge ' + e.id + ' controls itself');
+      if (ctrl.type !== 'R') throw new Error('edge ' + e.id + ' must be controlled by a resistor, not ' + ctrl.type);
     });
     return c;
   }
@@ -66,20 +100,25 @@
   }
 
   /* Same topology, different problem: random source polarity and now and then one resistor
-     replaced by a short, so a template rewards reading the circuit over recalling it. */
+     replaced by a short, so a template rewards reading the circuit over recalling it.
+     A resistor that some dependent source reads (its control edge) is never shorted away —
+     the control variable has to keep existing. */
   function flavour(specs) {
     specs = specs.map(function (s) {  // source polarity / current direction, both ways
-      return (s[0] === 'V' || s[0] === 'I') && Math.random() < 0.5 ? [s[0], s[2], s[1], s[3]] : s;
+      return isSource(s[0]) && Math.random() < 0.5 ? [s[0], s[2], s[1], s[3], s[4]] : s;
     });
+    var controlled = {};
+    specs.forEach(function (s) { if (isDependent(s[0]) && s[4] !== undefined) controlled[s[4]] = true; });
     var rs = [];
-    specs.forEach(function (s, i) { if (s[0] === 'R') rs.push(i); });
+    specs.forEach(function (s, i) { if (s[0] === 'R' && !controlled[i]) rs.push(i); });
     if (rs.length < 4 || Math.random() > 0.3) return specs;
     var k = pick(rs), t = specs.slice();
     t[k] = ['W', specs[k][1], specs[k][2]];
     return degenerate(t) ? specs : t;
   }
 
-  /* Build helper: nodes as [[x,y],...], edges as [type,a,b] (indices), values auto.
+  /* Build helper: nodes as [[x,y],...], edges as [type,a,b,value?,controlIndex?] (indices),
+     values auto. A dependent source's 5th field is the INDEX of the resistor spec it reads.
      opts.flavour === false keeps the topology exactly as written. */
   function build(nodeCoords, edgeSpecs, opts) {
     if (!opts || opts.flavour !== false) edgeSpecs = flavour(edgeSpecs);
@@ -93,6 +132,7 @@
       if (s[0] === 'R') e.value = pickR();
       if (s[0] === 'V') e.value = pickV();
       if (s[0] === 'I') e.value = pickI();
+      if (isDependent(s[0])) { e.value = pickGain(s[0]); e.control = 'e' + s[4]; }
       if (s[3] !== undefined) e.value = s[3]; // explicit value wins
       return e;
     });
@@ -136,6 +176,47 @@
       }
     }
     return validate(circuit);
+  }
+
+  /* ---------- control variables ----------
+     Names the quantity each dependent source reads, once per (control edge, kind) pair, so the
+     renderer's marker, the step text and the equations all say the same thing. The slides' own
+     symbols come first (iφ, vΔ), then plain letters.
+     Returns { list, of: {depEdgeId -> entry}, marks: [{ctrl, kind, sym, plain}] } where an entry
+     is { e, kind, out, ctrl, sym, symHtml, label, labelHtml } — `label` is plain text for the
+     SVG, `labelHtml` carries <sub> for the workbench. */
+  var SYMS = ['φ', 'Δ', 'x', 'y', 'z', 'w'];
+  function num(x) { var r = Math.round(x * 1000) / 1000; return String(Math.abs(r)); }
+  function controls(c) {
+    var byId = {}; c.edges.forEach(function (e) { byId[e.id] = e; });
+    var marks = [], markOf = {}, list = [], of = {};
+    c.edges.forEach(function (e) {
+      if (!isDependent(e.type)) return;
+      var kind = DEP[e.type], key = kind + ':' + e.control, mk = markOf[key];
+      if (!mk) {
+        mk = markOf[key] = { ctrl: byId[e.control], kind: kind, sym: SYMS[marks.length] || ('s' + marks.length) };
+        mk.plain = kind + mk.sym;
+        marks.push(mk);
+      }
+      var v = e.value, neg = v < 0, mag = num(v);
+      var lead = neg ? '−' : '';
+      var label, labelHtml;
+      var symHtml = kind + '<sub>' + mk.sym + '</sub>';
+      if (e.type === 'G' && Math.abs(1 / v) >= 1 && Math.abs(Math.round(1 / v) - 1 / v) < 1e-9) {
+        // written as a division, so a transconductance never has to be read in siemens
+        var d = Math.abs(Math.round(1 / v));
+        label = lead + mk.plain + '/' + d;
+        labelHtml = lead + symHtml + '/' + d;
+      } else {
+        var k = mag === '1' ? '' : mag;
+        label = lead + k + (k ? ' ' : '') + mk.plain;
+        labelHtml = lead + k + (k ? '·' : '') + symHtml;
+      }
+      var entry = { e: e, kind: kind, out: DEP_OUT[e.type], ctrl: mk.ctrl, sym: mk.sym,
+        symPlain: mk.plain, symHtml: symHtml, label: label, labelHtml: labelHtml };
+      list.push(entry); of[e.id] = entry;
+    });
+    return { list: list, of: of, marks: marks };
   }
 
   /* ---------- generator registry ----------
@@ -433,11 +514,15 @@
     build: build,
     currentify: currentify,
     degenerate: degenerate,
+    controls: controls,
+    isDependent: isDependent,
+    isSource: isSource,
     // value pickers, for generator files
     pick: pick,
     pickR: pickR,
     pickV: pickV,
     pickI: pickI,
+    pickGain: pickGain,
     // registry
     register: register,
     list: list,
