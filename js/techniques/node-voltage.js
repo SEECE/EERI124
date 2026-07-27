@@ -291,7 +291,7 @@
         (CV.any ? ', plus ' + CV.all.length + ' <b>dependent</b> source' + (CV.all.length === 1 ? '' : 's') + ' (' +
           CV.all.map(function (e) { return CV.short(e) + ', ' + CV.gain(e); }).join('; ') +
           ') — drawn as a diamond, because ' + (CV.all.length === 1 ? 'its value is' : 'their values are') +
-          ' not a number you were given but a multiple of something measured elsewhere in this same circuit' : '') +
+          ' not a number you were given but a multiple of something measured elsewhere in this same circuit, already marked on the drawing (the arrow / the + − pair on the resistor it reads)' : '') +
         '. Nothing to simplify — we analyse it as drawn.',
       hl: CV.any ? { edges: CV.all.map(function (e) { return e.id; }) } : {},
     });
@@ -353,8 +353,8 @@
           hl: { edges: [e.id], nodes: nodeIdsOf(a).concat(nodeIdsOf(b)), volts: voltsFor(order.filter(function (g) { return P.fixed[g]; })) },
         };
       })).concat(CV.all.map(function (e) {
-        // Naming the control variable is the whole content of this substep: the symbol appears
-        // on the drawing (on the resistor it is read from) at the same moment it appears here.
+        // Naming the control variable is the whole content of this substep: the symbol has been
+        // marked on the drawing (on the resistor it is read from) since step 1 — here we name it.
         var a = of[e.a], b = of[e.b], ce = CV.ctrlEdge(e), reads = CV.kind(e) === 'i' ? 'current through' : 'voltage across';
         var delivers = CV.out(e) === 'v'
           ? 'It is a voltage source of ' + CV.gain(e) + ' volts, + at node <b>' + L(b) + '</b>'
@@ -362,7 +362,7 @@
         return {
           title: CV.short(e) + ' ' + CV.gain(e),
           body: 'This diamond is a <b>' + CV.long(e) + '</b>. Call the ' + reads + ' the ' + si(ce.value, 'Ω') +
-            ' resistor <b>' + CV.sym(e) + '</b> — that is the quantity it reads, and it is now marked on the drawing. ' +
+            ' resistor <b>' + CV.sym(e) + '</b> — that is the quantity it reads, marked on the drawing from the start. ' +
             delivers + '. Neither number is known yet, because ' + CV.sym(e) +
             ' is not known yet — but ' + CV.sym(e) + ' is made of node voltages like everything else here, and step 7 writes it as such.',
           eq: [(CV.out(e) === 'v' ? vsub(L(b)) + ' − ' + vsub(L(a)) : 'i (from ' + L(a) + ' to ' + L(b) + ')') + ' = ' + CV.gain(e)],
