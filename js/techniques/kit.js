@@ -54,10 +54,23 @@
   function cleanT(e) { Object.keys(e.t).forEach(function (k) { if (Math.abs(e.t[k]) < 1e-12) delete e.t[k]; }); return e; }
   function resolveSelf(e, self) {
     if (self in e.t) {
-      var s = e.t[self]; delete e.t[self];
+      var s = e.t[self];
+      // a self-coefficient of exactly 1 leaves 0 = (the rest): the line no longer determines
+      // this quantity at all. Dividing by that zero is what used to print "Infinity·i₂".
+      if (Math.abs(1 - s) < 1e-12) return e;
+      delete e.t[self];
       var d = 1 - s; e.c /= d;
       Object.keys(e.t).forEach(function (k) { e.t[k] /= d; });
     }
+    return e;
+  }
+  /* Last line of defence for the substitution rounds: an expression that came out non-finite
+     (a cancellation the narration cannot carry) is replaced by the engine's own value, so a
+     view shows the right number rather than "Infinity" or "NaN". */
+  function settle(e, target) {
+    var ok = isFinite(e.c) && Object.keys(e.t).every(function (k) { return isFinite(e.t[k]); });
+    if (ok) return e;
+    e.c = target; e.t = {};
     return e;
   }
   function snap(e, target) {
@@ -87,6 +100,6 @@
     round: round, num: num, signed: signed, diff: diff, prod: prod,
     sub: sub, frac: frac, extend: extend,
     list: list, board: board,
-    cleanT: cleanT, resolveSelf: resolveSelf, snap: snap, fmtExpr: fmtExpr,
+    cleanT: cleanT, resolveSelf: resolveSelf, snap: snap, settle: settle, fmtExpr: fmtExpr,
   };
 })();

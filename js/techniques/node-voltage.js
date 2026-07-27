@@ -171,7 +171,10 @@
       // every node voltage OUTSIDE the unit that the unit's own equations mention
       function needs(u, inside) {
         var need = [];
-        if (u.pins.length) {                      // pinned: the gain equation is the whole story
+        // pinned AND alone: the gain equation is the whole story, so nothing else is needed.
+        // A pinned node that is also half of a supernode still needs the pair's KCL, so it falls
+        // through to the general case below.
+        if (u.pins.length && u.groups.length === 1) {
           u.pins.forEach(function (p) { need.push(p.from); need = need.concat(Lin.keys(ctrlLin(p.e))); });
           return need;
         }
@@ -205,9 +208,15 @@
         return (e.type === 'V' || isDepV(e)) && unknown.indexOf(of[e.a]) >= 0 && unknown.indexOf(of[e.b]) >= 0;
       });
       var pins = units.reduce(function (a, u) { return a.concat(u.pins); }, []);
-      var pinnedOf = {}; pins.forEach(function (p) { pinnedOf[p.to] = p; });
+      var pinnedOf = {};
+      pins.forEach(function (p) {
+        p.shared = unitOf[find(p.to)].groups.length > 1;   // also half of a supernode
+        pinnedOf[p.to] = p;
+      });
       // nodes that actually get a "Σ currents leaving = 0" equation — a pinned node does not
-      var kclNodes = unknown.filter(function (g) { return !pinnedOf[g]; });
+      // …a node that is ALSO half of a supernode still appears — the pair's enclosure KCL is
+      // written per member, the same as any other supernode
+      var kclNodes = unknown.filter(function (g) { return !pinnedOf[g] || pinnedOf[g].shared; });
       return { fixed: fixed, chain: chain, unknown: unknown, open: open, coupled: coupled,
         units: units, pins: pins, pinnedOf: pinnedOf, kclNodes: kclNodes,
         innerSrcs: innerSrcs, supernodes: supernodes };
@@ -553,6 +562,13 @@
         if (n === g) return;
         if (cset[n]) rhsSym.push({ n: n, c: -E.t[n] }); else rhsK -= E.t[n] * V(n);
       });
+      // A controlled source can cancel a node's own coefficient exactly. The equation is still
+      // true — it just relates the OTHER unknowns instead of giving this one, so there is
+      // nothing to divide by and the node comes out of the system rather than out of this line.
+      if (Math.abs(Cg) < 1e-9) {
+        return { Cg: 0, rhsK: rhsK, rhsSym: rhsSym, degenerate: true,
+          rhsTxt: num(round(rhsK)), expr: { c: V(g), t: {} } };
+      }
       var expr = { c: rhsK / Cg, t: {} };
       rhsSym.forEach(function (r) { expr.t[r.n] = r.c / Cg; });
       K.cleanT(expr); K.snap(expr, V(g));
@@ -576,7 +592,8 @@
       var R = solveFor(g, E, cset);
       var baseTxt = cset[p.from] ? vsub(L(p.from)) : round(V(p.from));
       return {
-        e: e, from: p.from, expr: R.expr, selfRef: Math.abs(R.Cg - 1) > 1e-9, Cg: R.Cg, rhsTxt: R.rhsTxt,
+        e: e, from: p.from, expr: R.expr, degenerate: R.degenerate,
+        selfRef: Math.abs(R.Cg - 1) > 1e-9, Cg: R.Cg, rhsTxt: R.rhsTxt,
         write: vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.gain(e),
         substituted: vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlPair(e, cset)),
         collect: R.Cg + '·' + vg + ' = ' + R.rhsTxt,
@@ -627,7 +644,7 @@
         return out;
       }
       return {
-        vg: vg, terms: terms, deps: ds, M: M, Cg: Cg, rhsSym: rhsSym, expr: R.expr,
+        vg: vg, terms: terms, deps: ds, M: M, Cg: Cg, rhsSym: rhsSym, expr: R.expr, degenerate: R.degenerate,
         Rlist: denoms(g).join(' × '),
         write: terms.map(function (t) { return frac(diff(vg, otherTxt(t)), t.R); }).join(' + ') + injTerms(g) + ' = 0',
         // only when there is something to put in: the same sum with each control symbol replaced
@@ -677,6 +694,17 @@
         });
         step('write the equation', 'Node ' + L(g) + '’s equation from step 6, with each known neighbour voltage filled in.' +
           (q ? ' The current source’s ' + si(Math.abs(q), 'A') + ' is already a number — it just sits in the sum.' : ''), Q.write);
+        if (Q.degenerate) {                                   // nothing to divide by — see solveFor
+          board[g] = si(V(g), 'V');
+          solveSubs.push({
+            title: 'node ' + L(g) + ' — from the system',
+            body: 'The controlled source cancels ' + vg + '’s own coefficient exactly, so this equation says nothing about ' + vg +
+              ' on its own — it is a relation between the others. Node ' + L(g) + '’s voltage comes out of the system as a whole.', board: boardHtml(),
+            eq: chain.concat([vg + ' = ' + si(V(g), 'V')]),
+            hl: extend(hl, { volts: voltsFor(Object.keys(solvedNow).concat([g])) }),
+          });
+          return;
+        }
         if (Q.substituted) step('put the control variable in',
           'The dependent source is still a symbol. Step 7 said what ' + Q.deps.map(function (e) { return CV.sym(e); }).join(' and ') +
           ' is — put that in its place, and every term in the line is made of node voltages again.', Q.substituted);
@@ -732,7 +760,7 @@
 
       P.open.forEach(function (u) {
         var hl = unitHl(u), tableBefore = neighborTable(remaining, solvedNow);
-        if (u.pins.length) {
+        if (u.pins.length && !u.supernode) {      // solvePinned speaks for one node only
           solvePinned(u, hl, tableBefore);
         } else if (!u.supernode) {
           solveOpenNode(u.groups[0], hl, tableBefore);
@@ -800,7 +828,7 @@
             var chainG = [];
             function stepG(title, body, line) { chainG.push(line); solveSubs.push({ title: 'node ' + L(g) + ' — ' + title, body: body, board: boardHtml(), eq: chainG.slice(), hl: gHl }); }
 
-            if (P.pinnedOf[g]) {
+            if (P.pinnedOf[g] && !P.pinnedOf[g].shared) {
               // no KCL to clear — the source's gain equation already IS this node's expression,
               // it just needs its control variable written out
               var Pq = pinEquation(g, cset), pvg = vsub(L(g));
@@ -812,6 +840,13 @@
               stepG('the source equation', 'Its + terminal decides the sign.', Pq.write);
               stepG('put the control variable in', CV.sym(Pq.e) + ' is a resistor’s ' +
                 (CV.kind(Pq.e) === 'i' ? 'current' : 'voltage') + ', from step 7.', Pq.substituted);
+              if (Pq.degenerate) {                            // nothing to divide by — see solveFor
+                board[g] = si(V(g), 'V');
+                solveSubs.push({ title: 'node ' + L(g) + ' — from the system', board: boardHtml(), hl: gHl,
+                  body: 'That cancelled ' + pvg + ' from both sides, so this line relates the other unknowns instead. Node ' +
+                    L(g) + ' comes out with the system: ' + pvg + ' = ' + si(V(g), 'V') + '.' });
+                return;
+              }
               if (Pq.selfRef) stepG('collect ' + pvg, 'That put ' + pvg + ' on both sides — collect it on the left.', Pq.collect);
               board[g] = pvg + ' = ' + fmtExpr(expr[g]);
               stepG(Pq.selfRef ? 'divide' : 'multiply out',
@@ -826,6 +861,15 @@
               hl: gHl,
             });
             stepG('write the equation', 'Node ' + L(g) + '’s equation from step 6, known neighbours filled in as numbers, coupled ones left as letters.', Q.write);
+            if (Q.degenerate) {                               // nothing to divide by — see solveFor
+              board[g] = si(V(g), 'V');
+              solveSubs.push({
+                title: 'node ' + L(g) + ' — from the system', board: boardHtml(), hl: gHl,
+                body: 'The controlled source cancels ' + vg + '’s own coefficient exactly, so this line relates the other unknowns rather than giving ' +
+                  vg + '. It still counts as one of the equations — node ' + L(g) + ' comes out when the system is solved together: ' + vg + ' = ' + si(V(g), 'V') + '.',
+              });
+              return;
+            }
             if (Q.substituted) stepG('put the control variable in',
               'Replace ' + Q.deps.map(function (e) { return CV.sym(e); }).join(' and ') + ' with what step 7 said it is. It may bring another node’s letter in with it — that is fine, this node was coupled anyway.', Q.substituted);
             stepG('clear the fractions', 'Multiply every term by everything underneath (' + Q.Rlist + '); each division cancels.', Q.clear);
@@ -843,7 +887,7 @@
           var pool = P.coupled.slice(), stored = [];
           while (pool.length > 1) {
             var p = pool[0];
-            resolveSelf(expr[p], p); cleanT(expr[p]);
+            resolveSelf(expr[p], p); cleanT(expr[p]); K.settle(expr[p], V(p));
             pool.slice(1).forEach(function (q) {
               if (!(p in expr[q].t)) return;
               var beforeLine = fmtExpr(expr[q]);
@@ -860,7 +904,7 @@
                 hl: extend(unitHl({ groups: [q] }), { volts: voltsFor(Object.keys(solvedNow)) }),
               });
               if (selfTerm) {
-                resolveSelf(expr[q], q); cleanT(expr[q]);
+                resolveSelf(expr[q], q); cleanT(expr[q]); K.settle(expr[q], V(q));
                 board[q] = vsub(L(q)) + ' = ' + fmtExpr(expr[q]);
                 solveSubs.push({
                   title: vsub(L(q)) + ' — collect and divide',
@@ -879,7 +923,7 @@
               hl: extend({ nodes: pool.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) }, { volts: voltsFor(Object.keys(solvedNow)) }),
             });
           }
-          var last = pool[0]; resolveSelf(expr[last], last); cleanT(expr[last]);
+          var last = pool[0]; resolveSelf(expr[last], last); cleanT(expr[last]); K.settle(expr[last], V(last));
           K.snap(expr[last], V(last));
           board[last] = si(V(last), 'V');
           var known = {}; known[last] = V(last);
