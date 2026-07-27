@@ -7,7 +7,8 @@
   <title>Circuits with dependent sources — EERI 124</title>
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
-  <link rel="stylesheet" href="../../css/topic.css" />
+  <link rel="stylesheet" href="../../css/circuit-page.css" />
+  <link rel="stylesheet" href="../../css/solver.css" />
 </head>
 
 <body>
@@ -18,19 +19,98 @@
     </div>
   </nav>
 
-  <main class="page">
-    <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Circuits with dependent sources</nav>
-
-    <section class="hero">
-      <div class="eyebrow">Techniques in circuit analysis</div>
+  <main class="page circuit-page">
+    <header class="circuit-topbar">
+      <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Circuits with dependent sources</nav>
       <h1>Circuits with dependent sources</h1>
-      <p>Networks whose sources are controlled by a current or voltage elsewhere in the circuit — VCVS, CCCS, VCCS, CCVS.</p>
-      <div class="status">Visualiser in progress</div>
-      <p>Techniques covered here: KCL and KVL with the extra constraint equation each controlled source brings.</p>
-    </section>
+    </header>
+
+    <div class="circuit-layout">
+      <aside class="circuit-sidebar">
+        <div class="control-group">
+          <h3>Technique</h3>
+          <select id="technique">
+            <option value="kcl">KCL — node-voltage</option>
+            <option value="kvl">KVL — mesh-current</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <h3>Circuit set</h3>
+          <select id="circuit-set"></select>
+        </div>
+        <div class="control-group">
+          <h3>Topology</h3>
+          <select id="topology"></select>
+        </div>
+        <div class="control-group">
+          <button id="generate">Generate</button>
+        </div>
+        <div class="control-group step-control">
+          <h3>Steps</h3>
+          <div class="step-count" id="step-count"></div>
+          <div class="step-nav">
+            <button id="step-prev">◀ Prev</button>
+            <button id="step-next">Next ▶</button>
+          </div>
+          <div class="step-subcount" id="step-subcount"></div>
+          <div class="step-nav step-subnav">
+            <button id="sub-prev">◂ Prev</button>
+            <button id="sub-next">Next ▸</button>
+          </div>
+        </div>
+      </aside>
+
+      <div class="circuit-canvas"><svg id="canvas"></svg></div>
+
+      <aside class="step-panel">
+        <div class="step-count step-count-label">Workbench</div>
+        <h3 class="step-title" id="step-title"></h3>
+        <div class="step-body" id="step-body"></div>
+        <div class="step-eq" id="step-eq"></div>
+        <div class="step-board" id="step-board"></div>
+      </aside>
+    </div>
   </main>
 
   <footer>EERI 124 — Electrotechnique 1</footer>
+
+  <script src="../../js/circuit.js"></script>
+  <script src="../../js/generators/dependent.js"></script>
+  <script src="../../js/generators/current-source.js"></script>
+  <script src="../../js/generators/random-grid.js"></script>
+  <script src="../../js/generators/basic.js"></script>
+  <script src="../../js/generators/bridge-ladder.js"></script>
+  <script src="../../js/generators/grid.js"></script>
+  <script src="../../js/generators/multi-source.js"></script>
+  <script src="../../js/solve.js"></script>
+  <script src="../../js/techniques/kit.js"></script>
+  <script src="../../js/techniques/controls.js"></script>
+  <script src="../../js/techniques/node-voltage.js"></script>
+  <script src="../../js/techniques/mesh-current.js"></script>
+  <script src="../../js/stepper.js"></script>
+  <script src="../../js/solver-page.js"></script>
+  <script>
+    // This topic adds the four controlled sources; KCL and KVL only, as on the current-sources
+    // page (equivalent resistance needs a source to deactivate, and deactivating a controlled
+    // one is a Thévenin-era idea). Two circuit sets, the same shape the §4 current-sources page
+    // uses: this topic's own circuits, and every other topology run through dependify() so §3's
+    // and §4's shapes get drilled with controlled sources too.
+    SolverPage({
+      sets: [
+        { value: 'dependent', label: 'Dependent-source circuits', filter: { tags: ['dependent-source'] } },
+        {
+          value: 'all', label: 'All topologies', filter: { elements: ['R', 'V', 'I', 'W'] },
+          // Wheatstone bridge opts out — its arms are the exact teaching point, flagged by its
+          // B/D node labels (see circuit.js's currentify() comment). dependify() hands the
+          // circuit back untouched when it cannot place one safely, so the page never breaks.
+          transform: function (c) {
+            var protectedWiring = c.nodes.some(function (n) { return n.label; });
+            return protectedWiring ? c : Circuit.dependify(c);
+          },
+        },
+      ],
+    });
+  </script>
 </body>
 
 </html>
