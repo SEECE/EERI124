@@ -17,6 +17,13 @@
   gap: var(--sp-3);
 }
 
+/* Lock a circuit page to the viewport: the page itself must NEVER scroll — the three columns
+   scroll internally instead. base.css gives body `min-height:100vh` (which lets a tall column
+   push the whole page taller — the "doesn't fit, have to scroll around" bug); a definite height
+   + overflow:hidden makes internal scrolling the only outcome. Narrow screens opt back out below. */
+html:has(.circuit-page) { height: 100%; }
+body:has(.circuit-page) { height: 100dvh; overflow: hidden; }
+
 .circuit-topbar {
   flex: none;
   background: var(--surface);
@@ -147,6 +154,7 @@
 
 /* ── narrow screens: abandon the fixed viewport shell, stack and let the page scroll ── */
 @media (max-width: 820px) {
+  body:has(.circuit-page) { height: auto; overflow: visible; }
   .circuit-page { min-height: auto; }
   .circuit-layout { flex-direction: column; }
   .circuit-sidebar,
