@@ -13,17 +13,22 @@
   };
   var TYPE_LABEL = { W: 'Wire', R: 'Resistor', V: 'Voltage source', I: 'Current source', DEP: 'Dependent source' };
   var DEFAULT_VALUE = { R: 220, V: 12, I: 0.05, E: 2, F: 2, G: 1 / 500, H: 220 };
-  var UNIT = { R: 'Ω', V: 'V', I: 'A', E: '(gain)', F: '(gain)', G: 'S', H: 'Ω' };
+  var UNIT = { R: 'Ω', V: 'V', I: 'A', E: '×', F: '×', G: 'Ω', H: 'Ω' };
   var TYPE_DESC = {
     W: 'Plain wire — no value, ties two nodes to the same potential.',
     R: 'Resistor — Ohm’s law drop, value in Ω.',
     V: 'Independent voltage source — the second node clicked is the + terminal.',
     I: 'Independent current source — current flows from the first node clicked to the second.',
-    E: 'VCVS — v = gain · v(control resistor). Second node clicked is +.',
-    H: 'CCVS — v = gain · i(control resistor). Second node clicked is +.',
-    F: 'CCCS — i = gain · i(control resistor). Flows first → second node clicked.',
-    G: 'VCCS — i = gain · v(control resistor). Flows first → second node clicked.',
+    E: 'Dependent voltage source — its volts are this number times the voltage across the control resistor. Second node clicked is +.',
+    H: 'Dependent voltage source — its volts are this many ohms times the current through the control resistor. Second node clicked is +.',
+    F: 'Dependent current source — its amps are this number times the current through the control resistor. Flows first → second node clicked.',
+    G: 'Dependent current source — its amps are the voltage across the control resistor divided by this many ohms. Flows first → second node clicked.',
   };
+  // G (a current read off a voltage) is written to students as a division by an ohm-like number,
+  // never in siemens — so the builder takes/shows that number and stores its reciprocal.
+  function toStored(t, x) { return t === 'G' ? 1 / x : x; }
+  function toShown(t, v) { return t === 'G' ? 1 / v : v; }
+  var DEFAULT_SHOWN = { R: 220, V: 12, I: 0.05, E: 2, F: 2, G: 500, H: 220 };
   // control kind × output kind -> the four textbook controlled-source types (GENERATORS.md):
   // VCVS (v reads v), CCCS (i reads i), VCCS (i reads v), CCVS (v reads i).
   var DEP_TYPE = { v: { v: 'E', i: 'G' }, i: { v: 'H', i: 'F' } };
@@ -100,7 +105,7 @@
       if (needsValue) {
         unitEl.textContent = UNIT[t];
         if (valueInput.dataset.forType !== t) {
-          valueInput.value = DEFAULT_VALUE[t];
+          valueInput.value = DEFAULT_SHOWN[t];
           valueInput.dataset.forType = t;
         }
       }
@@ -205,7 +210,7 @@
       }
       var t = selectedType();
       var edge = { id: 'e' + (nextE++), type: t, a: a, b: b };
-      if (t !== 'W') edge.value = parseFloat(valueInput.value) || DEFAULT_VALUE[t];
+      if (t !== 'W') edge.value = toStored(t, parseFloat(valueInput.value)) || DEFAULT_VALUE[t];
       if (Circuit.isDependent(t)) {
         if (!ctrlSel.value) {
           setError('add a resistor first, then pick it as the control');
@@ -336,7 +341,7 @@
     }
 
     function fmtVal(e) {
-      if (Circuit.isDependent(e.type)) return String(e.value);
+      if (Circuit.isDependent(e.type)) return String(toShown(e.type, e.value));
       return e.value + (UNIT[e.type] || '');
     }
 

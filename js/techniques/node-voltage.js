@@ -408,7 +408,7 @@
       body: supers.length
         ? 'A voltage source between two non-reference nodes forms a supernode — <b>any</b> voltage source, independent or dependent, because what matters is that its own branch current is unknown, not where its value comes from. Enclose both nodes, write KCL for the enclosure (the source’s current cancels inside it) and add the source voltage as a constraint. ' +
           supers.length + ' here: ' + supers.map(function (e) { return L(of[e.a]) + '–' + L(of[e.b]); }).join(', ') + '.' +
-          (supers.some(isDepV) ? ' The controlled one’s constraint is its gain equation, so it lands in step 7 with the other control variables.' : '')
+          (supers.some(isDepV) ? ' The controlled one’s constraint is the equation that gives its value, so it lands in step 7 with the other control variables.' : '')
         : 'A supernode forms when a voltage source — independent or dependent — connects two non-reference nodes. ' +
           (CV.volt.length ? 'Every voltage source here has a terminal at a node we already know, so no supernode forms.'
             : 'Every source here has a terminal at the reference, so no supernode forms.'),
@@ -466,7 +466,7 @@
         body: nEq ? 'One equation per unknown node — assume every current leaves the node and set the sum to zero. That is <b>' + nEq + '</b> equation' + (nEq === 1 ? '' : 's') +
           (P.supernodes.length ? ' plus ' + P.supernodes.length + ' source constraint' + (P.supernodes.length === 1 ? '' : 's') : '') +
           (P.pins.length ? ' (node' + (P.pins.length === 1 ? '' : 's') + ' ' + P.pins.map(function (p) { return L(p.to); }).join(', ') +
-            ' get no KCL — a controlled source pins ' + (P.pins.length === 1 ? 'it' : 'them') + ' to a known node, and its gain equation is step 7)' : '') +
+            ' get no KCL — a controlled source pins ' + (P.pins.length === 1 ? 'it' : 'them') + ' to a known node, and the equation that gives its value is step 7)' : '') +
           ' to build. Step through each node to see how its equation is put together; the solving is step 8.'
           : 'No node needs a KCL equation here: every node voltage is either fixed by a source or pinned by a controlled one.',
         eq: P.kclNodes.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }),

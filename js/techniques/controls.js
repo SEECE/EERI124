@@ -21,7 +21,9 @@
 
   var KIND = { E: 'v', F: 'i', G: 'v', H: 'i' };     // what the source READS
   var OUT = { E: 'v', F: 'i', G: 'i', H: 'v' };      // what it DELIVERS
-  var SHORT = { E: 'VCVS', F: 'CCCS', G: 'VCCS', H: 'CCVS' };
+  // No acronyms (VCVS/CCCS…): students meet these as plain English. SHORT names the source by what
+  // it delivers; LONG spells out what it reads too.
+  var SHORT = { v: 'dependent voltage source', i: 'dependent current source' };
   var LONG = {
     E: 'voltage-controlled voltage source', F: 'current-controlled current source',
     G: 'voltage-controlled current source', H: 'current-controlled voltage source',
@@ -81,7 +83,7 @@
       entry: entry, ctrlEdge: ctrlEdge, scale: scale, gainParts: gainParts,
       kind: function (e) { return KIND[e.type]; },
       out: function (e) { return OUT[e.type]; },
-      short: function (e) { return SHORT[e.type]; },
+      short: function (e) { return SHORT[OUT[e.type]]; },
       long: function (e) { return LONG[e.type]; },
       sym: function (e) { return entry(e).symHtml; },          // iφ
       gain: function (e) { return entry(e).labelHtml; },       // 3·iφ, 470·iφ, vΔ/500

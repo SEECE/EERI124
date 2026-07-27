@@ -63,7 +63,7 @@
     var byId = {}; c.edges.forEach(function (e) { byId[e.id] = e; });
     c.edges.forEach(function (e) {
       if (!isDependent(e.type)) return;
-      if (!(e.value !== 0 && isFinite(e.value))) throw new Error('edge ' + e.id + ' needs a non-zero gain');
+      if (!(e.value !== 0 && isFinite(e.value))) throw new Error('edge ' + e.id + ' needs a non-zero multiplier');
       var ctrl = byId[e.control];
       if (!ctrl) throw new Error('edge ' + e.id + ' names a missing control edge ' + e.control);
       if (ctrl === e) throw new Error('edge ' + e.id + ' controls itself');
