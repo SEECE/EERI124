@@ -397,7 +397,13 @@
   function fmtI(v) { return v >= 1 ? v + ' A' : Math.round(v * 1000) + ' mA'; }
 
   function render(circuit, svg) {
-    var PX = 90, PAD = 34;
+    // PX = grid spacing in user units; the viewBox scales to the canvas, so symbols/text (fixed
+    // user-unit sizes) shrink on screen as PX grows but gain empty wire between them — the lever
+    // against value-labels / control-marks / node-voltages merging on dense circuits. 104 spreads
+    // nodes ~15% wider than the old 90; halos keep any residual overlap legible.
+    // ponytail: single global-scale knob. If dense grids still crowd, the next step is per-label
+    // collision nudging in the fit() pass, not a bigger PX (which just shrinks everything).
+    var PX = 104, PAD = 38;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     var xs = circuit.nodes.map(function (n) { return n.x * PX; });
     var ys = circuit.nodes.map(function (n) { return n.y * PX; });
