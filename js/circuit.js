@@ -397,7 +397,13 @@
   function fmtI(v) { return v >= 1 ? v + ' A' : Math.round(v * 1000) + ' mA'; }
 
   function render(circuit, svg) {
-    var PX = 90, PAD = 34;
+    // PX = grid spacing in user units; the viewBox scales to the canvas, so symbols/text (fixed
+    // user-unit sizes) shrink on screen as PX grows but gain empty wire between them — the lever
+    // against value-labels / control-marks / node-voltages merging on dense circuits. 104 spreads
+    // nodes ~15% wider than the old 90; halos keep any residual overlap legible.
+    // ponytail: single global-scale knob. If dense grids still crowd, the next step is per-label
+    // collision nudging in the fit() pass, not a bigger PX (which just shrinks everything).
+    var PX = 104, PAD = 38;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     var xs = circuit.nodes.map(function (n) { return n.x * PX; });
     var ys = circuit.nodes.map(function (n) { return n.y * PX; });
@@ -455,9 +461,12 @@
       // of the drawing — a fixed side lands inside the loop half the time (and the source
       // symbols, whose a/b order is randomised, flipped sides at random)
       var side = G.side;
-      // 46 clears the r=16 source circle even for the widest label ("100 mA", "4.7 kΩ") — 38
-      // cleared shorter R/V labels but let a 6-char current-source reading overlap its own circle
-      var lx = mx - uy * 46 * side, ly = my + ux * 46 * side;
+      // perpendicular offset of the value label from the element. A resistor is a thin 16-tall
+      // rect and needs little clearance, so its label sits close (34); a source's r=16/20 body
+      // needs a touch more (42). Both were a flat 46 before — too far, the label read as floating
+      // away from its element rather than belonging to it.
+      var loff = e.type === 'R' ? 34 : 42;
+      var lx = mx - uy * loff * side, ly = my + ux * loff * side;
       var eg = el('g', { 'class': 'edge edge-' + e.type, 'data-eid': e.id }, svg);
 
       if (e.type === 'W') { line(a.x, a.y, b.x, b.y, eg); return; }
@@ -573,16 +582,17 @@
     circuit.nodes.forEach(function (n) {
       var p = byId[n.id];
       var gaps = gapsOf(n.id);
-      circleOf[n.id].setAttribute('data-gdir', (gaps[0] * 180 / Math.PI).toFixed(1));
+      var gdir = gaps[0];
+      circleOf[n.id].setAttribute('data-gdir', (gdir * 180 / Math.PI).toFixed(1));
+      // any node can show a voltage reading (drawn later by highlight()) in its widest open gap
+      // (data-gdir) at radius 26 — close to the node, into empty space. Reserve that spot for
+      // every node so the viewBox never clips it once a step reveals it.
+      fit(p.x + Math.cos(gdir) * 26, p.y + Math.sin(gdir) * 26, '-99.9 mV');
       if (!n.label) return;
       var ldir = gaps.length > 1 ? gaps[1] : gaps[0];
       circleOf[n.id].setAttribute('data-ldir', (ldir * 180 / Math.PI).toFixed(1));
       var lx = p.x + Math.cos(ldir) * 20, ly = p.y + Math.sin(ldir) * 20;
       fit(lx, ly, n.label);
-      // the voltage reading (drawn later, by highlight()) sits 60° off ldir at radius 44 —
-      // reserve that spot too so the viewBox never clips it once a step reveals it
-      var vrad = ldir + 60 * Math.PI / 180;
-      fit(p.x + Math.cos(vrad) * 44, p.y + Math.sin(vrad) * 44, '-99.9 mV');
       // hidden by default; a solver step reveals it via highlight({ labels: [nodeId] })
       // so letters appear when the method names them, not from the start
       el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, svg)
@@ -680,26 +690,25 @@
       });
     });
 
-    // physical voltage reading once a node is known/solved (spec.volts = {nodeId: text}) —
-    // offset from the node's letter direction (data-ldir, the *second*-widest gap), so it
-    // clears both the wires and the ground symbol (which claims the widest gap) instead of
-    // sitting in a fixed spot above the node. Rotated 60° off ldir and pushed to a bigger
-    // radius than the letter — sitting on the SAME ray as the letter (old: same angle, radius
-    // 36 vs the letter's 20) left only 16px of radial gap, not enough to clear either label's
-    // width or height, so the two almost always overlapped. The rotation buys real angular
-    // separation instead of relying on radius alone.
+    // physical voltage reading once a node is known/solved (spec.volts = {nodeId: text}) — drops
+    // into the node's WIDEST open angular gap (data-gdir, "where there's most space") at radius
+    // 26: close to the node and clear of wires. The old placement flung it 60° off the letter
+    // direction at radius 44, which routinely landed on a wire or another element. A reference
+    // node's widest gap holds the ground symbol, so those fall back to the letter gap (data-ldir).
     Array.prototype.forEach.call(svg.querySelectorAll('.node-volt'), function (t) {
       t.parentNode.removeChild(t);
     });
-    var volts = spec.volts || {};
+    var volts = spec.volts || {}, groundSet = spec.ground || [];
     Object.keys(volts).forEach(function (nid) {
       var c = svg.querySelector('[data-nid="' + nid + '"]');
       if (!c) return;
       var x = +c.getAttribute('cx'), y = +c.getAttribute('cy');
-      var ldirAttr = c.getAttribute('data-ldir');
-      var ldir = ldirAttr !== null ? (+ldirAttr * Math.PI / 180) : -Math.PI / 2;  // default: straight up
-      var rad = ldir + 60 * Math.PI / 180;
-      var vx = x + Math.cos(rad) * 44, vy = y + Math.sin(rad) * 44;
+      // widest gap normally; the letter gap on a grounded node (its widest gap is taken)
+      var dirAttr = groundSet.indexOf(nid) >= 0
+        ? (c.getAttribute('data-ldir') || c.getAttribute('data-gdir'))
+        : c.getAttribute('data-gdir');
+      var rad = dirAttr !== null ? (+dirAttr * Math.PI / 180) : -Math.PI / 2;  // default: straight up
+      var vx = x + Math.cos(rad) * 26, vy = y + Math.sin(rad) * 26;
       el('text', {
         'class': 'node-volt', x: vx, y: vy, 'text-anchor': 'middle', 'dominant-baseline': 'central',
         fill: 'var(--accent-hover)', 'font-size': 12, 'font-weight': 600,
