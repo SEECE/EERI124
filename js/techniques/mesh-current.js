@@ -588,6 +588,12 @@
     // engine's value so accumulated float noise can't print a last digit that contradicts the
     // answer shown two views later.
     function snap(f) { K.settle(expr[f], value[f]); K.snap(expr[f], value[f]); }
+    // A board cell shows the bare value once nothing unknown is left on the right — the row
+    // already carries the mesh's name, so "i₂ = 3.7 mA" there would say it twice, and the
+    // solved-row highlight keys off the value alone.
+    function boardCell(f) {
+      return Object.keys(expr[f].t).length ? name[f] + ' = ' + fmtExpr(expr[f]) : si(value[f], 'A');
+    }
 
     // One mesh's current read off a current source's constraint rather than off a KVL row:
     // i_fa − i_fb = I (or gain·control), rearranged for the face asked for. Used wherever a
@@ -644,13 +650,13 @@
           // the lead's own term is left on the right-hand side as well as the left
           Object.keys(Eb.t).forEach(function (g2) { if (g2 !== String(lead)) expr[lead].t[g2] = -Eb.t[g2] / Cb; });
           cleanT(expr[lead]); snap(lead);
-          board[lead] = nl + ' = ' + fmtExpr(expr[lead]);
+          board[lead] = boardCell(lead);
           // a fixed group can in principle hold more than one mesh (a chain of current sources
           // hanging off a boundary one); those ride on their own linking constraints
           grp.meshes.filter(function (f) { return f !== lead; }).forEach(function (f) {
             var ls = grp.srcs.filter(function (s) { return s.fa === f || s.fb === f; })[0];
             expr[f] = (ls && exprFromConstraint(f, ls)) || { c: value[f], t: {} };
-            board[f] = Object.keys(expr[f].t).length ? name[f] + ' = ' + fmtExpr(expr[f]) : si(value[f], 'A');
+            board[f] = boardCell(f);
           });
           solveSubs.push(WB({
             title: 'mesh ' + gn + ' — from its source',
@@ -774,7 +780,7 @@
             : ' — the controlled source contributed some of them too, which is why the total is ' + Cg + ' rather than the loop’s ' + grp.self + ' Ω') +
           ' and move everything else to the right.', lineCollect);
         if (sh.length) {
-          board[lead] = nl + ' = ' + fmtExpr(expr[lead]);
+          board[lead] = boardCell(lead);
           step('divide', 'Divide both sides by ' + Cg + ' — ' + nl + ' is now amps plus a plain ratio of its still-unknown neighbour' + (sh.length === 1 ? '' : 's') + ' (a resistance over a resistance, so the ratio has no units).', nl + ' = ' + fmtExpr(expr[lead]));
         } else {
           step('divide', 'Divide both sides by ' + Cg + ' Ω.', nl + ' = ' + frac(num(k), Cg));
@@ -794,7 +800,7 @@
             var got = ls && exprFromConstraint(f, ls);
             if (!got) { expr[f] = { c: value[f], t: {} }; board[f] = si(value[f], 'A'); return; }
             expr[f] = got;
-            board[f] = name[f] + ' = ' + fmtExpr(expr[f]);
+            board[f] = boardCell(f);
             // the linking source may be the controlled one or an ordinary one — a group can hold
             // both, so say which this member actually rode in on
             solveSubs.push({
@@ -812,7 +818,8 @@
           }
           var d = round(grp.delta[f]);
           expr[f] = { c: expr[lead].c + grp.delta[f], t: extend(expr[lead].t, {}) };
-          board[f] = name[f] + ' = ' + fmtExpr(expr[f]);
+          snap(f);
+          board[f] = boardCell(f);
           solveSubs.push({
             title: 'mesh ' + name[f] + ' — from the constraint',
             body: 'And ' + name[f] + ' follows from the same constraint: whatever ' + nl + ' turns out to be, ' + name[f] + ' is ' +
@@ -832,7 +839,7 @@
           var coef = expr[q].t[p]; delete expr[q].t[p];
           expr[q].c += coef * expr[p].c;
           cleanT(expr[q]); snap(q);
-          board[q] = name[q] + ' = ' + fmtExpr(expr[q]);
+          board[q] = boardCell(q);
           solveSubs.push({
             title: 'put ' + name[p] + ' into ' + name[q],
             body: 'Mesh <b>' + name[q] + '</b>’s line still mentions ' + name[p] + ', and that one is already known (' +
@@ -879,7 +886,7 @@
           });
           if (selfTerm) {
             resolveSelf(expr[q], q); cleanT(expr[q]); snap(q);
-            board[q] = name[q] + ' = ' + fmtExpr(expr[q]);
+            board[q] = boardCell(q);
             // a self-term too small to show rounds away to the same line — don't waste a view on it
             if (fmtExpr(expr[q]) !== afterLine) solveSubs.push({
               title: name[q] + ' — collect and divide',

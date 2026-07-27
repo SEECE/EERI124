@@ -15,6 +15,7 @@
   <script src="generators/grid.js"></script>
   <script src="generators/multi-source.js"></script>
   <script src="generators/current-source.js"></script>
+  <script src="generators/dependent.js"></script>
   <script src="solve.js"></script>
   <script src="techniques/kit.js"></script>
   <script src="techniques/controls.js"></script>
@@ -130,6 +131,60 @@
       assert(Solve.powerCheck(Solve.branches(c, Solve.nodeVoltages(c))).ok, 'power imbalance');
     });
 
+    // ---- the four controlled sources, each against a hand-worked answer ----
+    // A CCVS of 500·iφ in series with 1 kΩ + 2 kΩ off a 12 V source: KVL round the loop gives
+    // 12 = 1000i + 2000i + 500i (the source opposes), so i = 12/2500 = 4.8 mA.
+    check('CCVS (current-controlled voltage source)', function () {
+      var c = C(4, [['V', 0, 1, 12], ['R', 1, 2, 1000], ['R', 2, 3, 2000], ['H', 3, 0, 500]]);
+      c.edges[3].control = 'e1';
+      var sol = Solve.nodeVoltages(c);
+      assert(near(sol.ctrl['e3'], 0.0048, 1e-9), 'iφ = ' + sol.ctrl['e3'] + ' ≠ 4.8 mA');
+      assert(near(v(sol, 2), 7.2, 1e-9) && near(v(sol, 3), -2.4, 1e-9), 'node voltages ' + v(sol, 2) + ',' + v(sol, 3));
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    });
+
+    // A VCVS of 2·vΔ, vΔ across the 1 kΩ: 12 = 1000i + 2000i − 2·(1000i) → i = 12 mA.
+    check('VCVS (voltage-controlled voltage source)', function () {
+      var c = C(4, [['V', 0, 1, 12], ['R', 1, 2, 1000], ['R', 2, 3, 2000], ['E', 3, 0, 2]]);
+      c.edges[3].control = 'e1';
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 2), 0, 1e-9) && near(v(sol, 3), -24, 1e-9), 'node voltages ' + v(sol, 2) + ',' + v(sol, 3));
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    });
+
+    // A CCCS of 3·iφ across the 2 kΩ, iφ through the 1 kΩ:
+    // KCL at the tap → (v−12)/1000 + v/2000 + 3(12−v)/1000 = 0 → v = 16 V.
+    check('CCCS (current-controlled current source)', function () {
+      var c = C(3, [['V', 0, 1, 12], ['R', 1, 2, 1000], ['R', 2, 0, 2000], ['F', 2, 0, 3]]);
+      c.edges[3].control = 'e1';
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 2), 16, 1e-9), 'tap ' + v(sol, 2) + ' ≠ 16 V');
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    });
+
+    // A VCCS of vΔ/500, vΔ across the 1 kΩ: same sum with 4(12−v)/2000 → v = 24 V.
+    check('VCCS (voltage-controlled current source)', function () {
+      var c = C(3, [['V', 0, 1, 12], ['R', 1, 2, 1000], ['R', 2, 0, 2000], ['G', 2, 0, 1 / 500]]);
+      c.edges[3].control = 'e1';
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 2), 24, 1e-9), 'tap ' + v(sol, 2) + ' ≠ 24 V');
+      assert(near(sol.depI['e3'], (12 - 24) / 500, 1e-9), 'source current ' + sol.depI['e3']);
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    });
+
+    // ---- a controlled boundary current source gives no KVL row, but no VALUE either ----
+    check('dependent boundary source is fixed but not known', function () {
+      var c = Circuit.get('Supermesh (shared dependent current source)').generate();
+      var mc = Solve.meshCurrents(c);
+      var sm = mc.groups.filter(function (g) { return g.meshes.length > 1; });
+      assert(sm.length === 1, 'a shared controlled source should still weld one supermesh');
+      assert(!sm[0].known, 'a controlled source never hands its value over outright');
+      var s = mc.iSources[0];
+      assert(s.dep, 'the shared source should be flagged dependent');
+      assert(near(mc.i[mc.meshOf[s.fa]] - mc.i[mc.meshOf[s.fb]], s.e.value * mc.ctrlVec(s.e).reduce(function (a, x, j) { return a + x * mc.i[j]; }, 0), 1e-9),
+        'constraint i_fa − i_fb = gain·control not satisfied');
+    });
+
     // ---- every generator: node-voltage solves, mesh agrees, power balances ----
     Circuit.list().forEach(function (g) {
       check('solve ' + g.name + ' ×30', function () {
@@ -195,8 +250,26 @@
           });
           // the substitution chain reaching the engine's number is what makes "falls out" a
           // single line; two lines would mean the hand algebra and the solver disagree
-          (steps[7].subs || []).forEach(function (view) {
+          var hasDep = c.edges.some(function (e) { return Circuit.isDependent(e.type); });
+          if (!hasDep) (steps[7].subs || []).forEach(function (view) {
             if (/ — falls out$/.test(view.title)) assert(view.eq.length === 1, 'substitution chain ended at ' + view.eq[0] + ', engine says ' + view.eq[1]);
+          });
+          // whatever route the narration took, the last board must show every solved value —
+          // this is the invariant that a dependent circuit must not lose
+          function lastBoard(list) {
+            var b = null;
+            list.forEach(function (s2) { [s2].concat(s2.subs || []).forEach(function (view) { if (view.board) b = view.board; }); });
+            return b;
+          }
+          var ln = Solve.letterNodes(c), nsol = Solve.nodeVoltages(c), kb = lastBoard(kcl);
+          ln.groups.forEach(function (grp) {
+            assert(kb.indexOf('<td>' + Solve.si(nsol.v[grp], 'V') + '</td>') >= 0,
+              'KCL board never reached ' + ln.letter[grp] + ' = ' + Solve.si(nsol.v[grp], 'V'));
+          });
+          var mb = lastBoard(steps);
+          mc.order.forEach(function (f, idx) {
+            assert(mb.indexOf('<td>' + Solve.si(mc.i[mc.meshOf[f]], 'A') + '</td>') >= 0,
+              'KVL board never reached i' + (idx + 1) + ' = ' + Solve.si(mc.i[mc.meshOf[f]], 'A'));
           });
         }
       });
