@@ -8,8 +8,11 @@
    only the equivalent-resistance-over-two-points technique uses it.
 
    Usage:  SolverPage({ filter: { elements: ['R', 'V', 'W'] } });
-   filter goes straight to Circuit.list() (see structure/GENERATORS.md). Plain script, one
-   global, no ES modules — the site must open over file://. */
+   filter goes straight to Circuit.list() (see structure/GENERATORS.md). A page that offers
+   more than one topology set (e.g. current-sources: its own circuits vs. all of §3's) instead
+   passes `sets: [{ value, label, filter }, …]` plus a #circuit-set <select> in its DOM; the
+   topology dropdown is rebuilt from the chosen set's filter. Plain script, one global, no ES
+   modules — the site must open over file://. */
 (function () {
   'use strict';
 
@@ -17,20 +20,37 @@
     opts = opts || {};
     var topoSel = document.getElementById('topology');
     var techSel = document.getElementById('technique');
+    var setSel = document.getElementById('circuit-set');
     var termWrap = document.getElementById('terminals');
     var termA = document.getElementById('termA');
     var termB = document.getElementById('termB');
     var svg = document.getElementById('canvas');
     var circuit = null;
 
+    if (opts.sets) {
+      opts.sets.forEach(function (s) {
+        var o = document.createElement('option');
+        o.value = s.value; o.textContent = s.label; setSel.appendChild(o);
+      });
+    }
+    function currentFilter() {
+      if (!opts.sets) return opts.filter;
+      var hit = opts.sets.filter(function (s) { return s.value === setSel.value; })[0];
+      return hit.filter;
+    }
+
     // the topic's slice of the generator registry — the page's safety net: a generator loaded
     // by accident still cannot appear on a page that does not teach its elements
-    Circuit.list(opts.filter).forEach(function (g) {
-      var o = document.createElement('option');
-      o.value = g.name;
-      o.textContent = g.name;
-      topoSel.appendChild(o);
-    });
+    function refreshTopology() {
+      topoSel.innerHTML = '';
+      Circuit.list(currentFilter()).forEach(function (g) {
+        var o = document.createElement('option');
+        o.value = g.name;
+        o.textContent = g.name;
+        topoSel.appendChild(o);
+      });
+    }
+    refreshTopology();
 
     var stepper = Stepper({
       svg: svg,
@@ -91,6 +111,7 @@
     document.getElementById('generate').addEventListener('click', generate);
     topoSel.addEventListener('change', generate);
     techSel.addEventListener('change', runTechnique); // re-analyse the same circuit
+    if (setSel) setSel.addEventListener('change', function () { refreshTopology(); generate(); });
     if (termA) termA.addEventListener('change', runTechnique);
     if (termB) termB.addEventListener('change', runTechnique);
     generate();
