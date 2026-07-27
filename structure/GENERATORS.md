@@ -89,7 +89,10 @@ Rules:
    on its exact wiring.
 7. **A current source may only sit on an edge that is not a cut.** A source in a bridge branch
    (or two in series) has nowhere to send its current — unsolvable, not hard. `random-grid.js`
-   checks connectivity with the chosen source edges removed before converting a resistor.
+   checks connectivity with the chosen source edges removed before converting a resistor; so
+   does `Circuit.currentify()`, the same idea applied to an already-built circuit rather than
+   at generation time — used by the current-sources page's "All topologies" set to turn some
+   of §3's resistors into current sources (see SOLVER.md's `SolverPage({ sets })`).
 8. **A generator returns a valid circuit or `undefined`.** `build()` already validates;
    retry loops belong inside the generator (see `random-grid.js`).
 

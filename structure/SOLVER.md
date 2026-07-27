@@ -24,10 +24,14 @@ resistance stays on §3: it needs sources to *deactivate*, and deactivating a cu
 
 `topics/current-sources/` loads §3's generator files too and offers a **Circuit set** dropdown
 (`#circuit-set`) alongside Topology: its own I-bearing circuits (`tags: ['current-source']`),
-or the full §3 topology family (`elements: ['R','V','W']`, same filter as the §3 page) for
-KCL/KVL practice without a current source in the mix. `SolverPage({ sets: [...] })` — see
-`js/solver-page.js`'s header comment — rebuilds the Topology dropdown from whichever set is
-selected; a page with one filter still just passes `{ filter }`.
+or the full §3 topology family (`elements: ['R','V','W']`, same filter as the §3 page) — but
+run through `Circuit.currentify()` (GENERATORS.md #7), which turns some of the generated
+circuit's resistors (and, sometimes, a spare voltage source) into current sources, so §3's
+shapes drill supermesh / known-mesh-current too instead of always being voltage-source-only.
+`SolverPage({ sets: [...] })` — see `js/solver-page.js`'s header comment — rebuilds the
+Topology dropdown from whichever set is selected and runs the set's optional `transform`
+(here, `currentify`) on each freshly generated circuit; a page with one filter and no transform
+still just passes `{ filter }`.
 
 **Supernodes and supermeshes are real content, not "later".** The engine is modified nodal
 analysis plus a supermesh-aware mesh solve, so a voltage source between two non-reference nodes
