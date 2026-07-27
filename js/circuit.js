@@ -180,7 +180,9 @@
       // of the drawing — a fixed side lands inside the loop half the time (and the source
       // symbols, whose a/b order is randomised, flipped sides at random)
       var side = ((mx - midX) * -uy + (my - midY) * ux) >= 0 ? 1 : -1;
-      var lx = mx - uy * 38 * side, ly = my + ux * 38 * side;   // 38 clears the r=16 source circle and the resistor box
+      // 46 clears the r=16 source circle even for the widest label ("100 mA", "4.7 kΩ") — 38
+      // cleared shorter R/V labels but let a 6-char current-source reading overlap its own circle
+      var lx = mx - uy * 46 * side, ly = my + ux * 46 * side;
       var eg = el('g', { 'class': 'edge edge-' + e.type, 'data-eid': e.id }, svg);
 
       if (e.type === 'W') { line(a.x, a.y, b.x, b.y, eg); return; }
