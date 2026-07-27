@@ -178,6 +178,46 @@
     return validate(circuit);
   }
 
+  /* A dependent source can be given a gain that makes its circuit degenerate — the classic case
+     is a controlled voltage source whose gain cancels the loop resistance, leaving a singular
+     system, or one that lands just short of it and drives the answers to absurd magnitudes.
+     There is no cheap algebraic test for it, so a generator that places one just SOLVES the
+     candidate and keeps it only if it comes out sane. Uses the solver if it is loaded; in a
+     model-only context (circuit.test.html) there is nothing to check and everything passes. */
+  function solvable(c) {
+    var S = window.Solve;
+    if (!S) return true;
+    try {
+      var sol = S.nodeVoltages(c);
+      var br = S.branches(c, sol);
+      if (!S.powerCheck(br).ok) return false;
+      if (!br.every(function (r) { return isFinite(r.current) && Math.abs(r.current) < 10; })) return false;
+      if (!Object.keys(sol.v).every(function (g) { return isFinite(sol.v[g]) && Math.abs(sol.v[g]) < 1000; })) return false;
+      // a control variable that came out at zero means the controlled source is dead — the
+      // problem would look like it has a dependent source and behave as if it had none
+      if (!(sol.deps || []).every(function (e) { return Math.abs(sol.ctrl[e.id]) > 1e-9; })) return false;
+      S.meshCurrents(c);                 // both techniques are offered, so both must solve
+      return true;
+    } catch (err) { return false; }
+  }
+
+  /* Retry wrapper for generators that place dependent sources: build, check, build again.
+     ponytail: after 30 random tries the gains are halved instead — a small enough gain is always
+     a perturbation of the underlying resistive circuit, so this terminates; the label just gets
+     less pretty. In practice the random tries succeed on the first or second go. */
+  function attempt(make) {
+    var last;
+    for (var k = 0; k < 30; k++) {
+      try { last = make(); } catch (err) { last = null; }
+      if (last && solvable(last)) return last;
+    }
+    for (var h = 0; h < 12 && last; h++) {
+      last.edges.forEach(function (e) { if (isDependent(e.type)) e.value /= 2; });
+      if (solvable(last)) return last;
+    }
+    return last;
+  }
+
   /* ---------- control variables ----------
      Names the quantity each dependent source reads, once per (control edge, kind) pair, so the
      renderer's marker, the step text and the equations all say the same thing. The slides' own
@@ -217,6 +257,65 @@
       list.push(entry); of[e.id] = entry;
     });
     return { list: list, of: of, marks: marks };
+  }
+
+  /* Turn a resistor or two already on the circuit into DEPENDENT sources, each reading another
+     resistor — `currentify()`'s sibling, used by the dependent-sources page's "All topologies"
+     set so §3/§4's shapes can be drilled with controlled sources instead of only the templates
+     written for them. The independent sources are never touched, so the circuit always keeps at
+     least one (a network of controlled sources alone solves to all zeros).
+     Same cut-safety rule as `currentify()` for the current-type ones (GENERATORS.md #7), and a
+     control resistor is never a dead-end branch — its current would be zero and the controlled
+     source with it. Works on a copy per attempt and returns the first candidate that solves;
+     if none does, the original circuit comes back untouched. */
+  function pickDepType(out) { return out === 'v' ? pick(['E', 'H']) : pick(['F', 'G']); }
+
+  function dependify(circuit, opts) {
+    opts = opts || {};
+    var want = opts.count || (Math.random() < 0.3 ? 2 : 1);
+    for (var k = 0; k < 25; k++) {
+      var c = JSON.parse(JSON.stringify(circuit));
+      if (place(c, want) && solvable(c)) return c;
+    }
+    return circuit;
+
+    function place(c, n) {
+      var edges = c.edges, chosen = {}, placed = 0;
+      var deg = {};
+      edges.forEach(function (e) { deg[e.a] = (deg[e.a] || 0) + 1; deg[e.b] = (deg[e.b] || 0) + 1; });
+      function isR(e) { return e.type === 'R'; }
+      function liveR(e) { return isR(e) && deg[e.a] > 1 && deg[e.b] > 1; }   // carries current
+      function wouldCut(skip) {
+        var p = {};
+        function find(x) { if (p[x] === undefined) p[x] = x; while (p[x] !== x) { p[x] = p[p[x]]; x = p[x]; } return x; }
+        edges.forEach(function (e, j) { if (chosen[j] || j === skip || e.type === 'F' || e.type === 'G') return; p[find(e.a)] = find(e.b); });
+        var root = find(c.nodes[0].id);
+        return !c.nodes.every(function (x) { return find(x.id) === root; });
+      }
+      for (var t = 0; t < n; t++) {
+        var out = Math.random() < 0.5 ? 'v' : 'i', type = pickDepType(out);
+        var cands = [];
+        edges.forEach(function (e, j) {
+          if (chosen[j] || !isR(e)) return;
+          if (out === 'i' && wouldCut(j)) return;              // a current source in a cut branch
+          cands.push(j);
+        });
+        if (!cands.length) break;
+        var j = pick(cands);
+        // the control resistor must survive this pass and actually carry current
+        var ctrls = [];
+        edges.forEach(function (e, q) { if (q !== j && !chosen[q] && liveR(e)) ctrls.push(q); });
+        if (!ctrls.length) break;
+        var q = pick(ctrls);
+        chosen[j] = true;
+        edges[j] = { id: edges[j].id, type: type, a: edges[j].a, b: edges[j].b,
+          value: pickGain(type), control: edges[q].id };
+        placed++;
+      }
+      if (!placed) return false;
+      try { validate(c); } catch (err) { return false; }
+      return true;
+    }
   }
 
   /* ---------- generator registry ----------
@@ -581,8 +680,11 @@
     isConnected: isConnected,
     build: build,
     currentify: currentify,
+    dependify: dependify,
     degenerate: degenerate,
     controls: controls,
+    solvable: solvable,
+    attempt: attempt,
     isDependent: isDependent,
     isSource: isSource,
     // value pickers, for generator files
@@ -591,6 +693,7 @@
     pickV: pickV,
     pickI: pickI,
     pickGain: pickGain,
+    pickDepType: pickDepType,
     // registry
     register: register,
     list: list,

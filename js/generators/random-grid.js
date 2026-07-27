@@ -133,4 +133,19 @@
   C.register('Random (current sources)', function () {
     return randomGrid({ currentSources: Math.random() < 0.4 ? 2 : 1, maxMeshes: 4 });
   }, { elements: ['R', 'V', 'I', 'W'], tags: ['random', 'current-source', 'grid', 'mesh'] });
+
+  // The dependent-sources version: the same grid, sometimes with an independent current source
+  // in it as well, then one or two of its resistors turned into controlled sources reading
+  // another resistor. Random type, random gain, so a press can produce any of the four — and
+  // Circuit.attempt() throws away the candidates whose gain leaves the circuit degenerate.
+  C.register('Random (dependent sources)', function () {
+    return C.attempt(function () {
+      var c = randomGrid({ currentSources: Math.random() < 0.4 ? 1 : 0, maxMeshes: 4 });
+      if (!c) return null;
+      c = C.dependify(c, { count: Math.random() < 0.3 ? 2 : 1 });
+      // dependify hands the circuit back unchanged when it could not place one — no dependent
+      // source means this is not the generator the page asked for, so try another grid
+      return c.edges.some(function (e) { return C.isDependent(e.type); }) ? c : null;
+    });
+  }, { elements: ['R', 'V', 'I', 'W', 'E', 'F', 'G', 'H'], tags: ['random', 'dependent-source', 'grid', 'mesh'] });
 })(window.Circuit);
