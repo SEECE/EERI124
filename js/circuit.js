@@ -302,7 +302,11 @@
       var ldir = gaps.length > 1 ? gaps[1] : gaps[0];
       circleOf[n.id].setAttribute('data-ldir', (ldir * 180 / Math.PI).toFixed(1));
       var lx = p.x + Math.cos(ldir) * 20, ly = p.y + Math.sin(ldir) * 20;
-      fit(lx, ly, n.label + '   ');        // room for the voltage reading drawn here later too
+      fit(lx, ly, n.label);
+      // the voltage reading (drawn later, by highlight()) sits 60° off ldir at radius 44 —
+      // reserve that spot too so the viewBox never clips it once a step reveals it
+      var vrad = ldir + 60 * Math.PI / 180;
+      fit(p.x + Math.cos(vrad) * 44, p.y + Math.sin(vrad) * 44, '-99.9 mV');
       // hidden by default; a solver step reveals it via highlight({ labels: [nodeId] })
       // so letters appear when the method names them, not from the start
       el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, svg)
@@ -395,9 +399,13 @@
     });
 
     // physical voltage reading once a node is known/solved (spec.volts = {nodeId: text}) —
-    // offset along the node's letter direction (data-ldir, the *second*-widest gap) at a
-    // bigger radius than the letter, so it clears both the wires and the ground symbol
-    // (which claims the widest gap) instead of sitting in a fixed spot above the node.
+    // offset from the node's letter direction (data-ldir, the *second*-widest gap), so it
+    // clears both the wires and the ground symbol (which claims the widest gap) instead of
+    // sitting in a fixed spot above the node. Rotated 60° off ldir and pushed to a bigger
+    // radius than the letter — sitting on the SAME ray as the letter (old: same angle, radius
+    // 36 vs the letter's 20) left only 16px of radial gap, not enough to clear either label's
+    // width or height, so the two almost always overlapped. The rotation buys real angular
+    // separation instead of relying on radius alone.
     Array.prototype.forEach.call(svg.querySelectorAll('.node-volt'), function (t) {
       t.parentNode.removeChild(t);
     });
@@ -407,8 +415,9 @@
       if (!c) return;
       var x = +c.getAttribute('cx'), y = +c.getAttribute('cy');
       var ldirAttr = c.getAttribute('data-ldir');
-      var rad = ldirAttr !== null ? (+ldirAttr * Math.PI / 180) : -Math.PI / 2;  // default: straight up
-      var vx = x + Math.cos(rad) * 36, vy = y + Math.sin(rad) * 36;
+      var ldir = ldirAttr !== null ? (+ldirAttr * Math.PI / 180) : -Math.PI / 2;  // default: straight up
+      var rad = ldir + 60 * Math.PI / 180;
+      var vx = x + Math.cos(rad) * 44, vy = y + Math.sin(rad) * 44;
       el('text', {
         'class': 'node-volt', x: vx, y: vy, 'text-anchor': 'middle', 'dominant-baseline': 'central',
         fill: 'var(--accent-hover)', 'font-size': 12, 'font-weight': 600,
