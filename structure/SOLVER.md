@@ -116,7 +116,10 @@ A technique returns an array of steps:
   `css/solver.css`, which beats the renderer's presentation attributes). `hl.marks` reveals a
   control variable's notation, keyed `'i:<edgeId>'` / `'v:<edgeId>'` — like `hl.labels`, a view
   that omits it *erases* the markers, so both techniques stamp the full set onto any view that
-  is not about one particular source.
+  is not about one particular source. `hl.pol` is the same idea for **resistor polarity** (step 4 of
+  both methods), keyed `'<edgeId>:<nodeId>'` — the named terminal takes the `+`. Both readings of
+  every resistor are pre-drawn (hidden) at render, so a shared resistor's `+` simply moves to the
+  other end when the second mesh's walk meets it.
 - `board` (optional) → the **running board** html (KCL: node voltages, KVL: mesh currents). The
   stepper renders it into its own element (`#step-board`), **pinned to the bottom of the panel**
   (`css/solver.css`, `position: sticky`), so it stays in one place while the derivation scrolls

@@ -549,6 +549,25 @@
       }
     });
 
+    // ---- polarity marks on the resistors (+ … −), hidden until a step reveals them via
+    // highlight({ pol: ['<edgeId>:<terminalNodeId>'] }) — the key names the terminal that gets
+    // the +, so both readings of the same resistor are pre-drawn and either can be shown. KVL
+    // marks + where the mesh current enters; KCL marks + at the node whose sum is being written.
+    // They sit just past the resistor body (along ±28), one glyph-height off the wire (across 12,
+    // on the value-label's side): clear of the lead line, the body, its label at across 34, and
+    // the control markers on the far side.
+    circuit.edges.filter(function (e) { return e.type === 'R'; }).forEach(function (e) {
+      var G = geom(e);
+      [[e.a, 1], [e.b, -1]].forEach(function (pr) {
+        var g = el('g', { 'class': 'pol-mark', 'data-pol': e.id + ':' + pr[0] }, svg);
+        [['+', pr[1]], ['−', -pr[1]]].forEach(function (m) {
+          var al = -28 * m[1];                       // a-end is the −ux direction from the middle
+          label(G.mx + G.ux * al + G.vx * 12 * G.side, G.my + G.uy * al + G.vy * 12 * G.side,
+            m[0], g, { fill: 'var(--accent-hover)', size: 14, weight: 700, halo: 4 });
+        });
+      });
+    });
+
     var circleOf = {};
     circuit.nodes.forEach(function (n) {
       var p = byId[n.id];
@@ -606,7 +625,9 @@
 
   /* Toggle a 'hl' class on the edges/nodes a solver step wants to emphasise.
      spec = { edges:[edgeId], nodes:[nodeId], labels:[nodeId], marks:[markKey], loops:[...],
-     ground:[nodeId], volts:{nodeId:text} }; anything not listed is un-highlighted. `labels`
+     pol:['<edgeId>:<nodeId>'], ground:[nodeId], volts:{nodeId:text} }; anything not listed is
+     un-highlighted. `pol` reveals a resistor's + … − pair, the named terminal taking the +.
+     `labels`
      reveals the node letters (hidden at render) for the step that introduces them onward;
      `marks` does the same for the control-variable notation a dependent source reads, keyed
      'i:<edgeId>' / 'v:<edgeId>' (Circuit.controls().marks gives the keys). `ground` draws the
@@ -618,6 +639,10 @@
     var marks = spec.marks || [];
     Array.prototype.forEach.call(svg.querySelectorAll('.ctrl-mark'), function (g) {
       g.classList.toggle('show', marks.indexOf(g.getAttribute('data-mark')) >= 0);
+    });
+    var pol = spec.pol || [];
+    Array.prototype.forEach.call(svg.querySelectorAll('.pol-mark'), function (g) {
+      g.classList.toggle('show', pol.indexOf(g.getAttribute('data-pol')) >= 0);
     });
     Array.prototype.forEach.call(svg.querySelectorAll('[data-eid]'), function (g) {
       g.classList.toggle('hl', edges.indexOf(g.getAttribute('data-eid')) >= 0);
