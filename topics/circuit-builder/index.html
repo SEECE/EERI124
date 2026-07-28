@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Build a circuit — EERI 124</title>
+  <link rel="stylesheet" href="../../css/tokens.css" />
+  <link rel="stylesheet" href="../../css/base.css" />
+  <link rel="stylesheet" href="../../css/circuit-page.css" />
+  <link rel="stylesheet" href="../../css/builder.css" />
+</head>
+
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="../../index.html">EERI 124 <span>· Electrotechnique 1</span></a>
+    <div class="nav-links">
+      <a href="../../index.html">Topics</a>
+    </div>
+  </nav>
+
+  <main class="page circuit-page">
+    <header class="circuit-topbar">
+      <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Build a circuit</nav>
+      <h1>Build a circuit</h1>
+    </header>
+
+    <div class="circuit-layout">
+      <aside class="circuit-sidebar builder-sidebar">
+        <div class="control-group">
+          <h3>Complexity</h3>
+          <select id="level"></select>
+        </div>
+
+        <div class="sidebar-split">
+          <div class="sidebar-pane">
+            <h3>Element</h3>
+            <div class="palette" id="palette"></div>
+          </div>
+          <div class="sidebar-divider"></div>
+          <div class="sidebar-pane">
+            <h3>Tune</h3>
+            <div class="dep-toggles" id="dep-toggles">
+              <div class="toggle-group">
+                <span>Controlled by</span>
+                <label><input type="radio" name="dep-ctrl" value="v" checked /> Voltage</label>
+                <label><input type="radio" name="dep-ctrl" value="i" /> Current</label>
+              </div>
+              <div class="toggle-group">
+                <span>Delivers</span>
+                <label><input type="radio" name="dep-out" value="v" checked /> Voltage</label>
+                <label><input type="radio" name="dep-out" value="i" /> Current</label>
+              </div>
+            </div>
+            <div class="value-row" id="value-row">
+              <input type="number" id="value-input" step="any" />
+              <span id="value-unit"></span>
+            </div>
+            <div class="control-row" id="control-row">
+              <span>reads</span>
+              <select id="control-select"></select>
+              <select id="control-dir"></select>
+            </div>
+            <p class="type-desc" id="type-desc"></p>
+
+            <h3 class="pane-subhead">Grid size</h3>
+            <div class="grid-size-pair">
+              <div class="grid-size-row">
+                <span>Cols</span>
+                <button id="cols-minus">−</button>
+                <span id="cols-count"></span>
+                <button id="cols-plus">+</button>
+              </div>
+              <div class="grid-size-row">
+                <span>Rows</span>
+                <button id="rows-minus">−</button>
+                <span id="rows-count"></span>
+                <button id="rows-plus">+</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="control-group">
+          <p class="builder-hint">Click a grid dot, then an adjacent dot to add the selected
+            element between them. Click an existing element to remove it.</p>
+        </div>
+        <div class="control-group">
+          <button id="clear">Clear</button>
+        </div>
+        <div class="control-group">
+          <h3>Import / Export</h3>
+          <button id="export-circuit">Export JSON</button>
+          <label class="file-label">Import JSON
+            <input type="file" id="import-circuit" accept="application/json" hidden />
+          </label>
+          <div class="import-error" id="builder-error"></div>
+        </div>
+      </aside>
+
+      <div class="circuit-canvas"><svg id="canvas"></svg></div>
+    </div>
+  </main>
+
+  <footer>EERI 124 — Electrotechnique 1</footer>
+
+  <script src="../../js/circuit.js"></script>
+  <script src="../../js/builder.js"></script>
+  <script>
+    CircuitBuilder({
+      canvas: 'canvas',
+      level: 'level',
+      palette: 'palette',
+      valueRow: 'value-row',
+      valueInput: 'value-input',
+      unit: 'value-unit',
+      depToggles: 'dep-toggles',
+      controlRow: 'control-row',
+      controlSelect: 'control-select',
+      controlDir: 'control-dir',
+      typeDesc: 'type-desc',
+      error: 'builder-error',
+      clear: 'clear',
+      exportBtn: 'export-circuit',
+      importInput: 'import-circuit',
+      colsMinus: 'cols-minus',
+      colsPlus: 'cols-plus',
+      colsCount: 'cols-count',
+      rowsMinus: 'rows-minus',
+      rowsPlus: 'rows-plus',
+      rowsCount: 'rows-count',
+    });
+  </script>
+</body>
+
+</html>

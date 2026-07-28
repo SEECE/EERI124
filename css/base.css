@@ -1,5 +1,10 @@
-/* Reset, page shell, global navigation + footer. Loaded on every page. */
+/* Reset, page shell, global navigation + footer. Loaded on every page.
+   The body is a full-height flex column: nav (auto) · page (flex:1) · footer (auto).
+   Circuit pages lean on this chain to bound their inner height and scroll each column
+   internally — so no page needs a magic-number height any more. */
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { height: 100%; }
 
 body {
   font-family: var(--font);
@@ -10,19 +15,31 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
+  -webkit-font-smoothing: antialiased;
 }
 
 a { color: inherit; text-decoration: none; }
 
+/* one consistent keyboard-focus ring everywhere, and never on mouse click */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: var(--radius-sm);
+}
+
 /* ── global nav bar ── */
 .nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 14px clamp(16px, 4vw, 40px);
-  background: rgba(0, 0, 0, 0.15);
-  backdrop-filter: blur(6px);
+  gap: var(--sp-5);
+  padding: var(--sp-3) clamp(16px, 4vw, 40px);
+  background: rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--hairline);
 }
 
@@ -31,29 +48,29 @@ a { color: inherit; text-decoration: none; }
   color: var(--on-bg);
   letter-spacing: 0.02em;
 }
-
 .nav-brand span { color: var(--on-bg-soft); font-weight: 400; }
 
-.nav-links { margin-left: auto; display: flex; gap: 18px; }
-
+.nav-links { margin-left: auto; display: flex; gap: var(--sp-4); }
 .nav-links a {
   font-size: 13px;
   color: var(--on-bg-soft);
-  transition: color 0.2s;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
-.nav-links a:hover,
+.nav-links a:hover { color: var(--on-bg); background: rgba(255, 255, 255, 0.08); }
 .nav-links a[aria-current="page"] { color: var(--on-bg); }
 
-/* page content column */
+/* page content column (default document-flow pages: home, placeholders) */
 .page {
   width: 100%;
   max-width: var(--content-max);
-  padding: 48px clamp(16px, 4vw, 40px) 80px;
+  padding: var(--sp-7) clamp(16px, 4vw, 40px) var(--sp-7);
   flex: 1;
 }
 
 footer {
-  padding: 24px;
+  padding: var(--sp-5);
   font-size: 12px;
   color: var(--on-bg-faint);
   text-align: center;

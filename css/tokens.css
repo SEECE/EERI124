@@ -1,6 +1,8 @@
-/* Design tokens — the only file you edit to reskin the whole site. */
+/* Design tokens — the only file you edit to reskin the whole site.
+   Palette values are unchanged from the original; everything else is the shared
+   scale (spacing, elevation, motion) the rebuilt stylesheets consume. */
 :root {
-  /* palette (carried over from the algorithms playground) */
+  /* ── palette (unchanged) ── */
   --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   --surface: rgba(255, 255, 255, 0.95);
   --accent: #8b5cf6;
@@ -9,6 +11,12 @@
   --ink: #333;
   --ink-soft: #4b5563;
   --ink-faint: #9ca3af;
+  --danger: #c0392b;
+
+  /* derived surface tints (built from the accent above — no new hues) */
+  --accent-wash: rgba(139, 92, 246, 0.08);   /* 8b5cf6 @ 8%  — equation blocks, tags */
+  --accent-line: rgba(139, 92, 246, 0.18);   /* 8b5cf6 @ 18% — hairlines on wash */
+  --sunken: rgba(17, 24, 39, 0.04);          /* faint inset panels on white surface */
 
   /* text on the coloured background */
   --on-bg: #fff;
@@ -16,12 +24,37 @@
   --on-bg-faint: rgba(255, 255, 255, 0.5);
   --hairline: rgba(255, 255, 255, 0.15);
 
-  /* shape */
-  --radius: 12px;
-  --radius-sm: 6px;
-  --shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 14px 24px rgba(0, 0, 0, 0.3);
+  /* ── shape ── */
+  --radius: 14px;
+  --radius-sm: 8px;
+  --radius-pill: 999px;
 
+  /* ── elevation ── */
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.12);
+  --shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.30);
+  --ring: 0 0 0 3px rgba(139, 92, 246, 0.45);   /* focus-visible outline */
+
+  /* ── spacing scale (4px base) ── */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+
+  /* ── motion ── */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur: 0.2s;
+
+  /* ── type ── */
   --font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  --content-max: 960px;
+  --font-math: 'STIX Two Math', 'Cambria Math', Cambria, 'Times New Roman', serif;
+  --content-max: 1040px;
+}
+
+/* respect users who ask the OS to reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur: 0s; }
 }

@@ -1,13 +1,13 @@
 /* Home page: hero header, section labels, topic card grid. */
-.home-header { text-align: center; margin-bottom: 48px; }
+.home-header { text-align: center; margin-bottom: var(--sp-7); }
 
 .home-header h1 {
-  font-size: clamp(24px, 5vw, 42px);
+  font-size: clamp(26px, 5vw, 44px);
   color: var(--on-bg);
   text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
-  margin-bottom: 10px;
+  margin-bottom: var(--sp-2);
+  letter-spacing: -0.01em;
 }
-
 .home-header p { color: var(--on-bg-soft); font-size: 14px; }
 
 .section-label {
@@ -15,58 +15,69 @@
   letter-spacing: 0.15em;
   text-transform: uppercase;
   color: var(--on-bg-faint);
-  padding-bottom: 8px;
+  padding-bottom: var(--sp-2);
   border-bottom: 1px solid var(--hairline);
-  margin: 32px 0 14px;
+  margin: var(--sp-6) 0 var(--sp-4);
 }
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--sp-4);
 }
 
 .card {
   display: block;
   background: var(--surface);
   border-radius: var(--radius);
-  padding: 24px 24px 20px;
+  padding: var(--sp-5) var(--sp-5) var(--sp-4);
   box-shadow: var(--shadow);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
   position: relative;
   overflow: hidden;
 }
-
+/* accent bar along the top edge, revealed on hover — same purple, no new colour */
+.card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-deep));
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform var(--dur) var(--ease);
+}
 .card::after {
   content: '→';
   position: absolute;
-  bottom: 18px;
-  right: 20px;
+  bottom: var(--sp-4);
+  right: var(--sp-5);
   font-size: 18px;
   color: var(--accent);
   opacity: 0;
   transform: translateX(-6px);
-  transition: opacity 0.2s, transform 0.2s;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-
-.card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+.card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+.card:hover::before { transform: scaleX(1); }
 .card:hover::after { opacity: 1; transform: translateX(0); }
 
-.card-title { font-size: 18px; font-weight: 700; color: var(--accent-deep); margin-bottom: 4px; }
-.card-sub { font-size: 12px; color: var(--ink-faint); }
+.card-title { font-size: 18px; font-weight: 700; color: var(--accent-deep); margin-bottom: var(--sp-1); letter-spacing: -0.01em; }
+.card-sub { font-size: 12px; color: var(--ink-faint); line-height: 1.5; }
 
 /* placeholder cards (visualiser not built yet) */
 .card--todo { opacity: 0.85; }
 .card--todo .card::after,
-.card--todo::after { content: none; }
+.card--todo::after,
+.card--todo::before { content: none; }
 .card .tag {
   display: inline-block;
-  margin-top: 12px;
+  margin-top: var(--sp-3);
   font-size: 10px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--accent-hover);
   background: #ede9fe;
   padding: 3px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }

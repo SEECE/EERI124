@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>solve.js self-check</title>
+</head>
+
+<body>
+  <pre id="out"></pre>
+  <script src="circuit.js"></script>
+  <script src="generators/random-grid.js"></script>
+  <script src="generators/basic.js"></script>
+  <script src="generators/bridge-ladder.js"></script>
+  <script src="generators/grid.js"></script>
+  <script src="generators/multi-source.js"></script>
+  <script src="generators/current-source.js"></script>
+  <script src="generators/dependent.js"></script>
+  <script src="solve.js"></script>
+  <script src="techniques/kit.js"></script>
+  <script src="techniques/controls.js"></script>
+  <script src="techniques/mesh-current.js"></script>
+  <script src="techniques/node-voltage.js"></script>
+  <script>
+    var out = [];
+    function check(label, fn) {
+      try { fn(); out.push('PASS ' + label); }
+      catch (err) { out.push('FAIL ' + label + ' — ' + err.message); }
+    }
+    function assert(cond, msg) { if (!cond) throw new Error(msg); }
+    function near(a, b, t) { return Math.abs(a - b) <= (t || 1e-9); }
+
+    // compact circuit builder for the hand-computed cases (bypasses the generators)
+    function C(n, edges) {
+      return {
+        nodes: Array.apply(null, { length: n }).map(function (_, i) { return { id: 'n' + i, x: 0, y: 0 }; }),
+        edges: edges.map(function (e, i) { return { id: 'e' + i, type: e[0], a: 'n' + e[1], b: 'n' + e[2], value: e[3] }; }),
+      };
+    }
+    function v(sol, i) { return sol.v[sol.of['n' + i]]; }
+    function src(brs) { return brs.filter(function (r) { return r.edge.type === 'V'; })[0]; }
+
+    // ---- SI / engineering formatting ----
+    check('si formatting', function () {
+      var cs = [[0.1, 'A', '0.1 A'], [0.11, 'A', '110 mA'], [0.5, 'A', '0.5 A'],
+        [2200, 'Ω', '2.2 kΩ'], [220, 'Ω', '220 Ω'], [0.047, 'A', '47 mA'],
+        [0, 'A', '0 A'], [3.33, 'V', '3.33 V'], [-0.05, 'A', '−50 mA']];
+      cs.forEach(function (t) { assert(Solve.si(t[0], t[1]) === t[2], 'si(' + t[0] + ') = "' + Solve.si(t[0], t[1]) + '" ≠ "' + t[2] + '"'); });
+    });
+
+    // ---- linear core ----
+    check('linsolve 2×2', function () {
+      var x = Solve.linsolve([[2, 1], [1, 3]], [3, 5]); // 2x+y=3, x+3y=5 → 0.8, 1.4
+      assert(near(x[0], 0.8) && near(x[1], 1.4), JSON.stringify(x));
+    });
+
+    // ---- series: V=15 across R1=100 then R2=200 → I=0.05, mid node = 10 V ----
+    check('series network', function () {
+      var c = C(3, [['V', 0, 1, 15], ['R', 1, 2, 100], ['R', 2, 0, 200]]);
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 1), 15) && near(v(sol, 2), 10) && near(v(sol, 0), 0), 'node voltages wrong');
+      var br = Solve.branches(c, sol);
+      assert(near(src(br).current, 0.05), 'source current ≠ 0.05');
+      var pc = Solve.powerCheck(br);
+      assert(pc.ok && near(pc.dissipated, 0.75), 'power ' + JSON.stringify(pc));
+    });
+
+    // ---- parallel: V=10, two 100Ω in parallel → 0.2 A, 2 W ----
+    check('parallel network', function () {
+      var c = C(2, [['V', 0, 1, 10], ['R', 0, 1, 100], ['R', 0, 1, 100]]);
+      var br = Solve.branches(c, Solve.nodeVoltages(c));
+      assert(near(src(br).current, 0.2), 'source current ≠ 0.2');
+      var pc = Solve.powerCheck(br);
+      assert(pc.ok && near(pc.dissipated, 2), 'power ' + JSON.stringify(pc));
+    });
+
+    // ---- divider: V=12, R(300) over R(100) → tap = 3 V ----
+    check('voltage divider', function () {
+      var c = C(5, [['V', 0, 1, 12], ['W', 1, 2], ['R', 2, 3, 300], ['R', 3, 4, 100], ['W', 4, 0]]);
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 3), 3), 'tap ≠ 3 V (got ' + v(sol, 3) + ')');
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    });
+
+    // ---- two sources in series (MNA): n2 = 10 + 4 = 14 V, loop I = 14/200 = 0.07 A ----
+    check('two sources in series', function () {
+      var c = C(3, [['V', 0, 1, 10], ['V', 1, 2, 4], ['R', 2, 0, 200]]);
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 1), 10) && near(v(sol, 2), 14), 'node voltages ' + v(sol, 1) + ',' + v(sol, 2));
+      var br = Solve.branches(c, sol);
+      assert(near(Math.abs(br.filter(function (r) { return r.edge.type === 'R'; })[0].current), 0.07), 'loop current');
+      assert(Solve.powerCheck(br).ok, 'power imbalance');
+    });
+
+    // ---- two sources bridging two non-reference nodes (a supernode): both fixed, power balances ----
+    check('supernode (two grounded sources)', function () {
+      var c = C(3, [['V', 0, 1, 12], ['V', 0, 2, 6], ['R', 1, 2, 100], ['R', 2, 0, 300]]);
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 1), 12) && near(v(sol, 2), 6), 'node voltages ' + v(sol, 1) + ',' + v(sol, 2));
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    });
+
+    // ---- current source into two parallel 100 Ω: v = 0.1 × 50 = 5 V, 0.5 W generated ----
+    check('current source (parallel)', function () {
+      var c = C(2, [['I', 0, 1, 0.1], ['R', 0, 1, 100], ['R', 0, 1, 100]]);
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 1), 5), 'node voltage ' + v(sol, 1) + ' ≠ 5 V');
+      var pc = Solve.powerCheck(Solve.branches(c, sol));
+      assert(pc.ok && near(pc.generated, 0.5), 'power ' + JSON.stringify(pc));
+    });
+
+    // ---- a current source bordering one mesh fixes that mesh current outright (PPT step 3) ----
+    check('known mesh current', function () {
+      // one loop: 0.05 A source driving 100 Ω + 200 Ω in series
+      var c = C(3, [['I', 0, 1, 0.05], ['R', 1, 2, 100], ['R', 2, 0, 200]]);
+      var mc = Solve.meshCurrents(c);
+      assert(mc.groups.length === 1 && mc.groups[0].fixed, 'source against the outer face should fix its group');
+      assert(near(Math.abs(mc.i[0]), 0.05), 'mesh current ' + mc.i[0] + ' ≠ ±0.05 A');
+      assert(near(Math.abs(mc.edgeCurrent[c.edges[1].id]), 0.05), 'resistor current ≠ source current');
+    });
+
+    // ---- a current source shared by two meshes → supermesh + constraint (PPT steps 5 & 7) ----
+    check('supermesh', function () {
+      var c = Circuit.get('Supermesh (shared current source)').generate();
+      var mc = Solve.meshCurrents(c);
+      var sm = mc.groups.filter(function (g) { return g.meshes.length > 1; });
+      assert(sm.length === 1 && sm[0].meshes.length === 2, 'expected one 2-mesh supermesh');
+      assert(!sm[0].fixed, 'a shared source fixes nothing on its own');
+      var s = mc.iSources[0], i = mc.i;
+      assert(near(i[mc.meshOf[s.fa]] - i[mc.meshOf[s.fb]], s.e.value), 'constraint i_fa − i_fb = I not satisfied');
+      assert(Solve.powerCheck(Solve.branches(c, Solve.nodeVoltages(c))).ok, 'power imbalance');
+    });
+
+    // ---- the four controlled sources, each against a hand-worked answer ----
+    // A CCVS of 500·iφ in series with 1 kΩ + 2 kΩ off a 12 V source: KVL round the loop gives
+    // 12 = 1000i + 2000i + 500i (the source opposes), so i = 12/2500 = 4.8 mA.
+    check('CCVS (current-controlled voltage source)', function () {
+      var c = C(4, [['V', 0, 1, 12], ['R', 1, 2, 1000], ['R', 2, 3, 2000], ['H', 3, 0, 500]]);
+      c.edges[3].control = 'e1';
+      var sol = Solve.nodeVoltages(c);
+      assert(near(sol.ctrl['e3'], 0.0048, 1e-9), 'iφ = ' + sol.ctrl['e3'] + ' ≠ 4.8 mA');
+      assert(near(v(sol, 2), 7.2, 1e-9) && near(v(sol, 3), -2.4, 1e-9), 'node voltages ' + v(sol, 2) + ',' + v(sol, 3));
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    });
+
+    // A VCVS of 2·vΔ, vΔ across the 1 kΩ: 12 = 1000i + 2000i − 2·(1000i) → i = 12 mA.
+    check('VCVS (voltage-controlled voltage source)', function () {
+      var c = C(4, [['V', 0, 1, 12], ['R', 1, 2, 1000], ['R', 2, 3, 2000], ['E', 3, 0, 2]]);
+      c.edges[3].control = 'e1';
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 2), 0, 1e-9) && near(v(sol, 3), -24, 1e-9), 'node voltages ' + v(sol, 2) + ',' + v(sol, 3));
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    });
+
+    // A CCCS of 3·iφ across the 2 kΩ, iφ through the 1 kΩ:
+    // KCL at the tap → (v−12)/1000 + v/2000 + 3(12−v)/1000 = 0 → v = 16 V.
+    check('CCCS (current-controlled current source)', function () {
+      var c = C(3, [['V', 0, 1, 12], ['R', 1, 2, 1000], ['R', 2, 0, 2000], ['F', 2, 0, 3]]);
+      c.edges[3].control = 'e1';
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 2), 16, 1e-9), 'tap ' + v(sol, 2) + ' ≠ 16 V');
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    });
+
+    // A VCCS of vΔ/500, vΔ across the 1 kΩ: same sum with 4(12−v)/2000 → v = 24 V.
+    check('VCCS (voltage-controlled current source)', function () {
+      var c = C(3, [['V', 0, 1, 12], ['R', 1, 2, 1000], ['R', 2, 0, 2000], ['G', 2, 0, 1 / 500]]);
+      c.edges[3].control = 'e1';
+      var sol = Solve.nodeVoltages(c);
+      assert(near(v(sol, 2), 24, 1e-9), 'tap ' + v(sol, 2) + ' ≠ 24 V');
+      assert(near(sol.depI['e3'], (12 - 24) / 500, 1e-9), 'source current ' + sol.depI['e3']);
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    });
+
+    // ---- a controlled boundary current source gives no KVL row, but no VALUE either ----
+    check('dependent boundary source is fixed but not known', function () {
+      var c = Circuit.get('Supermesh (shared dependent current source)').generate();
+      var mc = Solve.meshCurrents(c);
+      var sm = mc.groups.filter(function (g) { return g.meshes.length > 1; });
+      assert(sm.length === 1, 'a shared controlled source should still weld one supermesh');
+      assert(!sm[0].known, 'a controlled source never hands its value over outright');
+      var s = mc.iSources[0];
+      assert(s.dep, 'the shared source should be flagged dependent');
+      assert(near(mc.i[mc.meshOf[s.fa]] - mc.i[mc.meshOf[s.fb]], s.e.value * mc.ctrlVec(s.e).reduce(function (a, x, j) { return a + x * mc.i[j]; }, 0), 1e-9),
+        'constraint i_fa − i_fb = gain·control not satisfied');
+    });
+
+    // ---- every generator: node-voltage solves, mesh agrees, power balances ----
+    Circuit.list().forEach(function (g) {
+      check('solve ' + g.name + ' ×30', function () {
+        for (var i = 0; i < 30; i++) {
+          var c = g.generate();
+          var sol = Solve.nodeVoltages(c);
+          Object.keys(sol.v).forEach(function (grp) { assert(isFinite(sol.v[grp]), 'non-finite node voltage'); });
+          var br = Solve.branches(c, sol);
+          assert(br.every(function (r) { return isFinite(r.current) && isFinite(r.power); }), 'non-finite branch');
+          assert(Solve.powerCheck(br).ok, 'power imbalance in ' + g.name);
+
+          // mesh (KVL) must find E−V+1 bounded faces and agree with node-voltage per resistor
+          var mc = Solve.meshCurrents(c);
+          assert(mc.meshes.length === c.edges.length - c.nodes.length + 1, 'mesh count ≠ E−V+1');
+          br.forEach(function (r) {
+            if (r.edge.type === 'W') return;
+            var im = mc.edgeCurrent[r.edge.id], iv = r.current;   // signed: the two methods must agree on direction too
+            assert(Math.abs(im - iv) <= 1e-6 * (Math.abs(iv) + 1), 'mesh current ≠ node-voltage current on ' + r.edge.type);
+          });
+        }
+      });
+    });
+
+    // ---- KVL technique step list: loops persist, and the narrated algebra lands on the engine ----
+    Circuit.list().forEach(function (g) {
+      check('KVL steps ' + g.name + ' ×10', function () {
+        for (var i = 0; i < 10; i++) {
+          var c = g.generate(), mc = Solve.meshCurrents(c), steps = MeshCurrent(c);
+          assert(steps.length === 10, '10 PPT steps expected, got ' + steps.length);
+          steps.forEach(function (s, k) {
+            [s].concat(s.subs || []).forEach(function (view) {
+              var loops = view.hl && view.hl.loops;
+              if (k === 0) assert(!loops, 'step 1 draws loops too early');
+              // steps 5-8 draw a supermesh as ONE loop over its meshes, so there the count is
+              // the number of groups; everywhere else it is one arrow per mesh
+              else assert(loops && loops.length === (s.n >= 5 && s.n <= 8 ? mc.groups.length : mc.meshes.length),
+                'step ' + s.n + ' dropped the mesh loops');
+            });
+          });
+          assert(!/undefined|NaN/.test(JSON.stringify(steps)), 'step text has undefined/NaN');
+          // step 4 must meet every shared resistor twice and show it both ways round (3 eq lines)
+          var shared = c.edges.filter(function (e, k) {
+            var fa = mc.F.faceOf[2 * k], fb = mc.F.faceOf[2 * k + 1];
+            return e.type === 'R' && fa !== fb && fa !== mc.F.outer && fb !== mc.F.outer;
+          }).length;
+          var bothWays = (steps[3].subs || []).filter(function (view) { return (view.eq || []).length === 3; }).length;
+          assert(bothWays === shared, shared + ' shared resistors but ' + bothWays + ' both-ways views in step 4');
+          // the running board is a pinned panel field, never baked into the body text, and from
+          // step 6 (first equation written) on it must never blank out — in either technique
+          var kcl = NodeVoltage(c);
+          assert(!/undefined|NaN/.test(JSON.stringify(kcl)), 'KCL step text has undefined/NaN');
+          // step 4's marks are keyed '<edgeId>:<terminalNodeId>' — KVL's polarity pairs (pol) and
+          // KCL's leaving-current arrows (flow). Only what the renderer pre-drew can be revealed,
+          // so a key naming the wrong terminal shows nothing; and once marked they stay to the end.
+          if (i === 0) {
+            var psvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            Circuit.render(c, psvg);
+            var drawn = {};
+            Array.prototype.forEach.call(psvg.querySelectorAll('.pol-mark'), function (pg) { drawn[pg.getAttribute('data-pol')] = 1; });
+            Array.prototype.forEach.call(psvg.querySelectorAll('.flow-mark'), function (pg) { drawn[pg.getAttribute('data-flow')] = 1; });
+            var marksOf = function (view) { return (((view.hl || {}).pol) || []).concat(((view.hl || {}).flow) || []); };
+            [steps, kcl].forEach(function (list) {
+              if (!marksOf(list[3]).length) return;         // no unknown node → no KCL, nothing marked
+              list.slice(3).forEach(function (s2) {
+                [s2].concat(s2.subs || []).forEach(function (view) {
+                  var keys = marksOf(view);
+                  // inside step 4 the set is still growing (the first walk view has none yet)
+                  if (s2.n > 4) assert(keys.length, 'step ' + s2.n + ' view "' + (view.title || 'overview') + '" lost step 4’s marks');
+                  keys.forEach(function (key) { assert(drawn[key], 'step 4 mark ' + key + ' is not on the drawing'); });
+                });
+              });
+            });
+          }
+          [steps, kcl].forEach(function (list) {
+            list.forEach(function (s2) {
+              [s2].concat(s2.subs || []).forEach(function (view) {
+                assert(!/eq-board/.test(view.body || ''), 'step ' + s2.n + ' still has the board inside its body');
+              });
+            });
+            list.slice(5).forEach(function (s2) {
+              [s2].concat(s2.subs || []).forEach(function (view) {
+                assert(/eq-board/.test(view.board || ''), 'step ' + s2.n + ' view "' + (view.title || 'overview') + '" lost its board');
+              });
+            });
+          });
+          // a step's own eq is its RESULT summary and the stepper hides it on the overview of a
+          // step that has substeps (answers before the derivation read as if it were undone), so
+          // every such step from the solve on must end on a substep that shows the results
+          [steps, kcl].forEach(function (list) {
+            list.forEach(function (s2) {
+              if (s2.n < 8 || !(s2.subs || []).length || !(s2.eq || []).length) return;
+              var last = s2.subs[s2.subs.length - 1];
+              assert((last.eq || []).length, 'step ' + s2.n + ' hides its results with no recap substep');
+            });
+          });
+          // the substitution chain reaching the engine's number is what makes "falls out" a
+          // single line; two lines would mean the hand algebra and the solver disagree
+          var hasDep = c.edges.some(function (e) { return Circuit.isDependent(e.type); });
+          if (!hasDep) (steps[7].subs || []).forEach(function (view) {
+            if (/ — falls out$/.test(view.title)) assert(view.eq.length === 1, 'substitution chain ended at ' + view.eq[0] + ', engine says ' + view.eq[1]);
+          });
+          // whatever route the narration took, the last board must show every solved value —
+          // this is the invariant that a dependent circuit must not lose
+          function lastBoard(list) {
+            var b = null;
+            list.forEach(function (s2) { [s2].concat(s2.subs || []).forEach(function (view) { if (view.board) b = view.board; }); });
+            return b;
+          }
+          var ln = Solve.letterNodes(c), nsol = Solve.nodeVoltages(c), kb = lastBoard(kcl);
+          ln.groups.forEach(function (grp) {
+            assert(kb.indexOf('<td>' + Solve.si(nsol.v[grp], 'V') + '</td>') >= 0,
+              'KCL board never reached ' + ln.letter[grp] + ' = ' + Solve.si(nsol.v[grp], 'V'));
+          });
+          var mb = lastBoard(steps);
+          mc.order.forEach(function (f, idx) {
+            assert(mb.indexOf('<td>' + Solve.si(mc.i[mc.meshOf[f]], 'A') + '</td>') >= 0,
+              'KVL board never reached i' + (idx + 1) + ' = ' + Solve.si(mc.i[mc.meshOf[f]], 'A'));
+          });
+        }
+      });
+    });
+
+    document.getElementById('out').textContent = out.join('\n');
+    out.forEach(function (l) { console.assert(l.indexOf('PASS') === 0, l); });
+  </script>
+</body>
+
+</html>

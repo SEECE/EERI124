@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Circuits with current sources — EERI 124</title>
+  <link rel="stylesheet" href="../../css/tokens.css" />
+  <link rel="stylesheet" href="../../css/base.css" />
+  <link rel="stylesheet" href="../../css/circuit-page.css" />
+  <link rel="stylesheet" href="../../css/solver.css" />
+</head>
+
+<body>
+  <nav class="nav">
+    <a class="nav-brand" href="../../index.html">EERI 124 <span>· Electrotechnique 1</span></a>
+    <div class="nav-links">
+      <a href="../../index.html">Topics</a>
+    </div>
+  </nav>
+
+  <main class="page circuit-page">
+    <header class="circuit-topbar">
+      <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Circuits with current sources</nav>
+      <h1>Circuits with current sources</h1>
+    </header>
+
+    <div class="circuit-layout">
+      <aside class="circuit-sidebar">
+        <div class="control-group">
+          <h3>Technique</h3>
+          <select id="technique">
+            <option value="kcl">KCL — node-voltage</option>
+            <option value="kvl">KVL — mesh-current</option>
+          </select>
+        </div>
+        <div class="control-group">
+          <h3>Circuit set</h3>
+          <select id="circuit-set"></select>
+        </div>
+        <div class="control-group">
+          <h3>Topology</h3>
+          <select id="topology"></select>
+        </div>
+        <div class="control-group">
+          <button id="generate">Generate</button>
+        </div>
+        <div class="control-group">
+          <h3>Import / Export</h3>
+          <button id="export-circuit">Export JSON</button>
+          <label class="file-label">Import JSON
+            <input type="file" id="import-circuit" accept="application/json" hidden />
+          </label>
+          <div class="import-error" id="import-error"></div>
+        </div>
+        <div class="control-group step-control">
+          <h3>Steps</h3>
+          <div class="step-count" id="step-count"></div>
+          <div class="step-nav">
+            <button id="step-prev">◀ Prev</button>
+            <button id="step-next">Next ▶</button>
+          </div>
+          <div class="step-subcount" id="step-subcount"></div>
+          <div class="step-nav step-subnav">
+            <button id="sub-prev">◂ Prev</button>
+            <button id="sub-next">Next ▸</button>
+          </div>
+        </div>
+      </aside>
+
+      <div class="circuit-canvas"><svg id="canvas"></svg></div>
+
+      <aside class="step-panel">
+        <div class="step-count step-count-label">Workbench</div>
+        <h3 class="step-title" id="step-title"></h3>
+        <div class="step-body" id="step-body"></div>
+        <div class="step-eq" id="step-eq"></div>
+        <div class="step-board" id="step-board"></div>
+      </aside>
+    </div>
+  </main>
+
+  <footer>EERI 124 — Electrotechnique 1</footer>
+
+  <script src="../../js/circuit.js"></script>
+  <script src="../../js/generators/current-source.js"></script>
+  <script src="../../js/generators/random-grid.js"></script>
+  <script src="../../js/generators/basic.js"></script>
+  <script src="../../js/generators/bridge-ladder.js"></script>
+  <script src="../../js/generators/grid.js"></script>
+  <script src="../../js/generators/multi-source.js"></script>
+  <script src="../../js/solve.js"></script>
+  <script src="../../js/techniques/kit.js"></script>
+  <script src="../../js/techniques/controls.js"></script>
+  <script src="../../js/techniques/node-voltage.js"></script>
+  <script src="../../js/techniques/mesh-current.js"></script>
+  <script src="../../js/stepper.js"></script>
+  <script src="../../js/solver-page.js"></script>
+  <script>
+    // this topic adds the independent current source; only KCL and KVL are taught on it
+    // (equivalent resistance needs a source to deactivate — a later topic). Two circuit sets:
+    // this topic's own I-bearing circuits, and the full §3 set for KCL/KVL practice on those
+    // shapes — currentify() below turns some of their resistors (and, sometimes, a spare
+    // voltage source) into current sources so §3's shapes get supermesh / known-mesh-current
+    // practice too, rather than only ever seeing random-grid.js's.
+    SolverPage({
+      elements: ['R', 'V', 'I', 'W'],
+      sets: [
+        { value: 'current-source', label: 'Current-source circuits', filter: { tags: ['current-source'], elements: ['R', 'V', 'I', 'W'] } },
+        {
+          value: 'all', label: 'All topologies', filter: { elements: ['R', 'V', 'W'] },
+          // Wheatstone bridge opts out — its arms are the exact teaching point, flagged by
+          // its B/D node labels (see circuit.js's currentify() comment).
+          transform: function (c) {
+            var protectedWiring = c.nodes.some(function (n) { return n.label; });
+            return protectedWiring ? c : Circuit.currentify(c, { voltage: true });
+          },
+        },
+      ],
+    });
+  </script>
+</body>
+
+</html>

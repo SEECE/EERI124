@@ -21,54 +21,36 @@
   <main class="page">
     <header class="home-header">
       <h1>Electrotechnique 1 — Visualisations</h1>
-      <p>DC &amp; AC resistive-network analysis · North-West University</p>
+      <p>DC resistive-network analysis · North-West University</p>
     </header>
 
-    <!-- ── Frequency-domain analysis ── -->
-    <div class="section-label">Frequency-domain analysis</div>
+
+
+    <!-- ── §2 Techniques in circuit analysis — the same techniques on harder circuits ── -->
+    <div class="section-label">Techniques in circuit analysis</div>
+
     <div class="grid">
-      <a class="card" href="topics/freq-parallel/index.html">
-        <div class="card-title">Parallel circuits</div>
-        <div class="card-sub">Phasors &amp; impedance</div>
+      <a class="card" href="topics/simple-resistive-circuits/index.html">
+        <div class="card-title">Resistors &amp; voltage sources</div>
+        <div class="card-sub">KCL · KVL · equivalent resistance</div>
       </a>
-      <a class="card" href="topics/freq-serial/index.html">
-        <div class="card-title">Series circuits</div>
-        <div class="card-sub">Phasors &amp; impedance</div>
+      <a class="card" href="topics/current-sources/index.html">
+        <div class="card-title">Circuits with current sources</div>
+        <div class="card-sub">KCL &amp; KVL · known mesh currents · supermesh</div>
+      </a>
+      <a class="card" href="topics/dependent-sources/index.html">
+        <div class="card-title">Circuits with dependent sources</div>
+        <div class="card-sub">KCL &amp; KVL · VCVS, CCCS, VCCS, CCVS · constraint equations</div>
       </a>
     </div>
 
-    <!-- ── Equivalent circuits ── -->
-    <div class="section-label">Equivalent circuits &amp; power transfer</div>
-    <div class="grid">
-      <a class="card" href="topics/max-power-thevenin/index.html">
-        <div class="card-title">Maximum power transfer</div>
-        <div class="card-sub">Thévenin equivalent</div>
-      </a>
-      <a class="card" href="topics/thevenin-nodes/index.html">
-        <div class="card-title">Thévenin via node voltages</div>
-        <div class="card-sub">Easy node-voltage route</div>
-      </a>
-    </div>
+    <!-- ── Build your own — hand-build a circuit, export it for the pages above ── -->
+    <div class="section-label">Build your own</div>
 
-    <!-- ── Mesh-current technique ── -->
-    <div class="section-label">Mesh-current technique</div>
     <div class="grid">
-      <a class="card" href="topics/mesh-dependent/index.html">
-        <div class="card-title">Dependent source</div>
-        <div class="card-sub">Mesh currents</div>
-      </a>
-      <a class="card" href="topics/mesh-supermesh/index.html">
-        <div class="card-title">Supermesh &amp; dependent sources</div>
-        <div class="card-sub">Mesh currents</div>
-      </a>
-    </div>
-
-    <!-- ── Node-voltage technique ── -->
-    <div class="section-label">Node-voltage technique</div>
-    <div class="grid">
-      <a class="card" href="topics/node-supernode/index.html">
-        <div class="card-title">Supernode &amp; dependent sources</div>
-        <div class="card-sub">Node voltages</div>
+      <a class="card" href="topics/circuit-builder/index.html">
+        <div class="card-title">Circuit builder</div>
+        <div class="card-sub">Draw a circuit on a grid · export JSON · import it on any solver page</div>
       </a>
     </div>
   </main>
