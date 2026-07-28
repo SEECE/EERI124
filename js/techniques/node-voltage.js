@@ -423,7 +423,8 @@
     // once is intimidating, so every node gets its own build view. The arithmetic is all step 8.
     function unitHl(u) { return { nodes: u.groups.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []), edges: u.groups.reduce(function (a, g) { return a.concat(resAt(g).map(function (e) { return e.id; })); }, []) }; }
     (function () {
-      var subs = P.kclNodes.map(function (g) {
+      var boardBefore = boardHtml();               // the substeps below fill the board in; the
+      var subs = P.kclNodes.map(function (g) {     // overview must show it as it is on entry
         var nbr = resAt(g).map(function (e) { return { n: other(e, g), R: e.value }; });
         var unk = nbr.filter(function (x) { return !P.fixed[x.n]; }).map(function (x) { return L(x.n); })
           .concat(ctrlNodes(g).filter(function (n) { return !P.fixed[n]; }).map(L));
@@ -469,6 +470,7 @@
             ' get no KCL — a controlled source pins ' + (P.pins.length === 1 ? 'it' : 'them') + ' to a known node, and the equation that gives its value is step 7)' : '') +
           ' to build. Step through each node to see how its equation is put together; the solving is step 8.'
           : 'No node needs a KCL equation here: every node voltage is either fixed by a source or pinned by a controlled one.',
+        board: boardBefore,
         eq: P.kclNodes.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }),
         hl: { nodes: P.unknown.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
         subs: subs,

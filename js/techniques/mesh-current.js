@@ -438,6 +438,8 @@
     // in the order you meet them going clockwise — and only the last substep closes it with "= 0".
     var eqSubs = [];
     var eqGroups = G.filter(function (grp) { return !grp.fixed; });    // fixed ones need no equation
+    var boardBefore6 = boardHtml();      // the substeps below write the equations onto the board;
+                                         // the overview must show it as it is on entry, not after
     G.forEach(function (grp) {
       var gn = gname(grp), what = grp.super ? 'supermesh' : 'mesh', run = [];
       var gEdges = grp.meshes.reduce(function (a, f) { return a.concat(faceEdgeIds(f)); }, []);
@@ -506,6 +508,7 @@
       body: 'One equation per loop that still has an unknown current — walk clockwise around it, add up every voltage drop and set the total to zero (Kirchhoff’s voltage law). That is <b>' + eqGroups.length + '</b> equation' + (eqGroups.length === 1 ? '' : 's') +
         (fixedMeshes.length ? ' (the mesh' + (fixedMeshes.length === 1 ? '' : 'es') + ' fixed in step 3 need none)' : '') +
         ' to build. Step through each loop to see how its equation is put together; the solving is step 8.',
+      board: boardBefore6,
       eq: G.map(function (grp) {
         return grp.fixed ? gname(grp) + ':  ' + grp.meshes.map(function (f) { return name[f] + ' = ' + si(value[f], 'A'); }).join(', ')
           : (grp.super ? 'supermesh ' : '') + gname(grp) + ':  ' + kvlG(grp);
@@ -518,7 +521,8 @@
     // current is the difference of the two loop currents, which is the equation that makes the
     // count add up again. (Dependent-source control variables land here too, later.)
     var constraints = mc.iSources.filter(function (s) { return s.fa !== F.outer && s.fb !== F.outer; });
-    constraints.forEach(function (s) {
+    var boardBefore7 = boardHtml();      // ditto: the constraints go on the board below, so the
+    constraints.forEach(function (s) {   // overview keeps the board as step 6 left it
       var other = groupOf[s.fa].lead === s.fa ? s.fb : s.fa;    // the member the lead is solved against
       if (board[other] === '?') board[other] = constraintTxt(s);
     });
@@ -529,6 +533,7 @@
     var nCtrl = CV.all.length;
     steps.push(WB({
       n: 7, title: 'Constraint equations', todo: allConstraints.length === 0 && !nCtrl,
+      board: boardBefore7,
       body: (allConstraints.length
         ? 'Bring the current source back. Its current <i>is</i> the difference between the two loop currents it sits between, so it hands us one more equation — exactly the one the supermesh cost us. ' +
           allConstraints.length + ' source constraint' + (allConstraints.length === 1 ? '' : 's') + ' here. '
@@ -958,17 +963,18 @@
     }));
     curLoops = loops;      // back to one arrow per mesh: steps 9–10 are about branch currents
 
-    // Step 9 — branch currents, one substep per element
+    // Step 9 — branch currents, one substep per element, the full set only on the closing substep
+    var branchLines = Redges.map(function (e) { return 'i(' + si(e.value, 'Ω') + ') = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A'); })
+      .concat(srcs.map(function (e) { return 'i(' + si(e.value, 'V') + ' source) = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A'); }))
+      .concat(CV.volt.map(function (e) { return 'i(' + CV.gain(e) + ' source) = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A'); }))
+      .concat(mc.iSources.map(function (s) {
+        var r = iSrcVoltage(s);
+        return 'v(' + (s.dep ? CV.gain(s.e) : si(s.e.value, 'A')) + ' source) = ' + (r ? si(Math.abs(r.v), 'V') : 'from the node voltages');
+      }));
     steps.push(WB({
       n: 9, title: 'Branch currents from mesh currents',
       body: 'A resistor between two meshes carries the difference of their currents; a boundary element carries its single mesh current. Step through every element.', board: boardHtml(),
-      eq: Redges.map(function (e) { return 'i(' + si(e.value, 'Ω') + ') = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A'); })
-        .concat(srcs.map(function (e) { return 'i(' + si(e.value, 'V') + ' source) = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A'); }))
-        .concat(CV.volt.map(function (e) { return 'i(' + CV.gain(e) + ' source) = ' + si(Math.abs(mc.edgeCurrent[e.id]), 'A'); }))
-        .concat(mc.iSources.map(function (s) {
-          var r = iSrcVoltage(s);
-          return 'v(' + (s.dep ? CV.gain(s.e) : si(s.e.value, 'A')) + ' source) = ' + (r ? si(Math.abs(r.v), 'V') : 'from the node voltages');
-        })),
+      eq: branchLines,
       hl: H({ edges: nonWireIds }),
       subs: Redges.concat(srcs).concat(CV.volt).map(function (e) {
         var fs = meshesOf(e), i = Math.abs(mc.edgeCurrent[e.id]);
@@ -1003,7 +1009,11 @@
           eq: ['i = ' + si(s.e.value, 'A')].concat(r ? ['v = ' + si(Math.abs(r.v), 'V')] : []),
           hl: H({ edges: [s.e.id].concat(r ? faceEdgeIds(r.f) : []), nodes: r ? faceNodeIds(r.f) : [] }),
         };
-      })),
+      })).concat([WB({
+        title: 'all branch currents',
+        body: 'Every element’s own current is now read off the mesh currents. Full set:',
+        eq: branchLines, hl: H({ edges: nonWireIds }),
+      })]),
     }));
 
     // Step 10 — power check, one substep per element then the balance

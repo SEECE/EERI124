@@ -124,6 +124,17 @@ A technique returns an array of steps:
   Build it with the technique's local `WB()` helper **at the point the view is created**: the board
   is time-varying, so stamping it later records the wrong state. A view with no `board` hides the
   panel — intended only for steps 1–5, before the first equation exists.
+- **A step's `eq` is its result *summary*, and the stepper shows it only when the step has no
+  substeps.** Handing out the answers on the overview and *then* walking the derivation reads as
+  if the walk were undoing them, so the results arrive at the end: each substep shows its own
+  line and the last substep recaps the set (step 8's "all nodes/meshes solved", step 9's "all
+  branch currents", step 10's "balance"). Keep the summary on the step — it is what the recap
+  substep is built from — the stepper folds it into a **"Show this step's result" disclosure**
+  on the overview, so a student who wants the answer and the next step rather than the walk gets
+  it in one click (opened once, it stays open across steps) — and add a recap substep to any
+  step that grows one. Same rule for the
+  `board`: a step whose substeps write to it stamps the board **as it stands on entry**
+  (`boardBefore…` / `boardAtStart`), never the state its own substeps leave behind.
 - `subs` (optional) → **substeps**. Entering a step shows its overview (sub 0); `subPrev`/`subNext`
   drill through the substeps, `next` skips the whole step. A substep's `body`/`eq`/`hl` override the
   step's for that view (any omitted field falls back). Used by KCL for per-node / per-source /
