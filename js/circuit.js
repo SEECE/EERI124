@@ -568,6 +568,24 @@
       });
     });
 
+    // ---- branch-current arrows, hidden until highlight({ flow: ['<edgeId>:<nodeId>'] }) shows
+    // them: one short arrow on the lead beside the named node, pointing AWAY from it. This is
+    // KCL's "assume every current leaves the node" drawn — a polarity pair says nothing useful
+    // there, because which end is + depends on an assumption the method has already made about
+    // direction. Both ends of a resistor can be shown at once (each belongs to its own node's
+    // sum); they sit at opposite ends of the element, so they never collide.
+    circuit.edges.filter(function (e) { return e.type === 'R'; }).forEach(function (e) {
+      var G = geom(e);
+      [[e.a, 1], [e.b, -1]].forEach(function (pr) {
+        var g = el('g', { 'class': 'flow-mark', 'data-flow': e.id + ':' + pr[0] }, svg);
+        var s = pr[1];                               // +1: the a end, at −ux from the middle
+        function at(al) { return { x: G.mx - G.ux * al * s + G.vx * 12 * G.side, y: G.my - G.uy * al * s + G.vy * 12 * G.side }; }
+        var p0 = at(40), p1 = at(26);                // on the lead, between the node and the body
+        el('line', { x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: 'var(--accent-hover)', 'stroke-width': 2 }, g);
+        arrowAt(p1.x, p1.y, G.ux * s, G.uy * s, G.vx, G.vy, 'var(--accent-hover)', g);   // tip points away from the node
+      });
+    });
+
     var circleOf = {};
     circuit.nodes.forEach(function (n) {
       var p = byId[n.id];
@@ -625,8 +643,9 @@
 
   /* Toggle a 'hl' class on the edges/nodes a solver step wants to emphasise.
      spec = { edges:[edgeId], nodes:[nodeId], labels:[nodeId], marks:[markKey], loops:[...],
-     pol:['<edgeId>:<nodeId>'], ground:[nodeId], volts:{nodeId:text} }; anything not listed is
-     un-highlighted. `pol` reveals a resistor's + … − pair, the named terminal taking the +.
+     pol:['<edgeId>:<nodeId>'], flow:['<edgeId>:<nodeId>'], ground:[nodeId], volts:{nodeId:text} };
+     anything not listed is un-highlighted. `pol` reveals a resistor's + … − pair, the named
+     terminal taking the + (KVL); `flow` reveals an arrow leaving the named node (KCL).
      `labels`
      reveals the node letters (hidden at render) for the step that introduces them onward;
      `marks` does the same for the control-variable notation a dependent source reads, keyed
@@ -640,9 +659,12 @@
     Array.prototype.forEach.call(svg.querySelectorAll('.ctrl-mark'), function (g) {
       g.classList.toggle('show', marks.indexOf(g.getAttribute('data-mark')) >= 0);
     });
-    var pol = spec.pol || [];
+    var pol = spec.pol || [], flow = spec.flow || [];
     Array.prototype.forEach.call(svg.querySelectorAll('.pol-mark'), function (g) {
       g.classList.toggle('show', pol.indexOf(g.getAttribute('data-pol')) >= 0);
+    });
+    Array.prototype.forEach.call(svg.querySelectorAll('.flow-mark'), function (g) {
+      g.classList.toggle('show', flow.indexOf(g.getAttribute('data-flow')) >= 0);
     });
     Array.prototype.forEach.call(svg.querySelectorAll('[data-eid]'), function (g) {
       g.classList.toggle('hl', edges.indexOf(g.getAttribute('data-eid')) >= 0);
