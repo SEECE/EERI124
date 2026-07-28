@@ -202,6 +202,13 @@
    the source is a multiple of, and in which direction, the moment the circuit is drawn. */
 .circuit-canvas svg .ctrl-mark { opacity: 1; }
 
+/* resistor polarity (+ … −, KVL) and branch-current arrows (KCL), hidden until step 4 marks
+   them (highlight pol: / flow:) and kept on for the rest of the method */
+.circuit-canvas svg .pol-mark,
+.circuit-canvas svg .flow-mark { opacity: 0; }
+.circuit-canvas svg .pol-mark.show,
+.circuit-canvas svg .flow-mark.show { opacity: 1; }
+
 /* a controlled source's diamond gets the same emphasis as a circle or a resistor box */
 .circuit-canvas svg .edge.hl polygon.dep-body { stroke: var(--accent-hover); stroke-width: 3; }
 

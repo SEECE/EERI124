@@ -236,6 +236,28 @@
           // step 6 (first equation written) on it must never blank out — in either technique
           var kcl = NodeVoltage(c);
           assert(!/undefined|NaN/.test(JSON.stringify(kcl)), 'KCL step text has undefined/NaN');
+          // step 4's marks are keyed '<edgeId>:<terminalNodeId>' — KVL's polarity pairs (pol) and
+          // KCL's leaving-current arrows (flow). Only what the renderer pre-drew can be revealed,
+          // so a key naming the wrong terminal shows nothing; and once marked they stay to the end.
+          if (i === 0) {
+            var psvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            Circuit.render(c, psvg);
+            var drawn = {};
+            Array.prototype.forEach.call(psvg.querySelectorAll('.pol-mark'), function (pg) { drawn[pg.getAttribute('data-pol')] = 1; });
+            Array.prototype.forEach.call(psvg.querySelectorAll('.flow-mark'), function (pg) { drawn[pg.getAttribute('data-flow')] = 1; });
+            var marksOf = function (view) { return (((view.hl || {}).pol) || []).concat(((view.hl || {}).flow) || []); };
+            [steps, kcl].forEach(function (list) {
+              if (!marksOf(list[3]).length) return;         // no unknown node → no KCL, nothing marked
+              list.slice(3).forEach(function (s2) {
+                [s2].concat(s2.subs || []).forEach(function (view) {
+                  var keys = marksOf(view);
+                  // inside step 4 the set is still growing (the first walk view has none yet)
+                  if (s2.n > 4) assert(keys.length, 'step ' + s2.n + ' view "' + (view.title || 'overview') + '" lost step 4’s marks');
+                  keys.forEach(function (key) { assert(drawn[key], 'step 4 mark ' + key + ' is not on the drawing'); });
+                });
+              });
+            });
+          }
           [steps, kcl].forEach(function (list) {
             list.forEach(function (s2) {
               [s2].concat(s2.subs || []).forEach(function (view) {
