@@ -248,6 +248,16 @@
               });
             });
           });
+          // a step's own eq is its RESULT summary and the stepper hides it on the overview of a
+          // step that has substeps (answers before the derivation read as if it were undone), so
+          // every such step from the solve on must end on a substep that shows the results
+          [steps, kcl].forEach(function (list) {
+            list.forEach(function (s2) {
+              if (s2.n < 8 || !(s2.subs || []).length || !(s2.eq || []).length) return;
+              var last = s2.subs[s2.subs.length - 1];
+              assert((last.eq || []).length, 'step ' + s2.n + ' hides its results with no recap substep');
+            });
+          });
           // the substitution chain reaching the engine's number is what makes "falls out" a
           // single line; two lines would mean the hand algebra and the solver disagree
           var hasDep = c.edges.some(function (e) { return Circuit.isDependent(e.type); });

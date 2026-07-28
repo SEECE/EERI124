@@ -24,7 +24,11 @@
       var s = steps[i];
       if (!s) return null;
       var subs = subsOf(s);
-      if (sub === 0 || !subs.length) return { title: s.title, body: s.body, eq: s.eq, todo: s.todo, hl: s.hl, board: s.board, label: null };
+      // A step's own `eq` is its RESULT summary. Showing it on the overview of a step that has
+      // substeps hands out the answers before the derivation that produces them, and the walk
+      // then reads as if it were undoing them — so the overview of such a step shows none, and
+      // the results arrive on the substeps (each its own line, the last one recapping the set).
+      if (sub === 0 || !subs.length) return { title: s.title, body: s.body, eq: subs.length ? null : s.eq, todo: s.todo, hl: s.hl, board: s.board, label: null };
       var ss = subs[sub - 1];
       return {
         title: s.title,
