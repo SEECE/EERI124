@@ -236,6 +236,21 @@
           // step 6 (first equation written) on it must never blank out — in either technique
           var kcl = NodeVoltage(c);
           assert(!/undefined|NaN/.test(JSON.stringify(kcl)), 'KCL step text has undefined/NaN');
+          // step 4's polarity marks are keyed '<edgeId>:<terminalNodeId>' and only the pairs the
+          // renderer pre-drew can be revealed — a key naming the wrong terminal shows nothing
+          if (i === 0) {
+            var psvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            Circuit.render(c, psvg);
+            var drawn = {};
+            Array.prototype.forEach.call(psvg.querySelectorAll('.pol-mark'), function (pg) { drawn[pg.getAttribute('data-pol')] = 1; });
+            [steps, kcl].forEach(function (list) {
+              [list[3]].concat(list[3].subs || []).forEach(function (view) {
+                ((view.hl || {}).pol || []).forEach(function (key) {
+                  assert(drawn[key], 'step 4 polarity mark ' + key + ' is not on the drawing');
+                });
+              });
+            });
+          }
           [steps, kcl].forEach(function (list) {
             list.forEach(function (s2) {
               [s2].concat(s2.subs || []).forEach(function (view) {

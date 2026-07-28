@@ -372,12 +372,23 @@
       })),
     });
 
-    // Step 4 — KCL prelude, one substep per unknown node
+    // Step 4 — KCL prelude, one substep per unknown node.
+    // Polarity here follows the method's own assumption: every current LEAVES the node, so the
+    // node end of each resistor is the + end and the far end the −. That is per node, not per
+    // resistor — a resistor between two unknown nodes is marked one way while node a's sum is
+    // written and the other way for node b's, which is the same "equal and opposite" fact KVL
+    // meets on a shared resistor. So each node's substep shows its own marks; the overview shows
+    // one pair per resistor (the first node that claims it), never two on the same resistor.
+    function polAt(g, e) { return e.id + ':' + (of[e.a] === g ? e.a : e.b); }
+    var polSeen = {}, polFirst = [];
+    P.unknown.forEach(function (g) {
+      resAt(g).forEach(function (e) { if (!polSeen[e.id]) { polSeen[e.id] = 1; polFirst.push(polAt(g, e)); } });
+    });
     steps.push({
       n: 4, title: 'Set up KCL at each unknown node',
-      body: m ? 'Every node not fixed by a source needs one equation. Assume all unknown currents leave the node; by KCL their sum is zero. Each current is (v<sub>node</sub> − v<sub>neighbour</sub>)/R (Ohm’s law). Step through each node.'
+      body: m ? 'Every node not fixed by a source needs one equation. Assume all unknown currents leave the node; by KCL their sum is zero. Each current is (v<sub>node</sub> − v<sub>neighbour</sub>)/R (Ohm’s law). Assuming the current leaves is the same as marking each resistor <b>+</b> at the node end and <b>−</b> at the far end — so the marks move as we step from node to node, and a resistor between two unknown nodes is marked one way in one equation and the other way in the next. Both are true; the sign of the answer sorts itself out. Step through each node.'
         : 'Every node voltage is already fixed by the sources — there are no unknowns, so no KCL equation is needed.',
-      hl: { nodes: P.unknown.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
+      hl: { nodes: P.unknown.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []), pol: polFirst },
       subs: P.unknown.map(function (g) {
         var rs = resAt(g), is = isrcAt(g), ds = depIAt(g), pin = P.pinnedOf[g];
         if (pin) {
@@ -390,13 +401,15 @@
             hl: { nodes: nodeIdsOf(g), edges: [pin.e.id], marks: [CV.markKey(pin.e)] } };
         }
         var body = 'At node <b>' + L(g) + '</b>, sum the currents leaving through ' + rs.length + ' resistor' + (rs.length === 1 ? '' : 's') +
-          ' and set the total to zero:<br>Σ (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R = 0.';
+          ' and set the total to zero:<br>Σ (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R = 0. Every resistor here is marked <b>+</b> at ' +
+          L(g) + ' and <b>−</b> at its far end: that is what "the current leaves ' + L(g) + '" looks like on the drawing.';
         if (is.length) body += ' A current source also meets this node, and its current is already known — it joins the sum as a plain number (' +
           is.map(function (e) { return (leaveSign(e, g) > 0 ? 'leaving: +' : 'entering: −') + si(e.value, 'A'); }).join(', ') + ').';
         if (ds.length) body += ' A <b>dependent</b> current source meets it too. It joins the same sum, and in the same place — the only difference is that it goes in as its symbol (' +
           ds.map(function (e) { return CV.gain(e); }).join(', ') + ') rather than as a number, because we do not know its value yet.';
         return { title: 'node ' + L(g), body: body,
           hl: { nodes: nodeIdsOf(g), edges: rs.concat(is).concat(ds).map(function (e) { return e.id; }),
+            pol: rs.map(function (e) { return polAt(g, e); }),
             marks: ds.map(function (e) { return CV.markKey(e); }) } };
       }),
     });
