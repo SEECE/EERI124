@@ -119,7 +119,9 @@ A technique returns an array of steps:
   is not about one particular source. `hl.pol` is the same idea for **resistor polarity** (step 4 of
   both methods), keyed `'<edgeId>:<nodeId>'` — the named terminal takes the `+`. Both readings of
   every resistor are pre-drawn (hidden) at render, so a shared resistor's `+` simply moves to the
-  other end when the second mesh's walk meets it.
+  other end when the second mesh's walk meets it. **Once marked, a polarity stays for the rest of
+  the method** — like the mesh loops, `pol` rides on every later `hl` (KVL: through `H()`), and a
+  view that omits it erases the marks.
 - `board` (optional) → the **running board** html (KCL: node voltages, KVL: mesh currents). The
   stepper renders it into its own element (`#step-board`), **pinned to the bottom of the panel**
   (`css/solver.css`, `position: sticky`), so it stays in one place while the derivation scrolls

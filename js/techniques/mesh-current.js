@@ -68,7 +68,15 @@
     // supermesh step (5) through the solve (8) a supermesh is drawn as ONE loop around both
     // its meshes — that is the whole idea of a supermesh, and it is how the slides draw it.
     var curLoops = loops;
-    function H(spec) { return extend(spec || {}, { loops: curLoops }); }
+    // Polarity marks work the same way: once step 4 marks a resistor + … −, the mark STAYS for
+    // the rest of the method (a spec that omits `pol` erases them, so H() re-attaches the set as
+    // it stands). Step 4's own views pass their own growing set and win.
+    var curPol = [];
+    function H(spec) {
+      var o = extend(spec || {}, { loops: curLoops });
+      if (!o.pol) o.pol = curPol;
+      return o;
+    }
 
     var Redges = circuit.edges.filter(function (e) { return e.type === 'R'; });
     var nonWireIds = circuit.edges.filter(function (e) { return e.type !== 'W'; }).map(function (e) { return e.id; });
@@ -342,8 +350,15 @@
     // otherwise step 6's equations look like they contradict each other.
     var polSubs = [];
     var seenIn = {};                        // edge id → the mesh whose walk wrote it first
-    var polFirst = [];                      // one +/− pair per resistor, as its first walk marks it
+    // Marks accumulate as the walk goes and never come off again: `polNow` is one live pair per
+    // resistor, and meeting a shared resistor from the other side REPLACES its pair (the + moves
+    // to the other end) rather than adding a second, contradicting one.
+    var polNow = {};
     function polKey(p) { return p.e.id + ':' + p.tail; }   // + at the terminal the loop enters
+    function polSet(ps) { ps.forEach(function (p) { polNow[p.e.id] = polKey(p); }); return polShown(); }
+    // each snapshot is a NEW array assigned to curPol, so views already built keep the set they
+    // were given and every later H() defaults to the marks as they now stand
+    function polShown() { return (curPol = Object.keys(polNow).map(function (k) { return polNow[k]; })); }
     mc.order.forEach(function (f) {
       var t = T[f];
       polSubs.push({
@@ -351,7 +366,7 @@
         body: 'Walk clockwise around mesh <b>' + name[f] + '</b> and mark each resistor + where ' + name[f] +
           ' <i>enters</i> it — that is the end current flows into, so the drop across it is counted positive going that way. ' +
           t.parts.length + ' resistor' + (t.parts.length === 1 ? '' : 's') + ' on this loop.',
-        hl: H({ edges: faceEdgeIds(f), nodes: faceNodeIds(f), pol: t.parts.map(polKey) }),
+        hl: H({ edges: faceEdgeIds(f), nodes: faceNodeIds(f), pol: polShown() }),
       });
       t.parts.forEach(function (p) {
         var first = seenIn[p.e.id];             // face indices start at 0 — test for undefined, not truthiness
@@ -373,9 +388,9 @@
             'from ' + name[f] + ':  v = ' + p.R + '·(' + name[f] + ' − ' + name[first] + ')',
             'the two are equal and opposite:  (' + name[first] + ' − ' + name[f] + ') = −(' + name[f] + ' − ' + name[first] + ')'];
         }
-        if (first === undefined) { seenIn[p.e.id] = f; polFirst.push(polKey(p)); }
+        if (first === undefined) seenIn[p.e.id] = f;
         polSubs.push({ title: name[f] + ' · ' + si(p.R, 'Ω'), body: body, eq: eq,
-          hl: H({ edges: [p.e.id], nodes: faceNodeIds(f), pol: [polKey(p)] }) });
+          hl: H({ edges: [p.e.id], nodes: faceNodeIds(f), pol: polSet([p]) }) });
       });
       // a current source met on the walk: no drop to mark, because its voltage is whatever the
       // rest of the circuit makes it. Saying that here is what motivates steps 3 and 5.
@@ -405,7 +420,7 @@
       body: 'Mark each resistor + where its mesh current enters. A resistor on the outside boundary carries its single mesh current; a resistor <b>shared</b> between two meshes carries the difference — and which difference depends on which loop you are walking: R·(' +
         (m > 1 ? 'i<sub>this</sub> − i<sub>adjacent</sub>) one way, R·(i<sub>adjacent</sub> − i<sub>this</sub>) the other' : 'i<sub>this</sub> − i<sub>adjacent</sub>)') +
         '. Step through each mesh and each of its resistors — the marks on the drawing follow the walk, so a shared resistor’s + jumps to the other end when the second loop meets it.',
-      hl: H({ edges: rIds, pol: polFirst }),
+      hl: H({ edges: rIds, pol: polShown() }),
       subs: polSubs,
     });
 
