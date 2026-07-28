@@ -60,6 +60,23 @@
   line-height: 1.7;
   letter-spacing: 0.01em;
 }
+/* the step's result, folded away on a step whose substeps derive it — open it to skip
+   straight to the answer. Native <details>, so the open/closed state costs no script. */
+.eq-peek > summary {
+  cursor: pointer;
+  font-family: var(--font);
+  font-style: normal;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-deep);
+  letter-spacing: 0.01em;
+  list-style: none;
+}
+.eq-peek > summary::-webkit-details-marker { display: none; }
+.eq-peek > summary::before { content: '▸ '; }
+.eq-peek[open] > summary::before { content: '▾ '; }
+.eq-peek[open] > summary { margin-bottom: 4px; }
+
 .eq-line + .eq-line { border-top: 1px solid rgba(139, 92, 246, 0.14); }
 .eq-line sub, .eq-line sup { font-size: 0.7em; font-style: normal; }
 .eq-line b { font-style: normal; }

@@ -129,7 +129,10 @@ A technique returns an array of steps:
   if the walk were undoing them, so the results arrive at the end: each substep shows its own
   line and the last substep recaps the set (step 8's "all nodes/meshes solved", step 9's "all
   branch currents", step 10's "balance"). Keep the summary on the step — it is what the recap
-  substep is built from — and add a recap substep to any step that grows one. Same rule for the
+  substep is built from — the stepper folds it into a **"Show this step's result" disclosure**
+  on the overview, so a student who wants the answer and the next step rather than the walk gets
+  it in one click (opened once, it stays open across steps) — and add a recap substep to any
+  step that grows one. Same rule for the
   `board`: a step whose substeps write to it stamps the board **as it stands on entry**
   (`boardBefore…` / `boardAtStart`), never the state its own substeps leave behind.
 - `subs` (optional) → **substeps**. Entering a step shows its overview (sub 0); `subPrev`/`subNext`

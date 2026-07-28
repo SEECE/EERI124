@@ -10,14 +10,20 @@
    of the current step). Entering a step lands on its overview (sub 0); the sub row is
    disabled when a step has no substeps. Main Next always jumps the whole step. The sub
    row rolls over into the neighbouring step at either end, so a student can walk the
-   entire technique using only Prev/Next on the detail row. */
+   entire technique using only Prev/Next on the detail row.
+
+   A step's `eq` is its result summary, so on a step that HAS substeps it is not shown outright
+   (that would answer the step before the substeps derive it) — it is folded into a "Show this
+   step's result" disclosure, for the reader who wants the answer and the next step rather than
+   the walk. Opened once, it stays open across steps. */
 (function () {
   'use strict';
 
   window.Stepper = function (o) {
-    var steps = [], i = 0, sub = 0;
+    var steps = [], i = 0, sub = 0, peekOpen = false;
     function html(el, s) { if (el) el.innerHTML = s; }
     function subsOf(s) { return (s && s.subs) || []; }
+    function lines(a) { return a.map(function (l) { return '<div class="eq-line">' + l + '</div>'; }).join(''); }
 
     // resolve the active view: the step overview (sub 0) or one of its substeps
     function view() {
@@ -28,7 +34,9 @@
       // substeps hands out the answers before the derivation that produces them, and the walk
       // then reads as if it were undoing them — so the overview of such a step shows none, and
       // the results arrive on the substeps (each its own line, the last one recapping the set).
-      if (sub === 0 || !subs.length) return { title: s.title, body: s.body, eq: subs.length ? null : s.eq, todo: s.todo, hl: s.hl, board: s.board, label: null };
+      // It is not thrown away, though: it rides as `peek`, folded away behind a disclosure the
+      // student opens when they want the result without walking the derivation for it.
+      if (sub === 0 || !subs.length) return { title: s.title, body: s.body, eq: subs.length ? null : s.eq, peek: subs.length ? s.eq : null, todo: s.todo, hl: s.hl, board: s.board, label: null };
       var ss = subs[sub - 1];
       return {
         title: s.title,
@@ -50,9 +58,14 @@
       html(o.title, 'Step ' + s.n + ' — ' + v.title + (v.label ? ' · ' + v.label : ''));
       html(o.body, (v.todo ? '<span class="step-badge">Nothing to do</span>' : '') + (v.body || ''));
       if (o.eq) {
-        var has = v.eq && v.eq.length;
-        o.eq.style.display = has ? '' : 'none';
-        o.eq.innerHTML = has ? v.eq.map(function (l) { return '<div class="eq-line">' + l + '</div>'; }).join('') : '';
+        var has = v.eq && v.eq.length, peek = !has && v.peek && v.peek.length;
+        o.eq.style.display = has || peek ? '' : 'none';
+        o.eq.innerHTML = has ? lines(v.eq)
+          : peek ? '<details class="eq-peek"' + (peekOpen ? ' open' : '') + '><summary>Show this step’s result</summary>' + lines(v.peek) + '</details>'
+            : '';
+        // the disclosure stays as the student left it from step to step: opened once, the
+        // reader who only wants the answers keeps getting them without re-opening it
+        if (peek && o.eq.firstChild) o.eq.firstChild.addEventListener('toggle', function () { peekOpen = this.open; });
       }
       // the running board (KCL nodes / KVL meshes) lives in its own pinned element, not in the
       // body — it must stay put while the derivation above it scrolls, not jump around per view
