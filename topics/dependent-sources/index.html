@@ -62,16 +62,23 @@
 
       <button type="button" class="btn btn--primary btn--block" id="generate">Generate Circuit</button>
 
-      <div class="field rail-spacer">
-        <span class="field-label">Circuit File</span>
-        <div class="btn-row">
-          <button type="button" class="btn btn--soft" id="export-circuit">Export</button>
-          <label class="btn btn--soft btn--file" for="import-circuit">Import
-            <input type="file" id="import-circuit" accept="application/json" class="sr-only" />
+      <div class="field filemenu rail-spacer">
+        <span class="field-label">File</span>
+        <button type="button" class="btn btn--soft btn--block" data-file-toggle aria-expanded="false"
+          aria-controls="file-actions"><span class="file-caret" aria-hidden="true"></span> Open or Save</button>
+        <div class="file-actions" id="file-actions" data-file-actions hidden>
+          <label class="file-action" for="file-open">Open Circuit…
+            <small>a .eeri file saved anywhere on this site</small>
+            <input type="file" id="file-open" accept=".eeri,.json,application/json" class="sr-only" />
           </label>
+          <button type="button" class="file-action" data-save="native">Save Circuit
+            <small>.eeri — reopens on any page here</small></button>
+          <button type="button" class="file-action" data-save="asc">Save LTspice Schematic
+            <small>.asc — open and simulate it in LTspice</small></button>
+          <button type="button" class="file-action" data-save="cir">Save LTspice Netlist
+            <small>.cir — simulates any circuit, dependent sources included</small></button>
         </div>
-        <p class="field-note field-note--error" id="import-error" role="status"></p>
-        <p class="field-note">Same JSON the builder writes — draw a circuit there, solve it here.</p>
+        <p class="field-note" data-file-note role="status"></p>
       </div>
     </aside>
 
@@ -125,6 +132,9 @@
   <script src="../../js/techniques/node-voltage.js"></script>
   <script src="../../js/techniques/mesh-current.js"></script>
   <script src="../../js/stepper.js"></script>
+  <script src="../../js/formats/native.js"></script>
+  <script src="../../js/formats/ltspice.js"></script>
+  <script src="../../js/ui/filemenu.js"></script>
   <script src="../../js/solver-page.js"></script>
   <script src="../../js/ui/shell.js"></script>
   <script>

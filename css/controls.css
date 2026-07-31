@@ -118,3 +118,45 @@ input.ctl { cursor: text; font-variant-numeric: tabular-nums; }
 
 /* pushes the last rail group to the bottom when there is spare height */
 .rail-spacer { margin-top: auto; }
+
+/* ── File menu (js/ui/filemenu.js) ──
+   Expands inline instead of popping over: the rail is a scroll container, and an absolutely
+   positioned menu would be clipped by it. */
+.file-caret {
+  width: 0;
+  height: 0;
+  border: 4px solid transparent;
+  border-left-color: currentColor;
+  transition: transform var(--dur) var(--ease);
+}
+[aria-expanded='true'] > .file-caret { transform: rotate(90deg); }
+
+.file-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--sp-1);
+  background-color: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.file-action {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-xs);
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.file-action:hover { color: var(--text); background-color: var(--tint); }
+.file-action:focus-within { outline: var(--ring); outline-offset: -2px; }
+.file-action small { display: block; font-size: 10.5px; font-weight: 400; color: var(--text-faint); margin-top: 1px; }
+.file-action + .file-action { border-top: 1px solid var(--line); }
