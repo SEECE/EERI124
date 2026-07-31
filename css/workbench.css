@@ -1,0 +1,141 @@
+/* The workbench column — the stepwise method. Four fixed rows (workspace.css sets the grid):
+
+     head    step counter + title            never scrolls
+     scroll  narration + equations           the only part that scrolls
+     board   the running node/mesh board     pinned, capped, scrolls itself
+     nav     Prev/Next + the detail row      always reachable, never scrolled away
+
+   The board used to be a sticky element with negative margins inside the scroll box, which is
+   what let it ride over the text. As its own row it physically cannot. */
+
+.wb-head { padding: var(--sp-3) var(--sp-4) var(--sp-3); border-bottom: 1px solid var(--line); }
+.wb-head-top { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+
+.step-count {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--violet-300);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.step-title { font-size: 15px; color: var(--text); margin-top: var(--sp-1); }
+
+.wb-scroll { padding: var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-3); }
+
+.step-body { font-size: 13px; line-height: 1.65; color: var(--text-dim); }
+.step-body b { color: var(--text); font-weight: 650; }
+.step-body p + p { margin-top: var(--sp-2); }
+
+.step-badge {
+  display: inline-block;
+  background: var(--tint-aqua);
+  border: 1px solid rgba(34, 211, 238, 0.34);
+  color: var(--aqua-300);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  margin-right: var(--sp-2);
+  vertical-align: 1px;
+}
+
+/* ── equations ── */
+.step-eq {
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--violet-500);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
+  font-family: var(--font-math);
+  font-size: 16px;
+  font-style: italic;
+  color: var(--text);
+}
+/* wrap long equations rather than scrolling them sideways — every term stays visible. No
+   hanging indent: a line can start with a stacked fraction (an atomic inline-flex box) and a
+   negative text-indent would shove it out past the border. */
+.eq-line { padding: var(--sp-2) 0; overflow-wrap: anywhere; line-height: 1.75; }
+.eq-line + .eq-line { border-top: 1px solid var(--line); }
+.eq-line sub, .eq-line sup { font-size: 0.7em; font-style: normal; }
+.eq-line b { font-style: normal; color: var(--violet-200); }
+
+/* the step's result, folded away on a step whose substeps derive it */
+.eq-peek > summary {
+  cursor: pointer;
+  font-family: var(--font);
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--violet-300);
+  list-style: none;
+}
+.eq-peek > summary::-webkit-details-marker { display: none; }
+.eq-peek > summary::before { content: '▸ '; }
+.eq-peek[open] > summary::before { content: '▾ '; }
+.eq-peek[open] > summary { margin-bottom: var(--sp-1); }
+
+/* real stacked fraction for Ohm's-law terms instead of a bare slash; nowrap + its own margin
+   so it reads as one atomic symbol and never splits across the line wrap above */
+.frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin: 3px 0.3em;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.frac .num { padding: 0 0.2em 2px; border-bottom: 1.5px solid currentColor; }
+.frac .den { padding: 2px 0.2em 0; }
+
+/* ── tables: the "still to find" list (in the body) and the running board (pinned) ── */
+.kcl-status-wrap { overflow-x: auto; overscroll-behavior-x: contain; }
+.kcl-status { width: 100%; border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.kcl-status th,
+.kcl-status td { padding: 4px 7px; text-align: left; border-bottom: 1px solid var(--line); }
+.kcl-status td { color: var(--text-dim); }
+.kcl-status th {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.kcl-status tr.row-ready td { color: var(--aqua-300); font-weight: 650; }
+.eq-board td:last-child { font-family: var(--font-math); font-style: italic; color: var(--text); }
+
+.step-board {
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--shell-2);
+  border-top: 1px solid var(--line);
+  max-height: 30vh;
+}
+.step-board .kcl-status thead th { position: sticky; top: 0; background: var(--shell-2); }
+
+/* ── nav ── */
+.wb-nav {
+  padding: var(--sp-3) var(--sp-3);
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  background: rgba(0, 0, 0, 0.14);
+}
+.step-nav { display: flex; gap: var(--sp-2); }
+.step-nav > .btn { flex: 1 1 0; }
+
+.substep-nav { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--sp-2); }
+.step-subcount {
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  min-height: 14px;
+  font-variant-numeric: tabular-nums;
+}

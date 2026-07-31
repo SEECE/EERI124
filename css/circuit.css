@@ -1,0 +1,41 @@
+/* How the rendered circuit looks on the stage — the CSS half of Circuit.highlight()'s contract
+   (js/circuit.js draws every element with presentation attributes; any rule here beats them).
+
+   The renderer pre-draws the things a step later reveals — node letters, control-variable
+   notation, resistor polarity, branch-current arrows — hidden at opacity 0. `highlight()` adds
+   .show to exactly the ones the current view asks for. Do not change a selector here without
+   reading structure/SOLVER.md's step model. */
+
+.stage svg { -webkit-user-select: none; user-select: none; }
+.stage svg text { paint-order: stroke; }
+
+/* ── the highlighted element of the current step ── */
+.stage svg .edge.hl line { stroke: var(--accent-hover); stroke-width: 3.5; }
+.stage svg .edge.hl rect,
+.stage svg .edge.hl circle,
+.stage svg .edge.hl polygon.dep-body { stroke: var(--accent-hover); stroke-width: 3; }
+.stage svg .node.hl { fill: var(--accent-hover); stroke: var(--accent); stroke-width: 3; r: 5.5px; }
+
+/* ── revealed on demand ── */
+/* node letters: hidden until the step that names them */
+.stage svg .node-label { opacity: 0; }
+/* a dependent source's control variable (the iφ arrow / the + vΔ − pair on the resistor it
+   reads) is shown from the start — the student must see which measured quantity the source is
+   a multiple of, and in which direction, the moment the circuit is drawn */
+.stage svg .ctrl-mark { opacity: 1; }
+/* resistor polarity (KVL) and branch-current arrows (KCL): off until step 4 marks them, then
+   kept on for the rest of the method */
+.stage svg .pol-mark,
+.stage svg .flow-mark { opacity: 0; }
+
+.stage svg .node-label.show,
+.stage svg .pol-mark.show,
+.stage svg .flow-mark.show { opacity: 1; }
+
+.stage svg .node-label,
+.stage svg .pol-mark,
+.stage svg .flow-mark,
+.stage svg .ctrl-mark { transition: opacity var(--dur) var(--ease); }
+
+/* earth symbol under the chosen 0 V reference node */
+.stage svg .ground-symbol line { stroke: var(--ink); }

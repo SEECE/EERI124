@@ -1,108 +1,60 @@
-/* Circuit-builder page only — palette buttons and grid-dot styling, on top of
-   circuit-page.css's sidebar/canvas layout (which already gives the sidebar overflow-y). */
+/* Circuit builder — the element palette, the tune block and the grid steppers, on top of
+   workspace.css (two-column layout, roomier rail) and controls.css (fields, selects, buttons).
+   The palette buttons carry their own class because js/builder.js sets className directly. */
 
-/* wider than the solver pages' sidebar — it holds two panes side by side, and needs room for
-   the longest palette label ("Dependent source") on one line */
-.builder-sidebar { flex: 0 0 630px; }
+.palette { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: var(--sp-2); }
 
-.sidebar-split { display: flex; gap: var(--sp-4); }
-.sidebar-pane { flex: 1 1 0; min-width: 0; }
-.pane-subhead {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent-hover);
-  margin: var(--sp-4) 0 var(--sp-2);
-}
-.sidebar-divider { width: 1px; background: var(--accent-line); flex: none; }
-
-.palette { display: flex; flex-direction: column; gap: var(--sp-2); }
 .palette-btn {
   font-size: 12px;
-  padding: 0.55rem 0.6rem;
+  font-weight: 550;
+  line-height: 1.25;
+  text-align: left;
+  padding: 7px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--ink-faint);
-  background: #fff;
-  color: var(--ink);
+  border: 1px solid var(--line);
+  background-color: var(--panel-hi);
+  color: var(--text-dim);
   cursor: pointer;
-  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease);
 }
-.palette-btn:hover { border-color: var(--accent); }
+.palette-btn:hover { color: var(--text); border-color: var(--line-hi); }
 .palette-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: linear-gradient(140deg, var(--violet-500), var(--violet-700));
+  border-color: var(--violet-600);
   color: #fff;
-  /* latch: pressed-in look, not just a colour swap, so the selected tool reads at a glance */
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.35);
+  box-shadow: var(--glow);
 }
 
-.dep-toggles {
-  margin-top: var(--sp-2);
-  padding: var(--sp-2);
-  border-radius: var(--radius-sm);
-  background: var(--sunken);
-}
-.toggle-group {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  font-size: 12px;
-  margin-bottom: var(--sp-1);
-}
-.toggle-group span { color: var(--ink-soft); min-width: 70px; }
-.toggle-group label { display: flex; align-items: center; gap: 3px; cursor: pointer; }
-.toggle-group input { accent-color: var(--accent); }
+/* ── the dependent-source toggles: two rows of radios ── */
+.toggle-group { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); font-size: 11.5px; }
+.toggle-group > span { color: var(--text-faint); min-width: 62px; }
+.toggle-group label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-dim); }
+.toggle-group label:hover { color: var(--text); }
+.toggle-group input { accent-color: var(--violet-500); margin: 0; cursor: pointer; }
 
-.value-row, .control-row {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin-top: var(--sp-2);
-}
-.value-row input {
-  width: 90px;
-  font: inherit;
-  padding: 0.4rem 0.6rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--ink-faint);
-}
-.control-row select { flex: 1; font: inherit; padding: 0.4rem; border-radius: var(--radius-sm); border: 1px solid var(--ink-faint); }
+.value-unit { font-size: 12px; color: var(--text-faint); flex: none; }
+#value-row input.ctl { max-width: 110px; }
 
-.type-desc {
-  font-size: 11px;
-  color: var(--ink-soft);
-  line-height: 1.45;
-  margin-top: var(--sp-2);
+/* ── grid-size steppers ── */
+.stepper-pair { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); }
+.stepper-row { display: flex; align-items: center; gap: var(--sp-2); }
+.stepper-row > .stepper-label { font-size: 11.5px; color: var(--text-faint); min-width: 30px; }
+.stepper-value {
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--text);
+  min-width: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
 }
+.stepper-row > .btn { padding: 3px 9px; font-size: 13px; line-height: 1.2; }
 
-.grid-size-pair { display: flex; gap: var(--sp-5); }
-.grid-size-row {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-2);
-  margin-top: var(--sp-1);
-}
-.grid-size-row span { font-size: 13px; color: var(--ink-soft); }
-.grid-size-row span:first-child { min-width: 34px; }
-.grid-size-row button { width: auto; padding: 0.3rem 0.7rem; }
-
-.builder-hint {
-  font-size: 12px;
-  color: var(--ink-soft);
-  line-height: 1.5;
-  background: var(--accent-wash);
-  border-radius: var(--radius-sm);
-  padding: var(--sp-2) var(--sp-3);
-}
-
-/* the builder's canvas is a literal-pixel-sized grid that grows with the grid-size controls
-   (more/fewer dots, not a visual zoom) and on import, unlike the solver pages' svg (which
-   always scales to fit) — so it scrolls instead of shrinking elements unreadable. */
-.circuit-page .circuit-canvas { overflow: auto; }
-.circuit-page .circuit-canvas svg { width: auto; height: auto; flex: none; }
-
-.grid-dot { fill: var(--ink-faint); cursor: pointer; }
+/* ── the grid itself (drawn on paper, so it uses the ink tokens) ── */
+.grid-dot { fill: var(--ink-faint); cursor: pointer; transition: fill var(--dur) var(--ease); }
+.grid-dot:hover { fill: var(--accent); }
 .grid-dot.has-node { fill: var(--accent-deep); }
 .grid-dot.pending { fill: var(--accent-hover); stroke: var(--accent-deep); stroke-width: 2; }
 .builder-edge { cursor: pointer; }
 .builder-edge:hover rect { stroke-width: 3; }
+.builder-edge:hover line { stroke: var(--accent-hover); }
