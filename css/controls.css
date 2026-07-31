@@ -94,7 +94,7 @@ input.ctl { cursor: text; font-variant-numeric: tabular-nums; }
 .btn--ghost:hover:not(:disabled) { color: var(--text); background-color: var(--tint); border-color: var(--line-hi); }
 
 .btn--block { width: 100%; }
-.btn--sm { padding: 5px 8px; font-size: 12px; }
+.btn--sm { padding: 6px 10px; font-size: 12px; }
 
 .btn-row { display: flex; gap: var(--sp-2); }
 .btn-row > .btn { flex: 1 1 0; min-width: 0; }

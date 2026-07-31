@@ -48,7 +48,7 @@
   text-align: center;
   font-variant-numeric: tabular-nums;
 }
-.stepper-row > .btn { padding: 3px 9px; font-size: 13px; line-height: 1.2; }
+.stepper-row > .btn { padding: 5px 10px; font-size: 13px; line-height: 1.2; }
 
 /* ── the grid itself (drawn on paper, so it uses the ink tokens) ── */
 .grid-dot { fill: var(--ink-faint); cursor: pointer; transition: fill var(--dur) var(--ease); }

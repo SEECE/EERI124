@@ -117,6 +117,11 @@
 }
 .step-board .kcl-status thead th { position: sticky; top: 0; background: var(--shell-2); }
 
+/* on a short screen head + board + nav must still leave the derivation somewhere to live */
+@media (max-height: 640px) {
+  .step-board { max-height: 22vh; }
+}
+
 /* ── nav ── */
 .wb-nav {
   padding: var(--sp-3) var(--sp-3);
