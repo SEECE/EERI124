@@ -1,15 +1,20 @@
-/* Circuit builder — the element palette, the tune block and the grid steppers, on top of
-   workspace.css (two-column layout, roomier rail) and controls.css (fields, selects, buttons).
-   The palette buttons carry their own class because js/builder.js sets className directly. */
+/* Circuit builder — the rail's palette and properties, the canvas chrome, and everything the
+   builder draws on the paper. The canvas is a light surface, so the marks on it use the ink /
+   accent tokens (structure/FRONTEND.md), never the dark chrome ones. */
 
-.palette { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: var(--sp-2); }
+/* ── tool palette ── */
+.palette { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--sp-2); }
 
 .palette-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
   font-size: 12px;
   font-weight: 550;
   line-height: 1.25;
   text-align: left;
-  padding: 7px 10px;
+  padding: 7px 8px 7px 10px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line);
   background-color: var(--panel-hi);
@@ -19,42 +24,110 @@
     color var(--dur) var(--ease);
 }
 .palette-btn:hover { color: var(--text); border-color: var(--line-hi); }
+.palette-btn kbd {
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--line);
+  color: var(--text-faint);
+}
 .palette-btn.active {
   background: linear-gradient(140deg, var(--violet-500), var(--violet-700));
   border-color: var(--violet-600);
   color: #fff;
   box-shadow: var(--glow);
 }
+.palette-btn.active kbd { color: rgba(255, 255, 255, 0.85); border-color: rgba(255, 255, 255, 0.3); }
 
-/* ── the dependent-source toggles: two rows of radios ── */
+/* ── properties block ── */
+.props { gap: var(--sp-3); }
 .toggle-group { display: flex; align-items: center; flex-wrap: wrap; gap: var(--sp-2); font-size: 11.5px; }
 .toggle-group > span { color: var(--text-faint); min-width: 62px; }
 .toggle-group label { display: flex; align-items: center; gap: 4px; cursor: pointer; color: var(--text-dim); }
 .toggle-group label:hover { color: var(--text); }
 .toggle-group input { accent-color: var(--violet-500); margin: 0; cursor: pointer; }
+.value-unit { font-size: 12px; color: var(--text-faint); flex: none; min-width: 14px; }
 
-.value-unit { font-size: 12px; color: var(--text-faint); flex: none; }
-#value-row input.ctl { max-width: 110px; }
-
-/* ── grid-size steppers ── */
-.stepper-pair { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-5); }
-.stepper-row { display: flex; align-items: center; gap: var(--sp-2); }
-.stepper-row > .stepper-label { font-size: 11.5px; color: var(--text-faint); min-width: 30px; }
-.stepper-value {
-  font-size: 12.5px;
-  font-weight: 650;
-  color: var(--text);
-  min-width: 18px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
+/* ── canvas chrome: a bar across the foot of the stage, over the paper ── */
+.canvas-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 6px 8px 6px 12px;
+  background: rgba(251, 250, 255, 0.92);
+  border-top: 1px solid rgba(34, 25, 60, 0.1);
+  backdrop-filter: blur(4px);
 }
-.stepper-row > .btn { padding: 5px 10px; font-size: 13px; line-height: 1.2; }
+.canvas-status {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canvas-status.is-error { color: #b91c1c; font-weight: 600; }
 
-/* ── the grid itself (drawn on paper, so it uses the ink tokens) ── */
-.grid-dot { fill: var(--ink-faint); cursor: pointer; transition: fill var(--dur) var(--ease); }
-.grid-dot:hover { fill: var(--accent); }
+.canvas-zoom { display: flex; gap: 4px; flex: none; }
+.canvas-btn {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  line-height: 1;
+  border-radius: var(--radius-xs);
+  border: 1px solid rgba(34, 25, 60, 0.16);
+  background: #fff;
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+.canvas-btn:hover { color: var(--accent-deep); border-color: var(--accent); background: #f6f2ff; }
+
+/* ── the drawing ── */
+.builder-canvas { cursor: crosshair; touch-action: none; }
+.builder-canvas.is-panning { cursor: grabbing; }
+.grid-bg { pointer-events: none; }
+.grid-dot-bg { fill: var(--ink-faint); opacity: 0.55; }
+
+.grid-dot { pointer-events: none; }
 .grid-dot.has-node { fill: var(--accent-deep); }
-.grid-dot.pending { fill: var(--accent-hover); stroke: var(--accent-deep); stroke-width: 2; }
+.grid-dot.is-hover { fill: none; stroke: var(--accent); stroke-width: 2; }
+.grid-dot.is-anchor { fill: var(--accent-hover); stroke: var(--accent-deep); stroke-width: 2; }
+
 .builder-edge { cursor: pointer; }
-.builder-edge:hover rect { stroke-width: 3; }
-.builder-edge:hover line { stroke: var(--accent-hover); }
+.be-wire { stroke: var(--ink); stroke-width: 2; }
+.be-body { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.be-dep { stroke: var(--accent-deep); }
+.be-arrow { stroke: var(--accent-hover); stroke-width: 2; }
+.be-arrow-head { fill: var(--accent-hover); }
+.be-pole, .be-label, .be-name {
+  text-anchor: middle;
+  dominant-baseline: central;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4;
+}
+.be-pole { fill: var(--accent-hover); font-weight: 700; }
+.be-label { fill: var(--ink); }
+.be-name { fill: var(--ink-soft); font-weight: 600; }
+
+.builder-edge:hover .be-body { stroke-width: 3; }
+.builder-edge:hover .be-wire { stroke: var(--accent-hover); }
+.builder-edge.is-selected .be-wire { stroke: var(--accent-hover); stroke-width: 3.5; }
+.builder-edge.is-selected .be-body { stroke: var(--accent-hover); stroke-width: 3; }
+
+/* the preview of what the next click places — dashed and out of the way of hit-testing */
+.builder-edge.is-ghost { opacity: 0.5; pointer-events: none; }
+.builder-edge.is-ghost .be-wire { stroke: var(--accent); stroke-dasharray: 5 4; }
+.builder-edge.is-ghost .be-body { stroke-dasharray: 5 4; }
