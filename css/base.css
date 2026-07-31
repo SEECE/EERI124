@@ -37,6 +37,12 @@ body::before {
     linear-gradient(168deg, var(--shell-2), var(--shell) 62%);
 }
 
+/* The UA's `[hidden] { display: none }` is a bare attribute selector, so ANY class rule that
+   sets display beats it — which silently breaks every element the scripts hide by setting
+   .hidden (the File menu's actions, the builder's unused panel toggle). Win it back once here
+   rather than remembering a [hidden] override next to every display rule. */
+[hidden] { display: none !important; }
+
 a { color: inherit; text-decoration: none; }
 h1, h2, h3, h4 { font-weight: 650; line-height: 1.25; text-wrap: balance; }
 button, select, input, label { font-family: inherit; }
