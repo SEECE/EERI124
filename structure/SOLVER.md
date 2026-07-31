@@ -113,7 +113,7 @@ A technique returns an array of steps:
 - `todo: true` → a muted **"Nothing to do"** badge.
 - `hl` → highlighted elements. The renderer wraps each edge in `<g class="edge" data-eid>` and tags
   each node circle `data-nid`; `Circuit.highlight(svg, hl)` toggles a `.hl` class (styled in
-  `css/solver.css`, which beats the renderer's presentation attributes). `hl.marks` reveals a
+  `css/circuit.css`, which beats the renderer's presentation attributes). `hl.marks` reveals a
   control variable's notation, keyed `'i:<edgeId>'` / `'v:<edgeId>'` — like `hl.labels`, a view
   that omits it *erases* the markers, so both techniques stamp the full set onto any view that
   is not about one particular source. `hl.pol` is the same idea for **resistor polarity** (step 4 of
@@ -128,8 +128,9 @@ A technique returns an array of steps:
   omits them erases the marks.
 - `board` (optional) → the **running board** html (KCL: node voltages, KVL: mesh currents). The
   stepper renders it into its own element (`#step-board`), **pinned to the bottom of the panel**
-  (`css/solver.css`, `position: sticky`), so it stays in one place while the derivation scrolls
-  above it. Never concatenate the board into `body` — that was what made it jump around and vanish.
+  (its own grid row in the workbench — see [FRONTEND.md](FRONTEND.md)), so it stays in one place
+  while the derivation scrolls above it. Never concatenate the board into `body` — that was what
+  made it jump around and vanish.
   Build it with the technique's local `WB()` helper **at the point the view is created**: the board
   is time-varying, so stamping it later records the wrong state. A view with no `board` hides the
   panel — intended only for steps 1–5, before the first equation exists.

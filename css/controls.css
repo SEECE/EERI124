@@ -14,8 +14,9 @@
 .field-row > .ctl { flex: 1 1 0; min-width: 0; }
 .field-sep { color: var(--text-faint); flex: none; }
 .field-note { font-size: 11.5px; line-height: 1.45; color: var(--text-faint); }
+/* the error note is a live region (role="status"), so it stays in the DOM even when empty —
+   a screen reader does not announce a change made while the element is display:none */
 .field-note--error { color: var(--danger); }
-.field-note:empty { display: none; }
 
 /* ── select / text input ── */
 .ctl {

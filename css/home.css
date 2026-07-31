@@ -96,4 +96,9 @@
 
 /* a topic whose visualiser is not built yet */
 .card--soon { opacity: 0.6; pointer-events: none; }
-.card--soon .card-go { content: none; display: none; }
+.card--soon .card-go { display: none; }
+
+/* gradient text has no colour to fall back on in a forced-colours theme */
+@media (forced-colors: active) {
+  .hero h1 { color: CanvasText; -webkit-text-fill-color: CanvasText; }
+}

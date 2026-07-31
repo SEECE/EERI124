@@ -35,7 +35,7 @@
   --line-hi: rgba(167, 139, 250, 0.38);
   --text: #ece9fb;
   --text-dim: #aba0cc;
-  --text-faint: #7d7299;
+  --text-faint: #8f84b0;        /* 5.2:1 on --panel — the floor for 12px secondary text */
   --danger: #fda4af;
   --tint: rgba(139, 92, 246, 0.12);       /* accent wash on chrome */
   --tint-aqua: rgba(34, 211, 238, 0.14);
