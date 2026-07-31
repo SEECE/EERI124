@@ -125,7 +125,10 @@ A technique returns an array of steps:
   answered; both ends of a resistor between two unknown nodes carry one, at opposite ends of the
   element. **Once marked, both kinds stay for the rest of the method** — like the mesh loops, they
   ride on every later `hl` (KVL through `H()`, KCL through the step-list post-pass), and a view that
-  omits them erases the marks.
+  omits them erases the marks. `hl.ground` draws the earth symbol and `hl.volts` writes a node's
+  solved reading — and **a node can carry those two plus its letter at once**, so the renderer
+  spreads them over the node's open gaps (`data-gaps`) instead of each picking a spot on its own.
+  That is placement logic, not decoration: getting it wrong prints the reading over the letter.
 - `board` (optional) → the **running board** html (KCL: node voltages, KVL: mesh currents). The
   stepper renders it into its own element (`#step-board`), **pinned to the bottom of the panel**
   (its own grid row in the workbench — see [FRONTEND.md](FRONTEND.md)), so it stays in one place

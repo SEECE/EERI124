@@ -621,10 +621,18 @@
       var gaps = gapsOf(n.id);
       var gdir = gaps[0];
       circleOf[n.id].setAttribute('data-gdir', (gdir * 180 / Math.PI).toFixed(1));
-      // any node can show a voltage reading (drawn later by highlight()) in its widest open gap
-      // (data-gdir) at radius 26 — close to the node, into empty space. Reserve that spot for
-      // every node so the viewBox never clips it once a step reveals it.
-      fit(p.x + Math.cos(gdir) * 26, p.y + Math.sin(gdir) * 26, '-99.9 mV');
+      // A node can end up carrying THREE annotations at once — its letter, an earth symbol and
+      // a solved voltage reading — so highlight() needs the whole list of open directions to
+      // spread them over, not just the widest one. Stamped here because only render knows the
+      // wiring angles.
+      circleOf[n.id].setAttribute('data-gaps', gaps.map(function (g) { return (g * 180 / Math.PI).toFixed(1); }).join(' '));
+      // reserve every spot a reading could land in, so the viewBox never clips one once a step
+      // reveals it: each open gap, plus the two swung positions freeDir() falls back to when a
+      // node has only one gap and something is already sitting in it
+      gaps.forEach(function (g) { fit(p.x + Math.cos(g) * 32, p.y + Math.sin(g) * 32, '-99.9 mV'); });
+      [gdir + 0.95, gdir - 0.95].forEach(function (g) {
+        fit(p.x + Math.cos(g) * 32, p.y + Math.sin(g) * 32, '-99.9 mV');
+      });
       if (!n.label) return;
       var ldir = gaps.length > 1 ? gaps[1] : gaps[0];
       circleOf[n.id].setAttribute('data-ldir', (ldir * 180 / Math.PI).toFixed(1));
@@ -652,10 +660,44 @@
      'i:<edgeId>' / 'v:<edgeId>' (Circuit.controls().marks gives the keys). `ground` draws the
      earth symbol under the chosen reference node(s); `volts` writes a solved/known voltage
      reading above a node. */
+  /* ---- placing the things that crowd a node ----
+     A node can show its letter, an earth symbol and a voltage reading at once. Each is put in
+     one of the node's open gaps (data-gaps, stamped at render, widest first); this is what
+     stops "0 V" being printed straight over the letter. */
+  var CLOSE = 0.62;                                  // ~35°: any nearer and two readings merge
+  function rads(c, attr) {
+    var v = c.getAttribute(attr);
+    return v === null ? null : +v * Math.PI / 180;
+  }
+  function angGap(a, b) {
+    var d = Math.abs(a - b) % (2 * Math.PI);
+    return d > Math.PI ? 2 * Math.PI - d : d;
+  }
+  /* The open direction furthest from everything already placed. A node with a single element
+     has only one gap, so when even the best is crowded, swing clear of the nearest occupant
+     rather than stacking on it — render reserves viewBox room for both swings. */
+  function freeDir(c, taken, fallback) {
+    var dirs = (c.getAttribute('data-gaps') || '').split(' ').filter(Boolean)
+      .map(function (d) { return +d * Math.PI / 180; });
+    if (!dirs.length) return fallback;
+    var best = dirs[0], score = -1;
+    dirs.forEach(function (d) {
+      var s = taken.length ? Math.min.apply(null, taken.map(function (t) { return angGap(d, t); })) : Math.PI;
+      if (s > score) { score = s; best = d; }
+    });
+    if (!taken.length || score >= CLOSE) return best;
+    var near = taken[0];
+    taken.forEach(function (t) { if (angGap(best, t) < angGap(best, near)) near = t; });
+    var side = Math.atan2(Math.sin(best - near), Math.cos(best - near));
+    return best + (side >= 0 ? 0.95 : -0.95);
+  }
+
   function highlight(svg, spec) {
     spec = spec || {};
     var edges = spec.edges || [], nodes = spec.nodes || [], labels = spec.labels || [];
     var marks = spec.marks || [];
+    var ground = spec.ground || [];
+    var labelDir = {};                               // where each shown letter ended up
     Array.prototype.forEach.call(svg.querySelectorAll('.ctrl-mark'), function (g) {
       g.classList.toggle('show', marks.indexOf(g.getAttribute('data-mark')) >= 0);
     });
@@ -673,7 +715,19 @@
       g.classList.toggle('hl', nodes.indexOf(g.getAttribute('data-nid')) >= 0);
     });
     Array.prototype.forEach.call(svg.querySelectorAll('.node-label'), function (t) {
-      t.classList.toggle('show', labels.indexOf(t.getAttribute('data-nlabel')) >= 0);
+      var nid = t.getAttribute('data-nlabel');
+      var shown = labels.indexOf(nid) >= 0;
+      t.classList.toggle('show', shown);
+      if (!shown) return;
+      // the letter keeps the spot render gave it unless the earth symbol wants the same one
+      var c = svg.querySelector('[data-nid="' + nid + '"]');
+      var dir = c ? rads(c, 'data-ldir') : null;
+      if (dir === null) return;
+      var gd = ground.indexOf(nid) >= 0 ? rads(c, 'data-gdir') : null;
+      if (gd !== null && angGap(dir, gd) < CLOSE) dir = freeDir(c, [gd], dir + 0.95);
+      labelDir[nid] = dir;
+      t.setAttribute('x', +c.getAttribute('cx') + Math.cos(dir) * 20);
+      t.setAttribute('y', +c.getAttribute('cy') + Math.sin(dir) * 20);
     });
 
     // clockwise mesh loop-arrows (KVL). loops:[{nodes:[ids], label, merged}] — the arc is an
@@ -745,17 +799,26 @@
     Array.prototype.forEach.call(svg.querySelectorAll('.node-volt'), function (t) {
       t.parentNode.removeChild(t);
     });
-    var volts = spec.volts || {}, groundSet = spec.ground || [];
+    var volts = spec.volts || {};
     Object.keys(volts).forEach(function (nid) {
       var c = svg.querySelector('[data-nid="' + nid + '"]');
       if (!c) return;
       var x = +c.getAttribute('cx'), y = +c.getAttribute('cy');
-      // widest gap normally; the letter gap on a grounded node (its widest gap is taken)
-      var dirAttr = groundSet.indexOf(nid) >= 0
-        ? (c.getAttribute('data-ldir') || c.getAttribute('data-gdir'))
-        : c.getAttribute('data-gdir');
-      var rad = dirAttr !== null ? (+dirAttr * Math.PI / 180) : -Math.PI / 2;  // default: straight up
-      var vx = x + Math.cos(rad) * 26, vy = y + Math.sin(rad) * 26;
+      /* The reading goes in the widest gap — unless the letter or the earth symbol is already
+         there, in which case it takes the furthest open direction from both. Reading the
+         letter's ACTUAL direction (set above, not data-ldir) matters: on a grounded node the
+         letter has itself just moved out of the earth symbol's way. */
+      var taken = [];
+      if (nid in labelDir) taken.push(labelDir[nid]);
+      if (ground.indexOf(nid) >= 0) {
+        var gd = rads(c, 'data-gdir');
+        if (gd !== null) taken.push(gd);
+      }
+      var wide = rads(c, 'data-gdir');
+      var clash = taken.some(function (t) { return wide === null || angGap(wide, t) < CLOSE; });
+      var rad = clash ? freeDir(c, taken, -Math.PI / 2) : (wide !== null ? wide : -Math.PI / 2);
+      var out = taken.length ? 32 : 26;               // step out a little when sharing a node
+      var vx = x + Math.cos(rad) * out, vy = y + Math.sin(rad) * out;
       el('text', {
         'class': 'node-volt', x: vx, y: vy, 'text-anchor': 'middle', 'dominant-baseline': 'central',
         fill: 'var(--accent-hover)', 'font-size': 12, 'font-weight': 600,
