@@ -12,7 +12,11 @@
   'use strict';
 
   var NS = 'http://www.w3.org/2000/svg';
-  var MIN_PITCH = 34, MAX_PITCH = 190, DEFAULT_PITCH = 78;
+  /* The solver pages draw into a viewBox that scales to fit the stage, so their symbols and
+     labels land on screen magnified — often 1.5×. This canvas is deliberately 1 unit = 1 CSS
+     pixel (pan and zoom have to be exact), so everything drawn here must be sized UP to carry
+     the same visual weight, or the builder reads as zoomed out next to the other pages. */
+  var MIN_PITCH = 44, MAX_PITCH = 210, DEFAULT_PITCH = 96;
 
   function el(tag, attrs, parent) {
     var e = document.createElementNS(NS, tag);
@@ -53,7 +57,7 @@
     var W = 900, H = 600;
     var defs = el('defs', {}, svg);
     var pat = el('pattern', { id: 'builder-dots', patternUnits: 'userSpaceOnUse' }, defs);
-    var patDot = el('circle', { r: 1.7, class: 'grid-dot-bg' }, pat);
+    var patDot = el('circle', { r: 2.3, class: 'grid-dot-bg' }, pat);
     var bg = el('rect', { x: 0, y: 0, class: 'grid-bg', fill: 'url(#builder-dots)' }, svg);
     var gEdges = el('g', {}, svg), gNodes = el('g', {}, svg), gOver = el('g', {}, svg);
 
@@ -95,8 +99,8 @@
     function pan(dx, dy) { vp.ox += dx; vp.oy += dy; drawGrid(); }
 
     function fit(b) {
-      var box = b || { c0: 0, c1: 5, r0: 0, r1: 4 };
-      var pad = 1.3;
+      var box = b || { c0: 0, c1: 4, r0: 0, r1: 3 };
+      var pad = 0.9;
       var cw = (box.c1 - box.c0) + 2 * pad, ch = (box.r1 - box.r0) + 2 * pad;
       vp.pitch = clamp(MIN_PITCH, Math.min(W / cw, H / ch), MAX_PITCH);
       vp.ox = W / 2 - ((box.c0 + box.c1) / 2) * vp.pitch;
@@ -115,9 +119,9 @@
       if (e.type === 'W') return g;
 
       var dep = window.Circuit.isDependent(e.type);
-      var half = Math.max(11, p * 0.21), font = clamp(9, p * 0.145, 13);
+      var half = Math.max(14, p * 0.25), font = clamp(11, p * 0.185, 17);
       if (e.type === 'R') {
-        var hw = Math.max(13, p * 0.22), hh = Math.max(6, p * 0.095);
+        var hw = Math.max(16, p * 0.26), hh = Math.max(7, p * 0.115);
         el('polygon', { points: [[mx + ux * hw + vx * hh, my + uy * hw + vy * hh],
           [mx + ux * hw - vx * hh, my + uy * hw - vy * hh],
           [mx - ux * hw - vx * hh, my - uy * hw - vy * hh],
@@ -146,11 +150,11 @@
           class: 'be-arrow-head' }, g);
       }
 
-      var off = Math.max(18, p * 0.30);
+      var off = Math.max(22, p * 0.33);
       var lx = mx + vx * off, ly = my + vy * off;
       el('text', { x: lx, y: ly, class: 'be-label', 'font-size': font }, g)
         .textContent = dep ? depLabel(e, nm) : fmt(e);
-      if (p >= 58) {
+      if (p >= 64) {
         el('text', { x: lx, y: ly - font * 1.15, class: 'be-name', 'font-size': font * 0.85 }, g)
           .textContent = nm[e.id] || '';
       }
@@ -169,7 +173,7 @@
       });
       c.nodes.forEach(function (n) {
         var p = screen({ r: n.y, c: n.x });
-        el('circle', { cx: p.x, cy: p.y, r: Math.max(3, vp.pitch * 0.045), class: 'grid-dot has-node' }, gNodes);
+        el('circle', { cx: p.x, cy: p.y, r: Math.max(4, vp.pitch * 0.058), class: 'grid-dot has-node' }, gNodes);
       });
     }
 

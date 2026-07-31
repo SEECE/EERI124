@@ -59,9 +59,6 @@
   min-height: 0;
 }
 
-/* the builder's canvas is edge-to-edge: it draws its own grid margin, and its chrome sits on
-   the paper rather than beside it */
-.stage--flush { padding: 0; }
 
 /* ── workbench: header / scrolling derivation / pinned board / nav. Four grid rows, so the
    board can never ride over the text the way the old sticky+negative-margin version did. ── */

@@ -105,11 +105,12 @@
 .grid-dot.is-hover { fill: none; stroke: var(--accent); stroke-width: 2; }
 .grid-dot.is-anchor { fill: var(--accent-hover); stroke: var(--accent-deep); stroke-width: 2; }
 
+/* stroke weights match what the solver pages end up with once their viewBox scales them up */
 .builder-edge { cursor: pointer; }
-.be-wire { stroke: var(--ink); stroke-width: 2; }
-.be-body { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.be-wire { stroke: var(--ink); stroke-width: 2.6; }
+.be-body { fill: var(--surface); stroke: var(--accent); stroke-width: 2.6; }
 .be-dep { stroke: var(--accent-deep); }
-.be-arrow { stroke: var(--accent-hover); stroke-width: 2; }
+.be-arrow { stroke: var(--accent-hover); stroke-width: 2.4; }
 .be-arrow-head { fill: var(--accent-hover); }
 .be-pole, .be-label, .be-name {
   text-anchor: middle;
