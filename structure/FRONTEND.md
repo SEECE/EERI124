@@ -58,6 +58,14 @@ on `.workspace` — and `js/ui/shell.js` is the only thing that writes it. CSS d
 `shell.js` never measures or positions anything. If you find yourself reading
 `getBoundingClientRect` in there, the layout is wrong, not the script.
 
+## Ask Midnjoy
+
+`js/ui/step-prompt.js` copies a prompt for the in-house LLM covering **one** step — whichever
+view the student is on, so a detail view sends that detail and an overview sends the step. It
+reads `Stepper.current()` rather than scraping the rendered panel, and turns the panel's HTML
+into plain text on the way out (stacked fractions become a/b, `<sub>` becomes `_a`). Keep it to
+one step: a prompt carrying the finished derivation just hands back the answer.
+
 ## Tokens: two palettes, and one contract with the renderer
 
 `css/tokens.css` holds **two palettes that are not interchangeable**:

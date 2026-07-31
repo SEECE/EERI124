@@ -138,6 +138,19 @@
       });
     }
 
+    // "Ask Midnjoy about this step" — copies a prompt for the step the student is on
+    if (window.StepPrompt) {
+      StepPrompt({
+        button: document.getElementById('ask-midnjoy'),
+        note: document.getElementById('midnjoy-note'),
+        stepper: stepper,
+        circuit: function () { return circuit; },
+        context: function () {
+          return { technique: techSel.options[techSel.selectedIndex].text, topology: topoSel.value };
+        },
+      });
+    }
+
     document.getElementById('generate').addEventListener('click', generate);
     topoSel.addEventListener('change', generate);
     techSel.addEventListener('change', runTechnique); // re-analyse the same circuit
