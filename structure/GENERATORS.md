@@ -60,10 +60,12 @@ nodes, edges }` — `meta.elements` is just the distinct type codes present, a c
 can reject on before even validating. `Circuit.importJSON(data, allowedElements?)` is the
 reverse: parses, `validate()`s, requires the result connected and carrying at least one
 independent source (`V`/`I` — the same rule a generator's output must already satisfy), and,
-if `allowedElements` is given, rejects any type outside it. Every solver page's Import button
-calls this with its own element set (see `SolverPage`'s `opts.elements` in
-[SOLVER.md](SOLVER.md)); `topics/circuit-builder/` (`js/builder.js`) is what writes these files
-by hand, and calls the same function on its own Export to catch a bad circuit before saving it.
+if `allowedElements` is given, rejects any type outside it.
+
+Both are wrapped by **`js/formats/native.js`**, which is what the File button actually calls —
+it adds the `.eeri` header and the friendly error messages. See [FORMATS.md](FORMATS.md) for the
+on-disk shape, and for the LTspice writers that consume the same model. Nothing outside
+`js/formats/` should be building a file by hand.
 
 ## Dependent sources
 

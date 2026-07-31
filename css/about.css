@@ -1,0 +1,76 @@
+/* About page — acknowledgement cards and the colophon facts. Rides on home.css's hero and
+   section-label, so it only needs what is genuinely its own. */
+
+.credit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: var(--sp-4); }
+
+.credit {
+  position: relative;
+  padding: var(--sp-5) var(--sp-4) var(--sp-4);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+/* a standing accent down the leading edge — these are the page's subject, not links to it */
+.credit::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 2px;
+  background: linear-gradient(180deg, var(--violet-400), var(--aqua-400));
+}
+
+.credit-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  margin-bottom: var(--sp-3);
+  background: linear-gradient(140deg, var(--violet-500), var(--violet-700));
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  box-shadow: var(--glow);
+}
+
+.credit-name { font-size: 17px; color: var(--text); letter-spacing: -0.01em; }
+.credit-role {
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--violet-300);
+}
+.credit-body { margin-top: var(--sp-3); font-size: 13.5px; line-height: 1.65; color: var(--text-dim); }
+
+/* ── colophon ── */
+.fact-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: var(--sp-3); }
+
+.fact {
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.fact dt {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--violet-300);
+  margin-bottom: var(--sp-1);
+}
+.fact dd { font-size: 12.5px; line-height: 1.55; color: var(--text-dim); }
+
+.about-note {
+  margin-top: var(--sp-5);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px dashed var(--line-hi);
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text-faint);
+}

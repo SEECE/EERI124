@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e0920" />
+  <title>About — EERI 124</title>
+  <link rel="stylesheet" href="css/tokens.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/ribbon.css" />
+  <link rel="stylesheet" href="css/home.css" />
+  <link rel="stylesheet" href="css/about.css" />
+</head>
+
+<body class="doc">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="ribbon">
+    <a class="ribbon-brand" href="index.html">
+      <span class="ribbon-mark" aria-hidden="true"></span>
+      <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
+    </a>
+    <span class="ribbon-sep" aria-hidden="true"></span>
+    <span class="ribbon-title">Electrotechnique 1</span>
+    <nav class="ribbon-nav" aria-label="Topics">
+      <a href="index.html">Home</a>
+      <a href="topics/simple-resistive-circuits/index.html">Resistive</a>
+      <a href="topics/current-sources/index.html">Current Sources</a>
+      <a href="topics/dependent-sources/index.html">Dependent Sources</a>
+      <a href="topics/circuit-builder/index.html">Builder</a>
+      <a href="about.html" aria-current="page">About</a>
+    </nav>
+  </header>
+
+  <main class="doc-main" id="main">
+    <div class="hero">
+      <p class="hero-eyebrow">About</p>
+      <h1>The People Behind This Site</h1>
+      <p class="hero-sub">A set of interactive visualisations for EERI 124 — Electrotechnique 1
+        at the North-West University. It exists because the methods it walks through are worth
+        practising more often than a lecture has time for.</p>
+    </div>
+
+    <section class="home-section">
+      <h2 class="section-label">Acknowledgements</h2>
+      <div class="credit-grid">
+        <article class="credit">
+          <span class="credit-mark" aria-hidden="true">JH</span>
+          <h3 class="credit-name">Prof. Johann Holm</h3>
+          <p class="credit-role">Teaching &amp; Learning · The Methods</p>
+          <p class="credit-body">The step-by-step methods this site walks through are his. The
+            order of the steps, the point at which a supernode or a supermesh is introduced, and
+            the insistence that every line stays ordinary algebra a student can follow — all of
+            it comes from his lectures, where the methods were taught and proved long before any
+            of it was written into code. What the pages here try to reproduce is the experience
+            of being walked through a circuit by someone who has done it a thousand times.</p>
+        </article>
+
+        <article class="credit">
+          <span class="credit-mark" aria-hidden="true">GB</span>
+          <h3 class="credit-name">Mr. Gerrit Buter</h3>
+          <p class="credit-role">Design &amp; Development</p>
+          <p class="credit-body">Designed and built the site — the circuit generators, the solver
+            that works every technique step by step, and the interface around them. It started as
+            a way to practise the course's methods on more circuits than a lecture has time for,
+            and grew into something that generates them, solves them one move at a time, and
+            hands them to LTspice when you want a simulator to agree.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="home-section">
+      <h2 class="section-label">About the Site</h2>
+      <dl class="fact-grid">
+        <div class="fact">
+          <dt>Course</dt>
+          <dd>EERI 124 — Electrotechnique 1, DC resistive-network analysis, North-West University.</dd>
+        </div>
+        <div class="fact">
+          <dt>What It Covers</dt>
+          <dd>Node-voltage (KCL), mesh-current (KVL) and equivalent resistance — including
+            supernodes, supermeshes and all four dependent sources.</dd>
+        </div>
+        <div class="fact">
+          <dt>Take It to LTspice</dt>
+          <dd>Any circuit saves as an LTspice schematic or netlist, so you can simulate it and
+            check the answer the workbench derived.</dd>
+        </div>
+        <div class="fact">
+          <dt>How It's Built</dt>
+          <dd>Static HTML, CSS and plain JavaScript. No build step, no framework, no tracking —
+            it runs straight off the filesystem, offline.</dd>
+        </div>
+      </dl>
+
+      <p class="about-note">This is a study aid, not an official course resource: where it and
+        the study guide disagree, the study guide wins. Found something wrong? It is worth
+        reporting — the whole point is that the steps match what you are taught.</p>
+    </section>
+  </main>
+
+  <footer class="site-foot">EERI 124 — Electrotechnique 1 · Ohm’s &amp; Kirchhoff’s laws, resistive networks</footer>
+</body>
+
+</html>

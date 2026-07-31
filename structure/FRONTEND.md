@@ -30,6 +30,9 @@ rather than *the page grows*.
 - **rail** (`css/controls.css`) — the controls. Scrolls internally (`.scroller`).
 - **stage** — the circuit, on paper. Gets the `1fr`: it is the point of the page. Never
   scrolls; `Circuit.render` sets a viewBox and the SVG scales to whatever the track gives it.
+  The builder's stage is `.stage--flush` (no padding) and its canvas is its own pan/zoom plane
+  sized to the track by `ResizeObserver` — the layout still owns the box, the canvas just
+  follows it.
 - **workbench** (`css/workbench.css`) — the method. **Four fixed grid rows**: head, scrolling
   derivation, board, nav. The board is a row, not a sticky element — that is why it can no
   longer ride over the text.
@@ -79,15 +82,21 @@ freely — but the ids themselves cannot change without changing the script that
 
 | Ids | Read by |
 |---|---|
-| `#technique` `#topology` `#generate` `#canvas` `#circuit-set` `#terminals` `#termA` `#termB` `#export-circuit` `#import-circuit` `#import-error` | `js/solver-page.js` |
+| `#technique` `#topology` `#generate` `#canvas` `#circuit-set` `#terminals` `#termA` `#termB` | `js/solver-page.js` |
 | `#step-count` `#step-subcount` `#step-title` `#step-body` `#step-eq` `#step-board` `#step-prev` `#step-next` `#sub-prev` `#sub-next` | `js/stepper.js`, wired by `solver-page.js` |
 | everything in the `CircuitBuilder({…})` call | `js/builder.js` |
+
+The **File button** binds to data attributes rather than ids, so a page can carry one without
+naming anything: `.filemenu` wraps it, `[data-file-toggle]` is the button, `[data-file-actions]`
+the disclosure, `[data-save="native|asc|cir"]` the save items, `[data-file-note]` the status
+line, and the one `input[type=file]` inside is Open. See [FORMATS.md](FORMATS.md).
 
 Class names the scripts emit or toggle are equally binding: `.edge` `.node` `.hl` `.show`
 `.node-label` `.ctrl-mark` `.pol-mark` `.flow-mark` `.dep-body` `.ground-symbol` (renderer,
 styled in `css/circuit.css`), `.eq-line` `.eq-peek` `.frac` `.kcl-status` `.eq-board`
 `.row-ready` `.step-badge` (step content, styled in `css/workbench.css`), `.palette-btn`
-`.grid-dot` `.builder-edge` (builder, styled in `css/builder.css`).
+`.grid-dot` `.grid-dot-bg` `.builder-edge` `.be-*` `.is-anchor` `.is-hover` `.is-ghost`
+`.is-selected` (builder, styled in `css/builder.css`).
 
 ## The stylesheets
 
@@ -102,8 +111,9 @@ Split by scope, ≤200 lines each, loaded in this order:
 | `controls.css` | `.field` / `.ctl` / `.btn` — the rail's vocabulary | topic pages |
 | `circuit.css` | how the rendered SVG looks: highlights, reveals | solver pages |
 | `workbench.css` | the step panel: head, equations, tables, board, nav | solver pages |
-| `builder.css` | palette, tune block, grid steppers, grid dots | builder page |
-| `home.css` | hero, section labels, topic cards | home |
+| `builder.css` | palette, properties, canvas chrome, everything drawn on the grid | builder page |
+| `home.css` | hero, section labels, topic cards | home, about |
+| `about.css` | acknowledgement cards, colophon facts | about |
 
 Adding a page = copy the nearest existing one and load the same set. New styling goes in the
 file that owns that scope; if it fits none of them, add a file rather than growing one past
