@@ -4,58 +4,82 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e0920" />
   <title>EERI 124 — Electrotechnique 1 · Interactive Visualisations</title>
   <link rel="stylesheet" href="css/tokens.css" />
   <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/ribbon.css" />
   <link rel="stylesheet" href="css/home.css" />
 </head>
 
-<body>
-  <nav class="nav">
-    <a class="nav-brand" href="index.html">EERI 124 <span>· Electrotechnique 1</span></a>
-    <div class="nav-links">
-      <a href="index.html" aria-current="page">Topics</a>
+<body class="doc">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="ribbon">
+    <a class="ribbon-brand" href="index.html">
+      <span class="ribbon-mark" aria-hidden="true"></span>
+      <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
+    </a>
+    <span class="ribbon-sep" aria-hidden="true"></span>
+    <span class="ribbon-title">Electrotechnique 1</span>
+    <nav class="ribbon-nav" aria-label="Topics">
+      <a href="index.html" aria-current="page">Home</a>
+      <a href="topics/simple-resistive-circuits/index.html">Resistive</a>
+      <a href="topics/current-sources/index.html">Current Sources</a>
+      <a href="topics/dependent-sources/index.html">Dependent Sources</a>
+      <a href="topics/circuit-builder/index.html">Builder</a>
+    </nav>
+  </header>
+
+  <main class="doc-main" id="main">
+    <div class="hero">
+      <p class="hero-eyebrow">North-West University</p>
+      <h1>Electrotechnique 1 — Interactive Visualisations</h1>
+      <p class="hero-sub">Generate a DC resistive network, then walk the method one step at a
+        time: node-voltage, mesh-current and equivalent resistance, worked on the circuit in
+        front of you.</p>
     </div>
-  </nav>
 
-  <main class="page">
-    <header class="home-header">
-      <h1>Electrotechnique 1 — Visualisations</h1>
-      <p>DC resistive-network analysis · North-West University</p>
-    </header>
-
-
-
-    <!-- ── §2 Techniques in circuit analysis — the same techniques on harder circuits ── -->
-    <div class="section-label">Techniques in circuit analysis</div>
-
-    <div class="grid">
-      <a class="card" href="topics/simple-resistive-circuits/index.html">
-        <div class="card-title">Resistors &amp; voltage sources</div>
-        <div class="card-sub">KCL · KVL · equivalent resistance</div>
-      </a>
-      <a class="card" href="topics/current-sources/index.html">
-        <div class="card-title">Circuits with current sources</div>
-        <div class="card-sub">KCL &amp; KVL · known mesh currents · supermesh</div>
-      </a>
-      <a class="card" href="topics/dependent-sources/index.html">
-        <div class="card-title">Circuits with dependent sources</div>
-        <div class="card-sub">KCL &amp; KVL · VCVS, CCCS, VCCS, CCVS · constraint equations</div>
-      </a>
-    </div>
+    <!-- ── §4 Techniques in circuit analysis — the same techniques on harder circuits ── -->
+    <section class="home-section">
+      <h2 class="section-label">Techniques in Circuit Analysis</h2>
+      <div class="card-grid">
+        <a class="card" href="topics/simple-resistive-circuits/index.html">
+          <span class="card-kicker">§3</span>
+          <h3 class="card-title">Resistors &amp; Voltage Sources</h3>
+          <p class="card-sub">KCL · KVL · equivalent resistance over the source or over any 2 points</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+        <a class="card" href="topics/current-sources/index.html">
+          <span class="card-kicker">§4</span>
+          <h3 class="card-title">Circuits with Current Sources</h3>
+          <p class="card-sub">KCL &amp; KVL · known mesh currents · supermesh · supernodes</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+        <a class="card" href="topics/dependent-sources/index.html">
+          <span class="card-kicker">§4</span>
+          <h3 class="card-title">Circuits with Dependent Sources</h3>
+          <p class="card-sub">KCL &amp; KVL · VCVS, CCCS, VCCS, CCVS · constraint equations</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+      </div>
+    </section>
 
     <!-- ── Build your own — hand-build a circuit, export it for the pages above ── -->
-    <div class="section-label">Build your own</div>
-
-    <div class="grid">
-      <a class="card" href="topics/circuit-builder/index.html">
-        <div class="card-title">Circuit builder</div>
-        <div class="card-sub">Draw a circuit on a grid · export JSON · import it on any solver page</div>
-      </a>
-    </div>
+    <section class="home-section">
+      <h2 class="section-label">Build Your Own</h2>
+      <div class="card-grid">
+        <a class="card" href="topics/circuit-builder/index.html">
+          <span class="card-kicker">Editor</span>
+          <h3 class="card-title">Circuit Builder</h3>
+          <p class="card-sub">Draw a circuit on a grid, export the JSON, import it on any solver page</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+      </div>
+    </section>
   </main>
 
-  <footer>EERI 124 — Electrotechnique 1 · Ohm's &amp; Kirchhoff's laws, resistive networks</footer>
+  <footer class="site-foot">EERI 124 — Electrotechnique 1 · Ohm's &amp; Kirchhoff's laws, resistive networks</footer>
 </body>
 
 </html>

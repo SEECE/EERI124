@@ -4,83 +4,112 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e0920" />
   <title>Circuits with current sources — EERI 124</title>
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
-  <link rel="stylesheet" href="../../css/circuit-page.css" />
-  <link rel="stylesheet" href="../../css/solver.css" />
+  <link rel="stylesheet" href="../../css/ribbon.css" />
+  <link rel="stylesheet" href="../../css/workspace.css" />
+  <link rel="stylesheet" href="../../css/controls.css" />
+  <link rel="stylesheet" href="../../css/circuit.css" />
+  <link rel="stylesheet" href="../../css/workbench.css" />
 </head>
 
-<body>
-  <nav class="nav">
-    <a class="nav-brand" href="../../index.html">EERI 124 <span>· Electrotechnique 1</span></a>
-    <div class="nav-links">
-      <a href="../../index.html">Topics</a>
+<body class="app">
+  <a class="skip-link" href="#canvas">Skip to the circuit</a>
+
+  <header class="ribbon">
+    <a class="ribbon-brand" href="../../index.html">
+      <span class="ribbon-mark" aria-hidden="true"></span>
+      <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
+    </a>
+    <span class="ribbon-sep" aria-hidden="true"></span>
+    <h1 class="ribbon-title">Circuits with Current Sources</h1>
+    <nav class="ribbon-nav" aria-label="Topics">
+      <a href="../../index.html">Home</a>
+      <a href="../simple-resistive-circuits/index.html">Resistive</a>
+      <a href="../current-sources/index.html" aria-current="page">Current Sources</a>
+      <a href="../dependent-sources/index.html">Dependent Sources</a>
+      <a href="../circuit-builder/index.html">Builder</a>
+    </nav>
+    <div class="ribbon-tools">
+      <button type="button" class="icon-btn icon-btn--rail" data-panel="rail" aria-pressed="true"
+        aria-label="Show or hide the controls panel"><span class="ptg" aria-hidden="true"></span></button>
+      <button type="button" class="icon-btn icon-btn--workbench" data-panel="workbench" aria-pressed="true"
+        aria-label="Show or hide the workbench panel"><span class="ptg" aria-hidden="true"></span></button>
     </div>
-  </nav>
+  </header>
 
-  <main class="page circuit-page">
-    <header class="circuit-topbar">
-      <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Circuits with current sources</nav>
-      <h1>Circuits with current sources</h1>
-    </header>
+  <div class="workspace" data-rail="open" data-workbench="open">
+    <aside class="rail panel scroller" id="rail" aria-label="Circuit controls">
+      <div class="field">
+        <label class="field-label" for="technique">Technique</label>
+        <select class="ctl" id="technique">
+          <option value="kcl">KCL — node-voltage</option>
+          <option value="kvl">KVL — mesh-current</option>
+        </select>
+      </div>
 
-    <div class="circuit-layout">
-      <aside class="circuit-sidebar">
-        <div class="control-group">
-          <h3>Technique</h3>
-          <select id="technique">
-            <option value="kcl">KCL — node-voltage</option>
-            <option value="kvl">KVL — mesh-current</option>
-          </select>
-        </div>
-        <div class="control-group">
-          <h3>Circuit set</h3>
-          <select id="circuit-set"></select>
-        </div>
-        <div class="control-group">
-          <h3>Topology</h3>
-          <select id="topology"></select>
-        </div>
-        <div class="control-group">
-          <button id="generate">Generate</button>
-        </div>
-        <div class="control-group">
-          <h3>Import / Export</h3>
-          <button id="export-circuit">Export JSON</button>
-          <label class="file-label">Import JSON
-            <input type="file" id="import-circuit" accept="application/json" hidden />
+      <div class="field">
+        <label class="field-label" for="circuit-set">Circuit Set</label>
+        <select class="ctl" id="circuit-set"></select>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="topology">Topology</label>
+        <select class="ctl" id="topology"></select>
+      </div>
+
+      <button type="button" class="btn btn--primary btn--block" id="generate">Generate Circuit</button>
+
+      <div class="field rail-spacer">
+        <span class="field-label">Circuit File</span>
+        <div class="btn-row">
+          <button type="button" class="btn btn--soft" id="export-circuit">Export</button>
+          <label class="btn btn--soft btn--file" for="import-circuit">Import
+            <input type="file" id="import-circuit" accept="application/json" class="sr-only" />
           </label>
-          <div class="import-error" id="import-error"></div>
         </div>
-        <div class="control-group step-control">
-          <h3>Steps</h3>
-          <div class="step-count" id="step-count"></div>
-          <div class="step-nav">
-            <button id="step-prev">◀ Prev</button>
-            <button id="step-next">Next ▶</button>
-          </div>
-          <div class="step-subcount" id="step-subcount"></div>
-          <div class="step-nav step-subnav">
-            <button id="sub-prev">◂ Prev</button>
-            <button id="sub-next">Next ▸</button>
-          </div>
+        <p class="field-note field-note--error" id="import-error" role="status"></p>
+        <p class="field-note">Same JSON the builder writes — draw a circuit there, solve it here.</p>
+      </div>
+    </aside>
+
+    <section class="stage panel" aria-label="Circuit diagram">
+      <svg id="canvas" role="img" aria-label="The circuit being analysed"></svg>
+    </section>
+
+    <aside class="workbench panel" id="workbench" aria-label="Method workbench">
+      <header class="wb-head">
+        <div class="wb-head-top">
+          <span class="eyebrow">Workbench</span>
+          <span class="step-count" id="step-count"></span>
         </div>
-      </aside>
+        <h2 class="step-title" id="step-title"></h2>
+      </header>
 
-      <div class="circuit-canvas"><svg id="canvas"></svg></div>
-
-      <aside class="step-panel">
-        <div class="step-count step-count-label">Workbench</div>
-        <h3 class="step-title" id="step-title"></h3>
+      <div class="wb-scroll scroller">
         <div class="step-body" id="step-body"></div>
         <div class="step-eq" id="step-eq"></div>
-        <div class="step-board" id="step-board"></div>
-      </aside>
-    </div>
-  </main>
+      </div>
 
-  <footer>EERI 124 — Electrotechnique 1</footer>
+      <div class="step-board scroller" id="step-board"></div>
+
+      <footer class="wb-nav">
+        <div class="step-nav">
+          <button type="button" class="btn btn--soft" id="step-prev">‹ Prev</button>
+          <button type="button" class="btn btn--primary" id="step-next">Next ›</button>
+        </div>
+        <div class="substep-nav">
+          <button type="button" class="btn btn--ghost btn--sm" id="sub-prev" aria-label="Previous detail">‹</button>
+          <span class="step-subcount" id="step-subcount"></span>
+          <button type="button" class="btn btn--ghost btn--sm" id="sub-next" aria-label="Next detail">›</button>
+        </div>
+      </footer>
+    </aside>
+
+    <button type="button" class="scrim" aria-label="Close the open panel"></button>
+  </div>
 
   <script src="../../js/circuit.js"></script>
   <script src="../../js/generators/current-source.js"></script>
@@ -96,6 +125,7 @@
   <script src="../../js/techniques/mesh-current.js"></script>
   <script src="../../js/stepper.js"></script>
   <script src="../../js/solver-page.js"></script>
+  <script src="../../js/ui/shell.js"></script>
   <script>
     // this topic adds the independent current source; only KCL and KVL are taught on it
     // (equivalent resistance needs a source to deactivate — a later topic). Two circuit sets:

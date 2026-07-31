@@ -4,108 +4,128 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e0920" />
   <title>Build a circuit — EERI 124</title>
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
-  <link rel="stylesheet" href="../../css/circuit-page.css" />
+  <link rel="stylesheet" href="../../css/ribbon.css" />
+  <link rel="stylesheet" href="../../css/workspace.css" />
+  <link rel="stylesheet" href="../../css/controls.css" />
   <link rel="stylesheet" href="../../css/builder.css" />
 </head>
 
-<body>
-  <nav class="nav">
-    <a class="nav-brand" href="../../index.html">EERI 124 <span>· Electrotechnique 1</span></a>
-    <div class="nav-links">
-      <a href="../../index.html">Topics</a>
+<body class="app">
+  <a class="skip-link" href="#canvas">Skip to the grid</a>
+
+  <header class="ribbon">
+    <a class="ribbon-brand" href="../../index.html">
+      <span class="ribbon-mark" aria-hidden="true"></span>
+      <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
+    </a>
+    <span class="ribbon-sep" aria-hidden="true"></span>
+    <h1 class="ribbon-title">Build a Circuit</h1>
+    <nav class="ribbon-nav" aria-label="Topics">
+      <a href="../../index.html">Home</a>
+      <a href="../simple-resistive-circuits/index.html">Resistive</a>
+      <a href="../current-sources/index.html">Current Sources</a>
+      <a href="../dependent-sources/index.html">Dependent Sources</a>
+      <a href="../circuit-builder/index.html" aria-current="page">Builder</a>
+    </nav>
+    <div class="ribbon-tools">
+      <button type="button" class="icon-btn icon-btn--rail" data-panel="rail" aria-pressed="true"
+        aria-label="Show or hide the controls panel"><span class="ptg" aria-hidden="true"></span></button>
     </div>
-  </nav>
+  </header>
 
-  <main class="page circuit-page">
-    <header class="circuit-topbar">
-      <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Build a circuit</nav>
-      <h1>Build a circuit</h1>
-    </header>
+  <div class="workspace workspace--duo" data-rail="open">
+    <aside class="rail panel scroller" id="rail" aria-label="Builder controls">
+      <div class="field">
+        <label class="field-label" for="level">Complexity</label>
+        <select class="ctl" id="level"></select>
+      </div>
 
-    <div class="circuit-layout">
-      <aside class="circuit-sidebar builder-sidebar">
-        <div class="control-group">
-          <h3>Complexity</h3>
-          <select id="level"></select>
+      <div class="field">
+        <span class="field-label">Element</span>
+        <div class="palette" id="palette"></div>
+      </div>
+
+      <div class="field" id="dep-toggles">
+        <span class="field-label">Dependent Source</span>
+        <div class="toggle-group">
+          <span>Controlled by</span>
+          <label><input type="radio" name="dep-ctrl" value="v" checked /> Voltage</label>
+          <label><input type="radio" name="dep-ctrl" value="i" /> Current</label>
         </div>
+        <div class="toggle-group">
+          <span>Delivers</span>
+          <label><input type="radio" name="dep-out" value="v" checked /> Voltage</label>
+          <label><input type="radio" name="dep-out" value="i" /> Current</label>
+        </div>
+      </div>
 
-        <div class="sidebar-split">
-          <div class="sidebar-pane">
-            <h3>Element</h3>
-            <div class="palette" id="palette"></div>
+      <div class="field" id="value-row">
+        <label class="field-label" for="value-input">Value</label>
+        <div class="field-row">
+          <input class="ctl" type="number" id="value-input" step="any" inputmode="decimal"
+            autocomplete="off" />
+          <span class="value-unit" id="value-unit"></span>
+        </div>
+      </div>
+
+      <div class="field" id="control-row">
+        <span class="field-label">Reads</span>
+        <div class="field-row">
+          <select class="ctl" id="control-select" aria-label="Control resistor"></select>
+          <select class="ctl" id="control-dir" aria-label="Control direction"></select>
+        </div>
+      </div>
+
+      <p class="field-note" id="type-desc"></p>
+
+      <div class="field">
+        <span class="field-label">Grid Size</span>
+        <div class="stepper-pair">
+          <div class="stepper-row">
+            <span class="stepper-label">Cols</span>
+            <button type="button" class="btn btn--ghost btn--sm" id="cols-minus" aria-label="Fewer columns">−</button>
+            <span class="stepper-value" id="cols-count"></span>
+            <button type="button" class="btn btn--ghost btn--sm" id="cols-plus" aria-label="More columns">+</button>
           </div>
-          <div class="sidebar-divider"></div>
-          <div class="sidebar-pane">
-            <h3>Tune</h3>
-            <div class="dep-toggles" id="dep-toggles">
-              <div class="toggle-group">
-                <span>Controlled by</span>
-                <label><input type="radio" name="dep-ctrl" value="v" checked /> Voltage</label>
-                <label><input type="radio" name="dep-ctrl" value="i" /> Current</label>
-              </div>
-              <div class="toggle-group">
-                <span>Delivers</span>
-                <label><input type="radio" name="dep-out" value="v" checked /> Voltage</label>
-                <label><input type="radio" name="dep-out" value="i" /> Current</label>
-              </div>
-            </div>
-            <div class="value-row" id="value-row">
-              <input type="number" id="value-input" step="any" />
-              <span id="value-unit"></span>
-            </div>
-            <div class="control-row" id="control-row">
-              <span>reads</span>
-              <select id="control-select"></select>
-              <select id="control-dir"></select>
-            </div>
-            <p class="type-desc" id="type-desc"></p>
-
-            <h3 class="pane-subhead">Grid size</h3>
-            <div class="grid-size-pair">
-              <div class="grid-size-row">
-                <span>Cols</span>
-                <button id="cols-minus">−</button>
-                <span id="cols-count"></span>
-                <button id="cols-plus">+</button>
-              </div>
-              <div class="grid-size-row">
-                <span>Rows</span>
-                <button id="rows-minus">−</button>
-                <span id="rows-count"></span>
-                <button id="rows-plus">+</button>
-              </div>
-            </div>
+          <div class="stepper-row">
+            <span class="stepper-label">Rows</span>
+            <button type="button" class="btn btn--ghost btn--sm" id="rows-minus" aria-label="Fewer rows">−</button>
+            <span class="stepper-value" id="rows-count"></span>
+            <button type="button" class="btn btn--ghost btn--sm" id="rows-plus" aria-label="More rows">+</button>
           </div>
         </div>
+      </div>
 
-        <div class="control-group">
-          <p class="builder-hint">Click a grid dot, then an adjacent dot to add the selected
-            element between them. Click an existing element to remove it.</p>
-        </div>
-        <div class="control-group">
-          <button id="clear">Clear</button>
-        </div>
-        <div class="control-group">
-          <h3>Import / Export</h3>
-          <button id="export-circuit">Export JSON</button>
-          <label class="file-label">Import JSON
-            <input type="file" id="import-circuit" accept="application/json" hidden />
+      <p class="well">Click a grid dot, then an <b>adjacent</b> dot to drop the selected element
+        between them. Click an element again to remove it.</p>
+
+      <div class="field rail-spacer">
+        <span class="field-label">Circuit File</span>
+        <div class="btn-row">
+          <button type="button" class="btn btn--soft" id="export-circuit">Export</button>
+          <label class="btn btn--soft btn--file" for="import-circuit">Import
+            <input type="file" id="import-circuit" accept="application/json" class="sr-only" />
           </label>
-          <div class="import-error" id="builder-error"></div>
         </div>
-      </aside>
+        <p class="field-note field-note--error" id="builder-error" role="status"></p>
+        <button type="button" class="btn btn--ghost btn--block" id="clear">Clear the Grid</button>
+      </div>
+    </aside>
 
-      <div class="circuit-canvas"><svg id="canvas"></svg></div>
-    </div>
-  </main>
+    <section class="stage stage--scroll panel" aria-label="Circuit grid">
+      <svg id="canvas" role="img" aria-label="The circuit you are drawing"></svg>
+    </section>
 
-  <footer>EERI 124 — Electrotechnique 1</footer>
+    <button type="button" class="scrim" aria-label="Close the open panel"></button>
+  </div>
 
   <script src="../../js/circuit.js"></script>
   <script src="../../js/builder.js"></script>
+  <script src="../../js/ui/shell.js"></script>
   <script>
     CircuitBuilder({
       canvas: 'canvas',
