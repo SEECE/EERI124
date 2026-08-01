@@ -67,19 +67,8 @@
 .card:hover::before { transform: scaleX(1); }
 .card:hover .card-go { opacity: 1; transform: none; }
 
-.card-kicker {
-  align-self: flex-start;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--violet-300);
-  background: var(--tint);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
-  padding: 2px 8px;
-  margin-bottom: var(--sp-2);
-}
+/* No kicker badge on a card: the study-unit section heading above the grid already says
+   which unit these are, so repeating "§3" on every card in the §3 section was noise. */
 .card-title { font-size: 16px; color: var(--text); letter-spacing: -0.01em; }
 .card-sub { font-size: 12.5px; line-height: 1.55; color: var(--text-faint); overflow-wrap: break-word; }
 
