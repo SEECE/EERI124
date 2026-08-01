@@ -102,9 +102,6 @@
         case 'kvl': return MeshCurrent(circuit);
         case 'req-source': return EquivResistance(circuit, { over: 'source' });
         case 'req-points': return EquivResistance(circuit, { over: 'points', a: termA.value, b: termB.value });
-        case 'bridge': return BridgeBalance(circuit);
-        case 'dy': return DeltaWye(circuit, { dir: 'dy' });
-        case 'yd': return DeltaWye(circuit, { dir: 'yd' });
         default: return [{ n: 0, title: techSel.options[techSel.selectedIndex].text, body: 'Coming soon.' }];
       }
     }
@@ -117,9 +114,8 @@
       if (points) refreshTerminals();
       var steps = buildSteps();
       Circuit.render(circuit, svg);   // render draws the labels the technique set, then
-      stepper.load(steps, circuit);   // step 1 highlights on the rendered svg. The circuit
-    }                                 // goes too: a step may redraw (Δ-Y), and this is what
-                                      // the stepper puts back afterwards.
+      stepper.load(steps);            // step 1 highlights on the rendered svg
+    }
 
     function generate() {
       circuit = Circuit.get(topoSel.value).generate();

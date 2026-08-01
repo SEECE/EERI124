@@ -16,16 +16,12 @@
   <script src="generators/multi-source.js"></script>
   <script src="generators/current-source.js"></script>
   <script src="generators/dependent.js"></script>
-  <script src="generators/wheatstone.js"></script>
-  <script src="generators/delta-wye.js"></script>
   <script src="solve.js"></script>
   <script src="techniques/kit.js"></script>
   <script src="techniques/controls.js"></script>
   <script src="techniques/mesh-current.js"></script>
   <script src="techniques/node-voltage.js"></script>
   <script src="techniques/equivalent-resistance.js"></script>
-  <script src="techniques/bridge.js"></script>
-  <script src="techniques/delta-wye.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -312,9 +308,7 @@
       });
     });
 
-    // ================= §3 deep dives: the Wheatstone bridge and the Δ-Y transform =================
-    // Both techniques are resistors + one voltage source only, so they refuse anything else —
-    // that refusal is one honest step, not a crash, and the sweeps below rely on it.
+    // ---- shared assertions for any technique's step list ----
     function noNaN(steps, label) {
       assert(steps.length, label + ': no steps');
       assert(!/undefined|NaN|Infinity/.test(JSON.stringify(steps)), label + ' step text has undefined/NaN/Infinity');
@@ -332,114 +326,6 @@
       var b = Solve.branches(c, Solve.nodeVoltages(c));
       return v.value / Math.abs(b.filter(function (r) { return r.edge.id === v.id; })[0].current);
     }
-
-    // ---- balanced bridge by hand: 100/200/300/600, so R1·Rx = R2·R3 = 60 000 ----
-    // v_p = 12·300/400 = 9 V, v_q = 12·600/800 = 9 V, Req = 400 ∥ 800 = 266.67 Ω
-    check('bridge — balanced, by hand', function () {
-      var c = C(4, [['V', 3, 0, 12], ['R', 0, 1, 100], ['R', 0, 2, 200],
-        ['R', 1, 3, 300], ['R', 2, 3, 600], ['R', 1, 2, 500]]);
-      var st = BridgeBalance(c);
-      noNaN(st, 'bridge/balanced');
-      assert(st.balanced, 'products 60 000 = 60 000 but reported unbalanced');
-      assert(near(st.vpq, 0), 'v_pq = ' + st.vpq + ', expected 0');
-      assert(near(st.idet, 0), 'detector current = ' + st.idet + ', expected 0');
-      assert(near(st.req, 800 / 3, 1e-6), 'Req = ' + st.req + ', expected 266.67');
-    });
-
-    // ---- unbalanced bridge: the walk's numbers must be the engine's ----
-    check('bridge — unbalanced follows the engine', function () {
-      var c = C(4, [['V', 3, 0, 10], ['R', 0, 1, 100], ['R', 0, 2, 100],
-        ['R', 1, 3, 100], ['R', 2, 3, 200], ['R', 1, 2, 100]]);
-      var st = BridgeBalance(c);
-      noNaN(st, 'bridge/unbalanced');
-      assert(!st.balanced, '20 000 ≠ 10 000 but reported balanced');
-      var sol = Solve.nodeVoltages(c), B = st.bridge;
-      assert(near(st.vpq, sol.v[B.p] - sol.v[B.q]), 'v_pq is not the solved difference');
-      assert(near(st.idet, st.vpq / B.det.value), 'detector current is not v_pq / R_det');
-      assert(near(st.req, reqOf(c)), 'Req is not V/I');
-    });
-
-    // ---- a bridge is a bridge however it is drawn ----
-    check('bridge — found on every wheatstone topology', function () {
-      Circuit.list({ tags: ['wheatstone'] }).forEach(function (g) {
-        for (var i = 0; i < 20; i++) {
-          var c = g.generate(), st = BridgeBalance(c);
-          assert(st.bridge, g.name + ': bridge not detected');
-          noNaN(st, 'bridge/' + g.name);
-          assert(near(st.req, reqOf(c)), g.name + ': Req ' + st.req + ' ≠ V/I ' + reqOf(c));
-          assert(st.balanced === (Math.abs(st.vpq) < 1e-9), g.name + ': verdict disagrees with v_pq');
-        }
-      });
-    });
-    check('bridge — refuses what it cannot argue about', function () {
-      var withI = C(4, [['V', 3, 0, 12], ['R', 0, 1, 100], ['R', 0, 2, 200],
-        ['R', 1, 3, 300], ['I', 2, 3, 0.01], ['R', 1, 2, 500]]);
-      var st = BridgeBalance(withI);
-      assert(st.length === 1 && st[0].todo, 'a current source should give one "nothing to do" step');
-    });
-
-    // ---- Δ → Y by hand: a 30/30/30 Δ becomes three 10 Ω legs ----
-    check('Δ→Y — 30/30/30 gives 10/10/10', function () {
-      var c = C(4, [['V', 0, 3, 12], ['R', 3, 1, 100], ['R', 1, 2, 30], ['R', 2, 0, 30], ['R', 0, 1, 30]]);
-      var st = DeltaWye(c, { dir: 'dy' });
-      noNaN(st, 'Δ→Y/hand');
-      var legs = st.shaped.edges.filter(function (e) { return /^dy/.test(e.id); });
-      assert(legs.length === 3, 'expected 3 Y legs, got ' + legs.length);
-      legs.forEach(function (e) { assert(near(e.value, 10), 'leg = ' + e.value + ', expected 10'); });
-      // 100 in series with 30 ∥ (30+30) = 20  ⇒  120 Ω, both before and after
-      assert(near(st.reqOriginal, 120), 'original Req = ' + st.reqOriginal);
-      assert(near(st.req, 120), 'transformed Req = ' + st.req);
-    });
-
-    // ---- Y → Δ by hand: three 10 Ω legs become a 30/30/30 Δ ----
-    check('Y→Δ — 10/10/10 gives 30/30/30', function () {
-      var c = C(5, [['V', 0, 4, 12], ['R', 4, 1, 100], ['R', 1, 3, 10], ['R', 0, 3, 10], ['R', 2, 3, 10]]);
-      var st = DeltaWye(c, { dir: 'yd' });
-      noNaN(st, 'Y→Δ/hand');
-      var sides = st.shaped.edges.filter(function (e) { return /^yd/.test(e.id); });
-      assert(sides.length === 3, 'expected 3 Δ sides, got ' + sides.length);
-      sides.forEach(function (e) { assert(near(e.value, 30), 'side = ' + e.value + ', expected 30'); });
-      assert(near(st.reqOriginal, 120), 'original Req = ' + st.reqOriginal);
-      assert(near(st.req, 120), 'transformed Req = ' + st.req);
-    });
-
-    // ---- the transform is an IDENTITY: it may never move Req, on any circuit either way ----
-    ['dy', 'yd'].forEach(function (dir) {
-      check('Δ-Y ' + dir + ' preserves R_eq on every topology', function () {
-        var transformed = 0;
-        Circuit.list().forEach(function (g) {
-          for (var i = 0; i < 8; i++) {
-            var c = g.generate();
-            var st = DeltaWye(c, { dir: dir });
-            noNaN(st, 'Δ-Y/' + dir + '/' + g.name);
-            if (st.length === 1) continue;                       // honest refusal, or no shape here
-            transformed++;
-            Circuit.validate(st.shaped);
-            assert(Circuit.isConnected(st.shaped), g.name + ': transform disconnected the circuit');
-            assert(near(st.req, st.reqOriginal, 1e-6), g.name + ': Req moved, ' + st.req + ' vs ' + st.reqOriginal);
-            assert(Solve.powerCheck(Solve.branches(st.shaped, Solve.nodeVoltages(st.shaped))).ok,
-              g.name + ': transformed circuit does not balance power');
-          }
-        });
-        assert(transformed > 0, 'no topology offered a shape to transform');
-      });
-    });
-
-    // ---- and it must finish the job a bridge refuses to give series/parallel ----
-    check('Δ→Y actually cracks a bridge open', function () {
-      Circuit.list({ tags: ['wheatstone'] }).forEach(function (g) {
-        for (var i = 0; i < 10; i++) {
-          var st = DeltaWye(g.generate(), { dir: 'dy' });
-          if (st.length === 1) continue;
-          var result = st[st.length - 2];                        // the reduction's Result, before our Check
-          assert(!/needs a Y-Δ/.test(result.title), g.name + ': still stuck after the transform');
-          // the redraw must hand a DIFFERENT circuit to the stepper, and hold it to the end
-          var redraw = st.filter(function (s) { return s.draw; });
-          assert(redraw.length, g.name + ': no step ever redraws');
-          assert(redraw[redraw.length - 1] === st[st.length - 1], g.name + ': the redraw is dropped before the end');
-        }
-      });
-    });
 
     /* ---- equivalent resistance: the reduction is pedagogy, V/I is the truth ----
        Single-source circuits only. With more than one source, "the resistance the source sees"

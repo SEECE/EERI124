@@ -34,8 +34,6 @@ rather than *the page grows*.
 - **rail** (`css/controls.css`) — the controls. Scrolls internally (`.scroller`).
 - **stage** — the circuit, on paper. Gets the `1fr`: it is the point of the page. Never
   scrolls; `Circuit.render` sets a viewBox and the SVG scales to whatever the track gives it.
-  A step may swap the circuit for a different one (`draw`, see [SOLVER.md](SOLVER.md)) — the
-  stepper re-renders into the same `#canvas`, so the layout is unaffected either way.
   The builder's stage is `.stage` like every other page, and its canvas is its own pan/zoom plane
   sized to the track by `ResizeObserver` — the layout still owns the box, the canvas just
   follows it.
