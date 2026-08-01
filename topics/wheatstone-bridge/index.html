@@ -9,14 +9,12 @@
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
   <link rel="stylesheet" href="../../css/ribbon.css" />
-  <link rel="stylesheet" href="../../css/workspace.css" />
   <link rel="stylesheet" href="../../css/controls.css" />
-  <link rel="stylesheet" href="../../css/circuit.css" />
-  <link rel="stylesheet" href="../../css/workbench.css" />
+  <link rel="stylesheet" href="../../css/tutorial.css" />
 </head>
 
 <body class="app">
-  <a class="skip-link" href="#canvas">Skip to the circuit</a>
+  <a class="skip-link" href="#figure">Skip to the bridge</a>
 
   <header class="ribbon">
     <a class="ribbon-brand" href="../../index.html">
@@ -35,124 +33,78 @@
       <a href="../circuit-builder/index.html">Builder</a>
       <a href="../../about.html">About</a>
     </nav>
-    <div class="ribbon-tools">
-      <button type="button" class="icon-btn icon-btn--rail" data-panel="rail" aria-pressed="true"
-        aria-label="Show or hide the controls panel"><span class="ptg" aria-hidden="true"></span></button>
-      <button type="button" class="icon-btn icon-btn--workbench" data-panel="workbench" aria-pressed="true"
-        aria-label="Show or hide the workbench panel"><span class="ptg" aria-hidden="true"></span></button>
-    </div>
   </header>
 
-  <div class="workspace" data-rail="open" data-workbench="open">
-    <aside class="rail panel scroller" id="rail" aria-label="Circuit controls">
-      <div class="field">
-        <label class="field-label" for="technique">Technique</label>
-        <select class="ctl" id="technique">
-          <option value="bridge">Bridge balance — deep dive</option>
-          <option value="dy">Δ → Y transform</option>
-          <option value="kcl">KCL — node-voltage</option>
-          <option value="kvl">KVL — mesh-current</option>
-          <option value="req-source">Equivalent resistance — over source</option>
-          <option value="req-points">Equivalent resistance — over 2 points</option>
-        </select>
-      </div>
-
-      <div class="field" id="terminals" style="display:none;">
-        <span class="field-label">Terminals</span>
-        <div class="field-row">
-          <select class="ctl" id="termA" aria-label="First terminal"></select>
-          <span class="field-sep" aria-hidden="true">↔</span>
-          <select class="ctl" id="termB" aria-label="Second terminal"></select>
+  <!-- A tutorial page: board + lesson, no rail. There is no circuit to generate and no
+       technique to choose. See structure/TUTORIALS.md. -->
+  <main class="lab">
+    <section class="board panel" aria-label="The bridge">
+      <div class="board-head">
+        <span class="eyebrow">The bridge</span>
+        <span class="badge badge--ok" id="verdict" role="status">Balanced — the detector reads zero</span>
+        <div class="seg" role="group" aria-label="What to do with the bridge">
+          <button type="button" id="mode-explore" aria-pressed="true">Explore</button>
+          <button type="button" id="mode-measure" aria-pressed="false">Measure an unknown</button>
+        </div>
+        <div class="seg" id="detectors" role="group" aria-label="Detector resistance">
+          <button type="button" data-detector="ideal" aria-pressed="true">Ideal detector</button>
+          <button type="button" data-detector="100" aria-pressed="false">100 Ω</button>
+          <button type="button" data-detector="10" aria-pressed="false">10 Ω</button>
         </div>
       </div>
 
-      <div class="field">
-        <label class="field-label" for="topology">Topology</label>
-        <select class="ctl" id="topology"></select>
+      <div class="figure">
+        <svg id="figure" viewBox="0 0 760 400" preserveAspectRatio="xMidYMid meet" role="img"
+          aria-label="A Wheatstone bridge: four resistors in a diamond, a supply across the vertical diagonal and a detector with a needle across the horizontal one"></svg>
       </div>
 
-      <button type="button" class="btn btn--primary btn--block" id="generate">Generate Circuit</button>
-
-      <div class="field filemenu rail-spacer">
-        <span class="field-label">File</span>
-        <button type="button" class="btn btn--soft btn--block" data-file-toggle aria-expanded="false"
-          aria-controls="file-actions"><span class="file-caret" aria-hidden="true"></span> Open or Save</button>
-        <div class="file-actions" id="file-actions" data-file-actions hidden>
-          <label class="file-action" for="file-open">Open Circuit…
-            <small>a .eeri file saved anywhere on this site</small>
-            <input type="file" id="file-open" accept=".eeri,.json,application/json" class="sr-only" />
-          </label>
-          <button type="button" class="file-action" data-save="native">Save Circuit
-            <small>.eeri — reopens on any page here</small></button>
-          <button type="button" class="file-action" data-save="asc">Save LTspice Schematic
-            <small>.asc — open and simulate it in LTspice</small></button>
-          <button type="button" class="file-action" data-save="cir">Save LTspice Netlist
-            <small>.cir — simulates any circuit, dependent sources included</small></button>
+      <div class="board-foot">
+        <div class="board-col">
+          <span class="eyebrow">Arms and supply</span>
+          <div id="dials"></div>
+          <div class="unknown" id="unknown" hidden>
+            <span class="unknown-out" id="unknown-out" role="status"></span>
+            <button type="button" class="btn btn--soft btn--sm" id="new-unknown">New unknown</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="reveal">Reveal</button>
+          </div>
         </div>
-        <p class="field-note" data-file-note role="status"></p>
+        <div class="board-col board-col--out">
+          <span class="eyebrow">Readings</span>
+          <div id="results"></div>
+        </div>
       </div>
-    </aside>
-
-    <section class="stage panel" aria-label="Circuit diagram">
-      <svg id="canvas" role="img" aria-label="The circuit being analysed"></svg>
     </section>
 
-    <aside class="workbench panel" id="workbench" aria-label="Method workbench">
-      <header class="wb-head">
-        <div class="wb-head-top">
-          <span class="eyebrow">Workbench</span>
-          <span class="step-count" id="step-count"></span>
+    <aside class="lesson panel" aria-label="Guide">
+      <header class="lesson-head">
+        <div class="lesson-head-top">
+          <span class="eyebrow">Guide</span>
+          <span class="lesson-count" id="lesson-count" aria-live="polite"></span>
         </div>
-        <h2 class="step-title" id="step-title" aria-live="polite"></h2>
+        <h2 class="lesson-title" id="lesson-title"></h2>
       </header>
 
-      <div class="wb-scroll scroller">
-        <div class="step-body" id="step-body"></div>
-        <div class="step-eq" id="step-eq"></div>
-      </div>
+      <div class="lesson-body scroller" id="lesson-body"></div>
 
-      <div class="step-board scroller" id="step-board"></div>
-
-      <footer class="wb-nav">
-        <div class="step-nav">
-          <button type="button" class="btn btn--soft" id="step-prev" aria-label="Previous step">‹ Prev</button>
-          <button type="button" class="btn btn--primary" id="step-next" aria-label="Next step">Next ›</button>
-        </div>
-        <div class="substep-nav">
-          <button type="button" class="btn btn--ghost btn--sm" id="sub-prev" aria-label="Previous detail">‹</button>
-          <span class="step-subcount" id="step-subcount"></span>
-          <button type="button" class="btn btn--ghost btn--sm" id="sub-next" aria-label="Next detail">›</button>
-        </div>
-        <button type="button" class="btn btn--ghost btn--sm btn--block" id="ask-midnjoy">Ask Midnjoy about this step</button>
-        <span class="sr-only" id="midnjoy-note" role="status"></span>
+      <footer class="lesson-nav">
+        <button type="button" class="btn btn--soft btn--sm" id="lesson-prev">‹ Back</button>
+        <div class="lesson-dots" id="lesson-dots" role="group" aria-label="Jump to a chapter"></div>
+        <button type="button" class="btn btn--primary btn--sm" id="lesson-next">Next ›</button>
       </footer>
     </aside>
+  </main>
 
-    <button type="button" class="scrim" aria-label="Close the open panel"></button>
-  </div>
-
-  <script src="../../js/circuit.js"></script>
-  <script src="../../js/generators/wheatstone.js"></script>
   <script src="../../js/solve.js"></script>
-  <script src="../../js/techniques/kit.js"></script>
-  <script src="../../js/techniques/controls.js"></script>
-  <script src="../../js/techniques/node-voltage.js"></script>
-  <script src="../../js/techniques/mesh-current.js"></script>
-  <script src="../../js/techniques/equivalent-resistance.js"></script>
-  <script src="../../js/techniques/bridge.js"></script>
-  <script src="../../js/techniques/delta-wye.js"></script>
-  <script src="../../js/stepper.js"></script>
-  <script src="../../js/formats/native.js"></script>
-  <script src="../../js/formats/ltspice.js"></script>
-  <script src="../../js/ui/filemenu.js"></script>
-  <script src="../../js/ui/step-prompt.js"></script>
-  <script src="../../js/solver-page.js"></script>
-  <script src="../../js/ui/shell.js"></script>
+  <script src="../../js/tutorial/draw.js"></script>
+  <script src="../../js/tutorial/lesson.js"></script>
+  <script src="../../js/tutorial/wheatstone.js"></script>
   <script>
-    // §3's bridge deep dive: only the bridge topologies, but every technique that has something
-    // to say about one — balance first, then Δ→Y for the unbalanced case that series/parallel
-    // cannot touch, then the general methods as a cross-check.
-    SolverPage({ filter: { tags: ['wheatstone'] }, elements: ['R', 'V', 'W'] });
+    // js/solve.js is doing real work here, not just formatting: every reading on this page is
+    // the shared engine solving a four-node model of the bridge by modified nodal analysis —
+    // the same solve the solver pages run. The two-divider formulas the guide derives are
+    // shown BESIDE that answer, never instead of it, which is what makes chapter 7's trap
+    // visible: load the bridge with a real detector and the two stop agreeing.
+    WheatstoneLab();
   </script>
 </body>
 

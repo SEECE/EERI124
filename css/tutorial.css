@@ -85,7 +85,31 @@
 .result-name { font-family: var(--font-math); font-weight: 650; color: var(--violet-200); }
 .result-name sub { font-size: 0.72em; }
 .result-val { margin-left: auto; font-weight: 700; color: var(--aqua-300); font-variant-numeric: tabular-nums; }
+.result-note { font-size: 11px; color: var(--text-faint); font-family: var(--font); }
 .result.is-lit { border-color: var(--line-hi); background: var(--tint); }
+/* the arm the student is not allowed to turn (the bridge's hidden unknown) */
+.dial.is-locked .dial-name { color: var(--text-faint); }
+.dial.is-locked input { opacity: 0.4; }
+
+/* the standing verdict — balanced or not — pinned in the board head so it is never scrolled
+   away from. It is the one thing on a bridge page that must be readable at a glance. */
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  border: 1px solid var(--line-hi);
+  white-space: nowrap;
+}
+.badge--ok { color: #062e2b; background: var(--aqua-300); border-color: var(--aqua-400); }
+.badge--off { color: var(--text-dim); background: var(--panel-hi); }
+
+/* the measure-an-unknown strip, shown only in that mode */
+.unknown { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.unknown-out { flex: 1 1 200px; min-width: 0; font-size: 12.5px; color: var(--text-dim); }
+.unknown-out b { color: var(--aqua-300); }
 
 /* stacked fraction, small enough to sit inline in a result row */
 .frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; line-height: 1.15; }
@@ -187,6 +211,13 @@
 .figure .t-sub { font-size: 0.72em; }
 /* a derived quantity — the side of the figure the student is solving FOR */
 .figure .is-out { fill: var(--accent-deep); }
+/* the detector needle: the one moving part on the site, and the whole point of the bridge
+   page — a null is something you watch happen, not a number you are told */
+.figure .needle { stroke: var(--accent-deep); stroke-width: 2.6; stroke-linecap: round; }
+@media (prefers-reduced-motion: no-preference) {
+  .figure .needle { transition: none; }
+}
+
 /* the chapter's subject, and everything the chapter is not about */
 .figure .is-lit { stroke: var(--accent-hover); stroke-width: 3.4; }
 .figure text.is-lit { stroke: var(--surface); fill: var(--accent-hover); }

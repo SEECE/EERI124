@@ -71,13 +71,20 @@
   }
   function readsY(y) { return { AB: y.a + y.b, BC: y.b + y.c, CA: y.c + y.a }; }
 
-  window.DeltaWyeLab = function () {
-    var svg = document.getElementById('figure');
-    var dialWrap = document.getElementById('dials');
-    var resWrap = document.getElementById('results');
-    var givenLabel = document.getElementById('given-label');
-    var outLabel = document.getElementById('out-label');
-    var practiceBtn = document.getElementById('practice');
+  /* opts.prefix — an id prefix. The page itself passes none; js/tutorial.test.html mounts both
+     labs in one document and prefixes them, since the two pages naturally share ids
+     (#figure, #lesson-body, …) that are only unique within their own page. */
+  window.DeltaWyeLab = function (opts) {
+    var P = (opts && opts.prefix) || '';
+    function id(name) { return document.getElementById(P + name); }
+
+    var svg = id('figure');
+    var dialWrap = id('dials');
+    var resWrap = id('results');
+    var givenLabel = id('given-label');
+    var outLabel = id('out-label');
+    var practiceBtn = id('practice');
+    var presetRoot = id('presets') || document;
 
     var dir = 'dy';                                  // 'dy' = Δ→Y, 'yd' = Y→Δ
     var D = { ab: 30, bc: 20, ca: 10 };              // exact, always; rounded only to display
@@ -462,12 +469,12 @@
     }
 
     var lesson = Lesson({
-      title: document.getElementById('lesson-title'),
-      count: document.getElementById('lesson-count'),
-      body: document.getElementById('lesson-body'),
-      prev: document.getElementById('lesson-prev'),
-      next: document.getElementById('lesson-next'),
-      dots: document.getElementById('lesson-dots'),
+      title: id('lesson-title'),
+      count: id('lesson-count'),
+      body: id('lesson-body'),
+      prev: id('lesson-prev'),
+      next: id('lesson-next'),
+      dots: id('lesson-dots'),
       onView: function (ch) { lit = ch.lit || []; applyLit(); },
     });
 
@@ -481,7 +488,7 @@
       redraw();
     }
 
-    var dyBtn = document.getElementById('dir-dy'), ydBtn = document.getElementById('dir-yd');
+    var dyBtn = id('dir-dy'), ydBtn = id('dir-yd');
 
     /* Flipping the direction hands the values just computed back as the new givens, so Δ→Y
        then Y→Δ returns the network the student started with. Chapter 9 asks them to try it. */
@@ -511,7 +518,7 @@
       buildResults();
     });
 
-    document.querySelectorAll('[data-preset]').forEach(function (b) {
+    presetRoot.querySelectorAll('[data-preset]').forEach(function (b) {
       b.addEventListener('click', function () {
         var vals = PRESETS[b.getAttribute('data-preset')] || givenKeys().map(function () {
           return E12[Math.floor(Math.random() * E12.length)];

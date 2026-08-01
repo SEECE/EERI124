@@ -20,7 +20,8 @@ is how we found out:
   these three resistors for those three) was buried inside a derivation about something else.
 - **A Wheatstone bridge is an instrument.** What has to be understood is what the detector does
   as the arms change, and that is a thing you learn by *moving an arm and watching*, not by
-  reading nine steps about one frozen set of values.
+  reading nine steps about one frozen set of values. Nulling a bridge to measure an unknown —
+  the thing the instrument exists for — cannot be expressed as a step list at all.
 
 So these pages have **no generator, no technique, no stepper, and no File menu**. There is
 nothing to import or export because there is no problem instance — the numbers are dialled in
@@ -110,13 +111,58 @@ sharing terminals A, B and C, with the transform running live between them.
 every number shown to a student is wrong with them. That is the assertion the self-check exists
 for; keep it.
 
+## `topics/wheatstone-bridge/` — the bridge
+
+`js/tutorial/wheatstone.js` (`WheatstoneLab`). The bridge drawn as a diamond: supply across the
+vertical diagonal, detector across the horizontal one, arms named the way the balance condition
+is written — `R₁ = S–P`, `R₂ = S–Q`, `R₃ = P–T`, `Rx = Q–T` — so `R₁·Rx = R₂·R₃` pairs up
+*opposite* arms and the products read straight off the picture.
+
+- **The numbers come from the real engine.** Every reading is `js/solve.js` solving a real
+  four-node `{nodes, edges}` model by modified nodal analysis — the same solve the solver pages
+  run. The two-divider formulas the guide derives are shown **beside** the engine's answer,
+  never in place of it. That is what makes the trap chapter land: load the bridge with a real
+  detector and the two columns visibly part company.
+- **The detector is a choice.** *Ideal* is a separate model **with no detector edge at all**,
+  not a very large resistor: an ideal meter draws exactly zero, and "1.2 pA" would be a lie
+  dressed as precision. The other settings are ordinary resistors on the P–Q branch.
+- **The needle is the page.** A null is something you watch happen, not a number you are told.
+  It deflects on the bridge output as a fraction of a quarter of the supply, clamped — a real
+  detector pins rather than reading off the scale.
+- **Measure mode is what the instrument is for.** `Rx` is hidden and the student turns `R₃`
+  until the needle centres, then computes `Rx = (R₂/R₁)·R₃`. The unknown is generated **from a
+  target on the slider's own grid**, so an exact null is reachable — an exercise whose answer
+  sits between two slider positions teaches only frustration.
+
+Two properties are worth stating because the whole method rests on them, and both are asserted
+in the self-check:
+
+1. **At balance the detector carries nothing, whatever its resistance.** So the balance
+   condition is completely untouched by the meter — you never have to know anything about your
+   detector except that it reads zero honestly. Keep this true.
+2. **The supply cancels out of the balance condition.** The output scales with `Vs`; the
+   verdict does not move at all. A weak supply costs sensitivity, never accuracy.
+
+The last chapter hands off to `topics/delta-wye/`: an unbalanced bridge is exactly the network
+series/parallel cannot reduce, and the Δ-Y page is where that gets fixed. The Δ-Y page's last
+chapter points back. Keep both links alive.
+
 ## Verifying
 
-`js/tutorial.test.html` — open in a browser, every line must read `PASS`. It mounts each page's
-**real markup** off-screen and drives the real lab rather than re-implementing its arithmetic:
-the transform identity both ways over random networks, the terminal-pair readings agreeing,
-every chapter in both directions rendering with no `undefined`/`NaN`, a dial move leaving the
-student on their chapter, the page-level round trip, practice mode, and every preset.
+`js/tutorial.test.html` — open in a browser, every line must read `PASS`. It mounts both pages'
+**real markup** off-screen and drives the real labs rather than re-implementing their
+arithmetic. (The ids there carry a `dy-` / `wb-` prefix only because two pages that each own
+`#figure` and `#lesson-body` cannot both be mounted in one document — hence `opts.prefix`,
+which each real page leaves unset.) It covers:
+
+- **Δ-Y** — the transform identity both ways over random networks, the terminal-pair readings
+  agreeing, every chapter in both directions rendering with no `undefined`/`NaN`, a dial move
+  leaving the student on their chapter, the page-level round trip, practice mode, every preset.
+- **Bridge** — the engine reproducing the two dividers exactly when the detector is ideal, the
+  output being zero at balance for *every* detector resistance, a real detector measurably
+  loading an unbalanced bridge (and power still balancing), the output scaling with the supply
+  while the verdict does not, the needle centring at balance, and twenty generated unknowns all
+  landing on the slider grid without starting balanced.
 
 Two things it cannot check, both of which need eyes:
 
