@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0e0920" />
-  <title>Simple resistive circuits — EERI 124</title>
+  <title>Δ-Y transformations — EERI 124</title>
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
   <link rel="stylesheet" href="../../css/ribbon.css" />
@@ -24,12 +24,12 @@
       <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
     </a>
     <span class="ribbon-sep" aria-hidden="true"></span>
-    <h1 class="ribbon-title">Simple Resistive Circuits</h1>
+    <h1 class="ribbon-title">Δ-Y Transformations</h1>
     <nav class="ribbon-nav" aria-label="Topics">
       <a href="../../index.html">Home</a>
-      <a href="../simple-resistive-circuits/index.html" aria-current="page">Resistive</a>
+      <a href="../simple-resistive-circuits/index.html">Resistive</a>
       <a href="../wheatstone-bridge/index.html">Bridge</a>
-      <a href="../delta-wye/index.html">Δ-Y</a>
+      <a href="../delta-wye/index.html" aria-current="page">Δ-Y</a>
       <a href="../current-sources/index.html">Current Sources</a>
       <a href="../dependent-sources/index.html">Dependent Sources</a>
       <a href="../circuit-builder/index.html">Builder</a>
@@ -48,20 +48,17 @@
       <div class="field">
         <label class="field-label" for="technique">Technique</label>
         <select class="ctl" id="technique">
+          <option value="dy">Δ → Y transform</option>
+          <option value="yd">Y → Δ transform</option>
+          <option value="req-source">Equivalent resistance — over source</option>
           <option value="kcl">KCL — node-voltage</option>
           <option value="kvl">KVL — mesh-current</option>
-          <option value="req-source">Equivalent resistance — over source</option>
-          <option value="req-points">Equivalent resistance — over 2 points</option>
         </select>
       </div>
 
-      <div class="field" id="terminals" style="display:none;">
-        <span class="field-label">Terminals</span>
-        <div class="field-row">
-          <select class="ctl" id="termA" aria-label="First terminal"></select>
-          <span class="field-sep" aria-hidden="true">↔</span>
-          <select class="ctl" id="termB" aria-label="Second terminal"></select>
-        </div>
+      <div class="field">
+        <label class="field-label" for="circuit-set">Circuit Set</label>
+        <select class="ctl" id="circuit-set"></select>
       </div>
 
       <div class="field">
@@ -130,17 +127,15 @@
   </div>
 
   <script src="../../js/circuit.js"></script>
-  <script src="../../js/generators/random-grid.js"></script>
-  <script src="../../js/generators/basic.js"></script>
-  <script src="../../js/generators/bridge-ladder.js"></script>
-  <script src="../../js/generators/grid.js"></script>
-  <script src="../../js/generators/multi-source.js"></script>
+  <script src="../../js/generators/delta-wye.js"></script>
+  <script src="../../js/generators/wheatstone.js"></script>
   <script src="../../js/solve.js"></script>
   <script src="../../js/techniques/kit.js"></script>
   <script src="../../js/techniques/controls.js"></script>
   <script src="../../js/techniques/node-voltage.js"></script>
   <script src="../../js/techniques/mesh-current.js"></script>
   <script src="../../js/techniques/equivalent-resistance.js"></script>
+  <script src="../../js/techniques/delta-wye.js"></script>
   <script src="../../js/stepper.js"></script>
   <script src="../../js/formats/native.js"></script>
   <script src="../../js/formats/ltspice.js"></script>
@@ -149,8 +144,16 @@
   <script src="../../js/solver-page.js"></script>
   <script src="../../js/ui/shell.js"></script>
   <script>
-    // this topic covers independent voltage sources + resistors only
-    SolverPage({ filter: { elements: ['R', 'V', 'W'] }, elements: ['R', 'V', 'W'] });
+    // §3's Δ-Y deep dive. Two circuit sets, deliberately in this order: learn the formulas on a
+    // π or a T, where series/parallel ALSO works and the two answers must agree — then take them
+    // to a bridge, where series/parallel stalls and the transform is the only way through.
+    SolverPage({
+      elements: ['R', 'V', 'W'],
+      sets: [
+        { value: 'shapes', label: 'Δ and Y networks — learn the formulas', filter: { tags: ['delta-wye'] } },
+        { value: 'bridge', label: 'Bridges — where you need them', filter: { tags: ['wheatstone'] } },
+      ],
+    });
   </script>
 </body>
 

@@ -3,8 +3,14 @@
    it renders one view at a time and highlights the circuit via Circuit.highlight. Plain
    script, one global `Stepper`. No ES modules (file://).
 
-   A step: { n, title, body(html), eq?[html lines], todo?, hl?, subs?[substep] }.
-   A substep: { title?, body?(html), eq?[html], hl? } — a drill-down inside a step.
+   A step: { n, title, body(html), eq?[html lines], todo?, hl?, draw?, subs?[substep] }.
+   A substep: { title?, body?(html), eq?[html], hl?, draw? } — a drill-down inside a step.
+
+   `draw` is a DIFFERENT circuit for that view — the one case where the picture itself changes
+   part-way through a method (Δ-Y redraws the network with the Y in place of the Δ). The
+   stepper renders it in place of the page's circuit and re-renders back on a view without one,
+   so a technique never has to touch the svg. A technique that never sets `draw` costs nothing:
+   the page's own render stands and no re-render ever happens.
 
    Two button rows (o.prev/o.next walk whole steps; o.subPrev/o.subNext walk the substeps
    of the current step). Entering a step lands on its overview (sub 0); the sub row is
@@ -21,6 +27,9 @@
 
   window.Stepper = function (o) {
     var steps = [], i = 0, sub = 0, peekOpen = false;
+    // `base` is the circuit the page rendered before handing the steps over; `drawn` is what
+    // is actually on the svg right now, so a walk that never uses `draw` never re-renders.
+    var base = null, drawn = null;
     function html(el, s) { if (el) el.innerHTML = s; }
     function subsOf(s) { return (s && s.subs) || []; }
     function lines(a) { return a.map(function (l) { return '<div class="eq-line">' + l + '</div>'; }).join(''); }
@@ -36,7 +45,7 @@
       // the results arrive on the substeps (each its own line, the last one recapping the set).
       // It is not thrown away, though: it rides as `peek`, folded away behind a disclosure the
       // student opens when they want the result without walking the derivation for it.
-      if (sub === 0 || !subs.length) return { title: s.title, body: s.body, eq: subs.length ? null : s.eq, peek: subs.length ? s.eq : null, todo: s.todo, hl: s.hl, board: s.board, label: null };
+      if (sub === 0 || !subs.length) return { title: s.title, body: s.body, eq: subs.length ? null : s.eq, peek: subs.length ? s.eq : null, todo: s.todo, hl: s.hl, board: s.board, draw: s.draw, label: null };
       var ss = subs[sub - 1];
       return {
         title: s.title,
@@ -45,6 +54,7 @@
         todo: false,
         hl: ss.hl != null ? ss.hl : s.hl,
         board: ss.board != null ? ss.board : s.board,
+        draw: ss.draw != null ? ss.draw : s.draw,
         label: ss.title || null,
       };
     }
@@ -73,7 +83,13 @@
         o.board.style.display = v.board ? '' : 'none';
         o.board.innerHTML = v.board || '';
       }
-      if (o.svg && window.Circuit) window.Circuit.highlight(o.svg, v.hl || {});
+      // the picture: a view carrying `draw` swaps the circuit on the svg (and any other view
+      // swaps the page's own back), then the highlight lands on whatever is now drawn
+      if (o.svg && window.Circuit) {
+        var want = v.draw || base;
+        if (want && want !== drawn) { window.Circuit.render(want, o.svg); drawn = want; }
+        window.Circuit.highlight(o.svg, v.hl || {});
+      }
       if (o.prev) o.prev.disabled = i <= 0;
       if (o.next) o.next.disabled = i >= steps.length - 1;
       if (o.subPrev) o.subPrev.disabled = i <= 0 && sub <= 0;
@@ -101,7 +117,14 @@
     if (o.subNext) o.subNext.addEventListener('click', subNext);
 
     return {
-      load: function (s) { steps = s || []; i = 0; sub = 0; render(); },
+      /* load(steps, circuit) — `circuit` is what the page has just rendered, so the stepper
+         knows what to put back when a `draw` view is stepped away from. Omitting it is fine
+         for any technique that never redraws. */
+      load: function (s, circuit) {
+        steps = s || []; i = 0; sub = 0;
+        if (circuit !== undefined) { base = circuit; drawn = circuit; }
+        render();
+      },
       go: go,
       /* The resolved view the student is looking at right now, plus where it sits in the walk.
          Anything that wants to act on "this step" (js/ui/step-prompt.js) reads it from here

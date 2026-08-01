@@ -30,6 +30,8 @@ rather than *the page grows*.
 - **rail** (`css/controls.css`) — the controls. Scrolls internally (`.scroller`).
 - **stage** — the circuit, on paper. Gets the `1fr`: it is the point of the page. Never
   scrolls; `Circuit.render` sets a viewBox and the SVG scales to whatever the track gives it.
+  A step may swap the circuit for a different one (`draw`, see [SOLVER.md](SOLVER.md)) — the
+  stepper re-renders into the same `#canvas`, so the layout is unaffected either way.
   The builder's stage is `.stage` like every other page, and its canvas is its own pan/zoom plane
   sized to the track by `ResizeObserver` — the layout still owns the box, the canvas just
   follows it.
@@ -125,7 +127,14 @@ Split by scope, ≤200 lines each, loaded in this order:
 
 Adding a page = copy the nearest existing one and load the same set. New styling goes in the
 file that owns that scope; if it fits none of them, add a file rather than growing one past
-200 lines.
+200 lines. The two §3 deep dives (`topics/wheatstone-bridge/`, `topics/delta-wye/`) were added
+exactly this way and needed **no new CSS at all** — if a new topic page wants its own
+stylesheet, that is a sign it is not using the shell it was given.
+
+**The ribbon nav is repeated per page, and there are eight pages.** Adding a topic means editing
+the `.ribbon-nav` in all of them (home, about, and the six topic pages) — there is no template.
+Keep the labels short (`Bridge`, `Δ-Y`): the nav scrolls horizontally rather than wrapping, so a
+long label pushes the others out of sight on a laptop.
 
 ## Verifying
 

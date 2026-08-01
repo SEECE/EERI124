@@ -13,14 +13,24 @@ offers whichever techniques make sense for its circuits, through the same **Tech
 | Page | Circuits | Techniques |
 |---|---|---|
 | `topics/simple-resistive-circuits/` (§3) | resistors + one or more independent **voltage** sources | KCL, KVL, equivalent resistance (over the source / over 2 points) |
+| `topics/wheatstone-bridge/` (§3, deep dive) | the bridge family only (`tags: ['wheatstone']`) | **bridge balance**, Δ→Y, KCL, KVL, equivalent resistance ×2 |
+| `topics/delta-wye/` (§3, deep dive) | π / T networks, and the bridges again | **Δ→Y**, **Y→Δ**, equivalent resistance, KCL, KVL |
 | `topics/current-sources/` (§4) | the above **plus independent current sources** | KCL, KVL only |
 | `topics/dependent-sources/` (§4) | the above **plus the four controlled sources** | KCL, KVL only |
 
-Both solver pages share **`js/solver-page.js`** (registry → topology dropdown, stepper wiring,
+Every solver page shares **`js/solver-page.js`** (registry → topology dropdown, stepper wiring,
 technique switch). A page differs only in which generator files it loads, its `Circuit.list`
 filter(s), and which `<option>`s its Technique dropdown carries — never in logic. Equivalent
 resistance stays on §3: it needs sources to *deactivate*, and deactivating a current source
-(open circuit) is a Thévenin-era idea, not this page's.
+(open circuit) is a Thévenin-era idea, not this page's. The two deep dives are §3 for the same
+reason — `BridgeBalance` and `DeltaWye` both **refuse** a circuit that is not resistors plus
+exactly one voltage source, with one honest step rather than a crash or a wrong number.
+
+**The two §3 deep dives exist because §3's own page can only say "this needs a Y-Δ transform"
+and stop.** They are the pages that carry on: the bridge page derives balance from two dividers
+and then reports what the detector actually does, and the Δ-Y page performs the transform the
+bridge page pointed at. They are ordinary solver pages — same shell, same stepper, same File
+button — not a special case.
 
 `topics/current-sources/` loads §3's generator files too and offers a **Circuit set** dropdown
 (`#circuit-set`) alongside Topology: its own I-bearing circuits (`tags: ['current-source']`),
@@ -93,8 +103,8 @@ so, rather than dividing by zero.
 | **Kit** | `js/techniques/kit.js` | `StepKit` — the presentation and small-algebra layer both techniques share: fraction/subscript fragments, the status and board tables, number formatting that never prints `-12` or `− -5`, and the `{ c, t }` expression objects (`cleanT`, `resolveSelf`, `snap`, `settle`, `fmtExpr`) their step 8s substitute into one another. Knows nothing about circuits. |
 | **Controls** | `js/techniques/controls.js` | `ControlVars` — everything a step list says about a dependent source (type names, symbol, gain label, sign-aware term text, marker key) plus `Lin`, the key-agnostic linear form. |
 | **Engine** | `js/solve.js` | `si` (SI/engineering value formatting), `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (**MNA**, any number of sources), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
-| **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — sets up equations in step 6, hand-works the solve in step 8), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
-| **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view, highlights the circuit via `Circuit.highlight`. |
+| **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — sets up equations in step 6, hand-works the solve in step 8), `mesh-current` (KVL), `equivalent-resistance`, `bridge` (Wheatstone balance), `delta-wye` (Δ↔Y). Each self-registers a global (`window.NodeVoltage`, …). |
+| **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view, highlights the circuit via `Circuit.highlight`, and swaps in a step's own `draw` circuit when it has one. |
 | **Page wiring** | `js/solver-page.js` | shared by every solver page: fills the topology dropdown from the registry, maps the technique dropdown to a builder, renders the circuit + drives the stepper. |
 | **Page** | `topics/<slug>/index.html` | picks generator files, the registry filter(s) and the technique options, then calls `SolverPage({ filter })` or, for a page with more than one topology set, `SolverPage({ sets })`. No logic of its own. |
 
@@ -148,6 +158,12 @@ A technique returns an array of steps:
   step that grows one. Same rule for the
   `board`: a step whose substeps write to it stamps the board **as it stands on entry**
   (`boardBefore…` / `boardAtStart`), never the state its own substeps leave behind.
+- `draw` (optional) → **a different circuit for this view**. The stepper renders it in place of
+  the page's circuit and puts the page's back on any view without one, so the technique never
+  touches the svg itself. The page hands its circuit over as `stepper.load(steps, circuit)`; a
+  technique that never sets `draw` costs nothing, because no re-render ever happens. **Only for
+  a method where the network genuinely changes** — Δ-Y swapping a Y in for a Δ is the one case
+  on the site. It is not a way to annotate a drawing: that is what `hl` is for.
 - `subs` (optional) → **substeps**. Entering a step shows its overview (sub 0); `subPrev`/`subNext`
   drill through the substeps, `next` skips the whole step. A substep's `body`/`eq`/`hl` override the
   step's for that view (any omitted field falls back). Used by KCL for per-node / per-source /
@@ -278,8 +294,71 @@ per step, over the **source** (remove it, reduce between its terminals → also 
 `P = V²/Req`) or between **two chosen nodes** (deactivate the source — a voltage source becomes a
 short — then reduce). Edge cases: hanging/dead-end branches carry no current and are pruned; no path
 → `Req = ∞` (open); a **bridge** (non-series-parallel) can't be collapsed by hand → the step says so
-and gives `Req` from nodal analysis. The **authoritative `Req` is the nodal value**; the reduction
-is the pedagogy and is verified to match `V/I` for every generator.
+and gives `Req` from nodal analysis (and `topics/delta-wye/` is where that transform gets done).
+The **authoritative `Req` is the nodal value**; the reduction is the pedagogy and is verified to
+match `V/I` for every **single-source** generator.
+
+**Known limit — more than one source.** `over: 'source'` removes the *first* voltage source and
+reduces the resistor network between its terminals, while the other sources go on pushing current
+through it. So on a multi-source topology the reported `Req` is not `V/I` at the source, and the
+self-check deliberately skips those. Fixing it is a pedagogy decision (deactivate every source, or
+refuse the technique), not a bug fix — so it is written down here rather than quietly patched.
+
+## The Wheatstone bridge (§3 deep dive)
+
+`js/techniques/bridge.js` — `BridgeBalance(circuit)`, nine steps. It **reads the bridge off the
+circuit** rather than trusting a generator: four electrical nodes, the supply diagonal `s–t`
+taken from the source (`b` is +, `a` is the reference), and a detector diagonal `p–q` where each
+mid-node reaches **both** supply corners through **exactly one** resistor. Working on electrical
+nodes is what makes the diamond and the bridged-T come out as the same structure; "exactly one"
+is what stops a parallel pair being mistaken for an arm. No bridge → one honest step.
+
+The arms are then named the way the condition is written — `R₁ = s–p`, `R₂ = s–q`, `R₃ = p–t`,
+`Rx = q–t` — so the balance products pair up correctly:
+
+- **Steps 3–4 derive the condition, they do not assert it.** Assume no detector current, so each
+  branch is a plain divider; `v_p = V·R₃/(R₁+R₃)`, `v_q = V·Rx/(R₂+Rx)`; set them equal and V
+  cancels, which is the point worth making — *a bridge measurement does not depend on the
+  supply*. Cross-multiplying leaves `R₁·Rx = R₂·R₃`.
+- **Step 5 tests this bridge** and says balanced or unbalanced outright.
+- **Step 6 says what the detector does**, and on a *loaded, unbalanced* bridge it explicitly
+  warns that step 4's dividers no longer apply — printing both the divider values and the true
+  ones. That trap is the single most common error on this topic; do not quietly drop it.
+- **Step 8** reduces the bridge when the detector diagonal is dead ((R₁+R₃) ∥ (R₂+Rx)) and, when
+  it is not, says series/parallel stalls and points at Δ→Y on the same page.
+
+Every displayed number comes from `nodeVoltages`/`branches`; the balance verdict is checked
+against `v_pq` in the self-check, so the derivation and the engine cannot drift apart.
+
+## Δ-Y (§3 deep dive) — the one technique that redraws
+
+`js/techniques/delta-wye.js` — `DeltaWye(circuit, { dir: 'dy' | 'yd' })`.
+
+- **Δ detection is on ELECTRICAL nodes**: three groups joined pairwise by exactly one resistor.
+  A π network's shunt arms land on different rail nodes and only form a triangle once the wires
+  are contracted, so drawn-node detection would miss it. Candidates are ranked by how many
+  corners carry something *other* than the two Δ sides — a corner with nothing else on it is a
+  series pair, and transforming it buys nothing.
+- **Y detection is on ONE DRAWN node** carrying exactly three resistors and nothing else. That
+  restriction keeps the redraw honest: the centre disappears and there is no leftover bundle of
+  wires to decide about.
+- **The transform builds a new circuit** (`toWye`/`toDelta`), which step 5 hands to the stepper
+  as `draw`. Δ→Y adds a centre node at the centroid of the three corners; Y→Δ deletes the centre
+  and, where a new side lands on the same two nodes as an existing resistor, **combines the pair
+  on the spot** — they would otherwise be drawn on top of each other, and pairing off with the
+  old arms is exactly how Y→Δ cracks a bridge. `prune()` trims any rail stub a vanished Δ side
+  left behind. Deleting the centre re-letters the nodes after it, and the redraw step says so.
+- **The reduction is not re-implemented.** Steps 6+ are `EquivResistance(transformed, {over:
+  'source'})` with its goal step dropped, renumbered, and each tagged with the new drawing.
+- **The last step is the check that matters**: the reduction ran on the *swapped* network, so
+  nodal analysis of the network *as originally drawn* is an independent route to the same Req.
+  The self-check asserts it for every topology, both directions — a Δ-Y transform is an
+  identity, and a transform that moves Req is a bug.
+
+Step 1 does not *claim* series/parallel stalls, it runs a throwaway reduction and reports what
+happened. That is why the π and the T are in the generator set at all: they reduce **both** ways,
+so a student can check the formulas on a network they can already do, before meeting a bridge
+where they cannot.
 
 ## Adding a technique
 
@@ -295,8 +374,13 @@ is the pedagogy and is verified to match `V/I` for every generator.
 
 `js/solve.test.html` — open in a browser, every line must read `PASS`. It runs hand-computed
 series/parallel/divider circuits and one hand-worked case per controlled type (CCVS, VCVS, CCCS,
-VCCS), then sweeps **every generator**: node-voltage solves, mesh agrees (Euler face count +
-per-resistor current), and power balances. It then walks both techniques' step lists and asserts
+VCCS), a hand-worked balanced bridge (100/200/300/600 → 60 000 both ways, `Req = 266.67 Ω`) and a
+hand-worked Δ-Y pair in both directions (30/30/30 ↔ 10/10/10), then sweeps **every generator**:
+node-voltage solves, mesh agrees (Euler face count + per-resistor current), and power balances.
+The bridge sweep asserts the balance verdict matches `v_pq` and `Req = V/I` on every bridge
+drawing; the Δ-Y sweep asserts **Req is unmoved by the transform** on every topology in both
+directions, that the transformed circuit is valid, connected and balances power, and that the
+redraw survives to the last step. It then walks both techniques' step lists and asserts
 the narration invariants — the mesh loops never blink out, no view says `undefined`/`NaN`, the
 board is never baked into the body text, and, whatever route the derivation took, **the final
 board shows every node voltage and mesh current the engine found**. That last one is the check

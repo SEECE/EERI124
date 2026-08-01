@@ -120,8 +120,18 @@ balance, magnitude sanity, a non-zero control variable and a solvable mesh syste
 Rules:
 
 1. **One file per topology family**, not per template. `basic.js`, `bridge-ladder.js`,
-   `grid.js`, `random-grid.js`, `current-source.js`, `dependent.js`. Group by what a student
-   would call the shape.
+   `grid.js`, `random-grid.js`, `current-source.js`, `dependent.js`, `wheatstone.js`,
+   `delta-wye.js`. Group by what a student would call the shape.
+   `wheatstone.js` is the §3 bridge deep dive's family: the diamond (balanced / unbalanced /
+   open detector) and the **bridged-T**, which is the same bridge drawn so that students do not
+   recognise it. All four are `flavour: false` — flavour() can swap a resistor for a wire, and a
+   shorted arm is not a bridge. "Balanced" is exact, not rounded: the file enumerates at load
+   time every arm triple whose balancing fourth arm is itself a stock value, so the two products
+   compared in the workbench are equal to the digit.
+   `delta-wye.js` holds a π and a T that are **deliberately still series-parallel reducible** —
+   that is the point of them. Work them twice and the two answers must agree, which is how the
+   formulas earn trust before a bridge, where series/parallel stalls. The circuits that genuinely
+   need the transform are the bridges, so the Δ-Y page loads both files.
 2. **Register, don't export.** The file's only side effect is `C.register()` calls.
 3. **Everything shared goes through `C`** — `C.build`, `C.pick`, `C.pickR`, `C.pickV`,
    `C.degenerate`. Never re-declare the E12 value list or re-implement union-find locally.
@@ -129,7 +139,8 @@ Rules:
    current source must say so, or pages that only teach voltage sources will offer it. The
    self-check enforces this.
 5. **`tags` are for pages to filter on** (`series`, `parallel`, `divider`, `bridge`,
-   `ladder`, `grid`, `mesh`, `random`, `current-source`, `supermesh`, `multi-source`). Add
+   `wheatstone`, `delta`, `wye`, `delta-wye`, `ladder`, `grid`, `mesh`, `random`,
+   `current-source`, `supermesh`, `multi-source`). Add
    tags freely; they cost nothing. The current-sources page's own circuit set filters on
    `current-source`, because "circuits with an `I` in them" is exactly what that topic is; its
    other circuit set (the §3 topologies) filters on `elements` only, same as §3 itself — see

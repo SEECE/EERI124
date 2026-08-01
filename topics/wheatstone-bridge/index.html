@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#0e0920" />
-  <title>Simple resistive circuits — EERI 124</title>
+  <title>Wheatstone bridge — EERI 124</title>
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
   <link rel="stylesheet" href="../../css/ribbon.css" />
@@ -24,11 +24,11 @@
       <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
     </a>
     <span class="ribbon-sep" aria-hidden="true"></span>
-    <h1 class="ribbon-title">Simple Resistive Circuits</h1>
+    <h1 class="ribbon-title">Wheatstone Bridge</h1>
     <nav class="ribbon-nav" aria-label="Topics">
       <a href="../../index.html">Home</a>
-      <a href="../simple-resistive-circuits/index.html" aria-current="page">Resistive</a>
-      <a href="../wheatstone-bridge/index.html">Bridge</a>
+      <a href="../simple-resistive-circuits/index.html">Resistive</a>
+      <a href="../wheatstone-bridge/index.html" aria-current="page">Bridge</a>
       <a href="../delta-wye/index.html">Δ-Y</a>
       <a href="../current-sources/index.html">Current Sources</a>
       <a href="../dependent-sources/index.html">Dependent Sources</a>
@@ -48,6 +48,8 @@
       <div class="field">
         <label class="field-label" for="technique">Technique</label>
         <select class="ctl" id="technique">
+          <option value="bridge">Bridge balance — deep dive</option>
+          <option value="dy">Δ → Y transform</option>
           <option value="kcl">KCL — node-voltage</option>
           <option value="kvl">KVL — mesh-current</option>
           <option value="req-source">Equivalent resistance — over source</option>
@@ -130,17 +132,15 @@
   </div>
 
   <script src="../../js/circuit.js"></script>
-  <script src="../../js/generators/random-grid.js"></script>
-  <script src="../../js/generators/basic.js"></script>
-  <script src="../../js/generators/bridge-ladder.js"></script>
-  <script src="../../js/generators/grid.js"></script>
-  <script src="../../js/generators/multi-source.js"></script>
+  <script src="../../js/generators/wheatstone.js"></script>
   <script src="../../js/solve.js"></script>
   <script src="../../js/techniques/kit.js"></script>
   <script src="../../js/techniques/controls.js"></script>
   <script src="../../js/techniques/node-voltage.js"></script>
   <script src="../../js/techniques/mesh-current.js"></script>
   <script src="../../js/techniques/equivalent-resistance.js"></script>
+  <script src="../../js/techniques/bridge.js"></script>
+  <script src="../../js/techniques/delta-wye.js"></script>
   <script src="../../js/stepper.js"></script>
   <script src="../../js/formats/native.js"></script>
   <script src="../../js/formats/ltspice.js"></script>
@@ -149,8 +149,10 @@
   <script src="../../js/solver-page.js"></script>
   <script src="../../js/ui/shell.js"></script>
   <script>
-    // this topic covers independent voltage sources + resistors only
-    SolverPage({ filter: { elements: ['R', 'V', 'W'] }, elements: ['R', 'V', 'W'] });
+    // §3's bridge deep dive: only the bridge topologies, but every technique that has something
+    // to say about one — balance first, then Δ→Y for the unbalanced case that series/parallel
+    // cannot touch, then the general methods as a cross-check.
+    SolverPage({ filter: { tags: ['wheatstone'] }, elements: ['R', 'V', 'W'] });
   </script>
 </body>
 
