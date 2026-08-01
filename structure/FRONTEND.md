@@ -19,6 +19,10 @@ A page picks one on `<body>`:
 | `body.app` | every topic page | `height: 100dvh; overflow: hidden`. Grid rows: ribbon (auto) + `.workspace` (1fr). The page **cannot** scroll — there is nowhere to scroll to. |
 | `body.doc` | home | An ordinary document. Grows and scrolls if the screen is small. |
 
+`body.app` carries `.workspace` on a solver page and `.lab` on a tutorial page
+([TUTORIALS.md](TUTORIALS.md)) — three regions or two. The shell rules below are the same for
+both; only the number of tracks differs.
+
 `body.app` is the whole fix. Because the shell's height is definite, every region below it
 inherits a definite height, and "this panel is too tall" resolves to *that panel scrolls*
 rather than *the page grows*.
@@ -122,14 +126,16 @@ Split by scope, ≤200 lines each, loaded in this order:
 | `circuit.css` | how the rendered SVG looks: highlights, reveals | solver pages |
 | `workbench.css` | the step panel: head, equations, tables, board, nav | solver pages |
 | `builder.css` | palette, properties, canvas chrome, everything drawn on the grid | builder page |
+| `tutorial.css` | the two-region lab shell: board, dials, results, lesson, hand-drawn figure | tutorial pages |
 | `home.css` | hero, section labels, topic cards | home, about |
 | `about.css` | acknowledgement cards, colophon facts | about |
 
 Adding a page = copy the nearest existing one and load the same set. New styling goes in the
 file that owns that scope; if it fits none of them, add a file rather than growing one past
-200 lines. The two §3 deep dives (`topics/wheatstone-bridge/`, `topics/delta-wye/`) were added
-exactly this way and needed **no new CSS at all** — if a new topic page wants its own
-stylesheet, that is a sign it is not using the shell it was given.
+200 lines. **A new topic page wanting its own stylesheet is usually a sign it is not using the
+shell it was given** — check that first. `tutorial.css` is the one earned exception: the two §3
+deep dives are not solver pages at all (no generated circuit, so no rail), and they say so with
+a shell of their own. See [TUTORIALS.md](TUTORIALS.md).
 
 **The ribbon nav is repeated per page, and there are eight pages.** Adding a topic means editing
 the `.ribbon-nav` in all of them (home, about, and the six topic pages) — there is no template.

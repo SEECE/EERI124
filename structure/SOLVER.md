@@ -14,7 +14,6 @@ offers whichever techniques make sense for its circuits, through the same **Tech
 |---|---|---|
 | `topics/simple-resistive-circuits/` (§3) | resistors + one or more independent **voltage** sources | KCL, KVL, equivalent resistance (over the source / over 2 points) |
 | `topics/wheatstone-bridge/` (§3, deep dive) | the bridge family only (`tags: ['wheatstone']`) | **bridge balance**, Δ→Y, KCL, KVL, equivalent resistance ×2 |
-| `topics/delta-wye/` (§3, deep dive) | π / T networks, and the bridges again | **Δ→Y**, **Y→Δ**, equivalent resistance, KCL, KVL |
 | `topics/current-sources/` (§4) | the above **plus independent current sources** | KCL, KVL only |
 | `topics/dependent-sources/` (§4) | the above **plus the four controlled sources** | KCL, KVL only |
 
@@ -22,15 +21,16 @@ Every solver page shares **`js/solver-page.js`** (registry → topology dropdown
 technique switch). A page differs only in which generator files it loads, its `Circuit.list`
 filter(s), and which `<option>`s its Technique dropdown carries — never in logic. Equivalent
 resistance stays on §3: it needs sources to *deactivate*, and deactivating a current source
-(open circuit) is a Thévenin-era idea, not this page's. The two deep dives are §3 for the same
-reason — `BridgeBalance` and `DeltaWye` both **refuse** a circuit that is not resistors plus
-exactly one voltage source, with one honest step rather than a crash or a wrong number.
+(open circuit) is a Thévenin-era idea, not this page's. `BridgeBalance` and `DeltaWye` both
+**refuse** a circuit that is not resistors plus exactly one voltage source, with one honest step
+rather than a crash or a wrong number.
 
-**The two §3 deep dives exist because §3's own page can only say "this needs a Y-Δ transform"
-and stop.** They are the pages that carry on: the bridge page derives balance from two dividers
-and then reports what the detector actually does, and the Δ-Y page performs the transform the
-bridge page pointed at. They are ordinary solver pages — same shell, same stepper, same File
-button — not a special case.
+**`topics/delta-wye/` is not on this list — it is a tutorial page**
+([TUTORIALS.md](TUTORIALS.md)). A Δ-Y transform is a rewriting rule for three resistors, not an
+analysis technique, and running it as a generated-circuit-plus-stepwise-solve taught the student
+how the page worked rather than how the transform worked. It has no generator, no technique and
+no stepper; the `DeltaWye` technique below survives only because the bridge page offers Δ→Y from
+its own dropdown.
 
 `topics/current-sources/` loads §3's generator files too and offers a **Circuit set** dropdown
 (`#circuit-set`) alongside Topology: its own I-bearing circuits (`tags: ['current-source']`),

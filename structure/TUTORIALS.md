@@ -1,0 +1,127 @@
+# Tutorial pages — the two Study Unit 3 deep dives
+
+**Read this before touching `topics/delta-wye/`, `topics/wheatstone-bridge/`, `css/tutorial.css`
+or anything in `js/tutorial/`.** The solver pages are [SOLVER.md](SOLVER.md); the shell they
+share is [FRONTEND.md](FRONTEND.md). This is the third kind of page on the site, and the point
+of the doc is to stop it drifting back into the second.
+
+## Why these two are not solver pages
+
+Every other topic page asks the same question: *here is a randomly generated circuit — apply a
+technique to it.* That is the right question for §3's networks and §4's sources, where the
+circuit changes every time and the method is what stays.
+
+It is the wrong question for these two topics, and they were built as solver pages first, which
+is how we found out:
+
+- **Δ-Y is not circuit analysis.** It is a rewriting rule for three resistors. Generating a
+  random π network, running a nine-step solve on it and redrawing the result taught the student
+  how the *page* worked, not how the *transform* worked — the one thing they came for (swap
+  these three resistors for those three) was buried inside a derivation about something else.
+- **A Wheatstone bridge is an instrument.** What has to be understood is what the detector does
+  as the arms change, and that is a thing you learn by *moving an arm and watching*, not by
+  reading nine steps about one frozen set of values.
+
+So these pages have **no generator, no technique, no stepper, and no File menu**. There is
+nothing to import or export because there is no problem instance — the numbers are dialled in
+by the student and the figure is the same figure every visit.
+
+**Do not add a topology dropdown, a Technique dropdown or a Generate button to either page.**
+If a topic genuinely needs those, it is a solver page and belongs in [SOLVER.md](SOLVER.md).
+
+## The shell: two regions, not three
+
+`body.app` and the ribbon are unchanged — same page frame, same tokens, same nav. Below the
+ribbon, `main.lab` is a two-column grid (`css/tutorial.css`):
+
+| Region | Owns |
+|---|---|
+| **board** (`1fr`) | the figure, the dials that drive it, and the results it produces. Grid rows: head · figure · foot. |
+| **lesson** (`--lesson-w`) | the guide. Grid rows: head · scrolling body · nav. |
+
+There is no rail, because there are no circuit controls to put in one — the only controls are
+the dials, and they belong next to the thing they change. Every [FRONTEND.md](FRONTEND.md) rule
+still applies: grid rows, `min-height: 0`, exactly one `.scroller`, no magic-number heights.
+Under 1000px the two columns stack and `.lab` itself becomes the single scroller.
+
+## The figure is drawn by hand
+
+`js/tutorial/draw.js` (`Draw`) is a handful of SVG primitives — `wire`, `resistor` along an
+arbitrary segment, `dot`, `text` with subscripts, `arrow`. Each page builds its own figure from
+them and **throws the whole thing away and rebuilds on every change**; twenty-odd elements is
+cheaper to redraw than to diff, and a rebuilt figure cannot go stale.
+
+This does **not** replace `js/circuit.js`'s renderer, and neither page uses it. That renderer
+draws the `{nodes, edges}` model on an orthogonal grid, which is exactly right for a generated
+circuit and exactly wrong here: a Δ is a triangle, a Y is a star and a bridge is a diamond, and
+**the shape is the lesson**. Drawing a Δ as a grid rectangle would teach the wrong picture.
+
+`Draw` sets no paint attributes — colour is `css/tutorial.css`'s job (`.figure .wire`, `.res`,
+`.is-lit`, `.is-out`). The figure sits on `--paper` and uses the same six renderer token names
+FRONTEND.md pins down, so it matches the solver pages' stage.
+
+**Label positions are hand-placed constants** (`TAGPOS`), not computed offsets. The figures are
+fixed, and a label landing on a wire is the one thing that makes a circuit diagram unreadable.
+There is a geometry check for this — see *Verifying*, below.
+
+## The lesson is chapters, not steps
+
+`js/tutorial/lesson.js` (`Lesson`) walks a fixed list of teaching chapters with Prev/Next and a
+row of jump dots. It is deliberately **not** `js/stepper.js`:
+
+| | `Stepper` | `Lesson` |
+|---|---|---|
+| content | a derivation a technique generated from one circuit | teaching text, the same every visit |
+| shape | changes with the problem | fixed |
+| when it re-renders | when you move a step | also when a **dial** moves |
+
+That last row is the whole design. A chapter's `html` is a **function**, not a string, so
+`refresh()` re-runs it against the live values — the prose stays put, the numbers inside it
+move, and the student is not scrolled or bumped off the chapter they are reading. **Nothing
+derived may be captured outside that function**, or the chapter goes stale on the first drag.
+
+A chapter's optional `lit` names parts of the figure; `Lesson` hands it back through `onView`
+and never touches the figure itself. Everything not lit is dimmed, so "the two Δ sides meeting
+at A" is something the student sees rather than something they are told.
+
+## Practice mode
+
+Both pages hide their computed values behind a `?` the student clicks, and swap the worked
+numeric formula for the symbolic rule while hidden — so the exercise is *substitute and
+divide*, not *read the answer off a filled-in fraction*. Any change to the inputs clears every
+reveal: new numbers mean a revealed answer is no longer the answer.
+
+## `topics/delta-wye/` — Δ ↔ Y
+
+`js/tutorial/delta-wye.js` (`DeltaWyeLab`). A Δ and a Y drawn side by side on one sheet,
+sharing terminals A, B and C, with the transform running live between them.
+
+- **The given side is whichever side you are converting from**, and flipping the direction
+  hands the computed values back as the new givens. So Δ→Y→Δ lands exactly where it started —
+  the round trip is something the student can *perform*, and chapter 9 asks them to. This only
+  works because stored values stay exact and rounding happens at display time.
+- **The transform math is pure and exported** (`DeltaWyeLab.toWye/.toDelta/.readsD/.readsY`) so
+  the self-check can assert the identity without mounting a page.
+- The guide derives the rule rather than asserting it: what "equivalent" is allowed to mean
+  (three terminal pairs, nothing else) → the A–B reading on both networks → three equations →
+  solve them once → apply, one arm at a time → check the three readings again.
+
+**A Δ-Y transform is an identity.** If a round trip moves a value, the formulas are wrong and
+every number shown to a student is wrong with them. That is the assertion the self-check exists
+for; keep it.
+
+## Verifying
+
+`js/tutorial.test.html` — open in a browser, every line must read `PASS`. It mounts each page's
+**real markup** off-screen and drives the real lab rather than re-implementing its arithmetic:
+the transform identity both ways over random networks, the terminal-pair readings agreeing,
+every chapter in both directions rendering with no `undefined`/`NaN`, a dial move leaving the
+student on their chapter, the page-level round trip, practice mode, and every preset.
+
+Two things it cannot check, both of which need eyes:
+
+- **Layout.** As everywhere else on the site, real-browser QA — say so when handing work over.
+- **Figure geometry.** Whether a label overlaps a wire is arithmetic, though, and worth
+  checking when the figures move: estimate each label's box from its string length and font
+  size, then test it against the viewBox and against every drawn segment. That check found two
+  overlapping arm labels on the first Δ-Y figure.

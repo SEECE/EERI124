@@ -9,14 +9,12 @@
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
   <link rel="stylesheet" href="../../css/ribbon.css" />
-  <link rel="stylesheet" href="../../css/workspace.css" />
   <link rel="stylesheet" href="../../css/controls.css" />
-  <link rel="stylesheet" href="../../css/circuit.css" />
-  <link rel="stylesheet" href="../../css/workbench.css" />
+  <link rel="stylesheet" href="../../css/tutorial.css" />
 </head>
 
 <body class="app">
-  <a class="skip-link" href="#canvas">Skip to the circuit</a>
+  <a class="skip-link" href="#figure">Skip to the two networks</a>
 
   <header class="ribbon">
     <a class="ribbon-brand" href="../../index.html">
@@ -35,125 +33,73 @@
       <a href="../circuit-builder/index.html">Builder</a>
       <a href="../../about.html">About</a>
     </nav>
-    <div class="ribbon-tools">
-      <button type="button" class="icon-btn icon-btn--rail" data-panel="rail" aria-pressed="true"
-        aria-label="Show or hide the controls panel"><span class="ptg" aria-hidden="true"></span></button>
-      <button type="button" class="icon-btn icon-btn--workbench" data-panel="workbench" aria-pressed="true"
-        aria-label="Show or hide the workbench panel"><span class="ptg" aria-hidden="true"></span></button>
-    </div>
   </header>
 
-  <div class="workspace" data-rail="open" data-workbench="open">
-    <aside class="rail panel scroller" id="rail" aria-label="Circuit controls">
-      <div class="field">
-        <label class="field-label" for="technique">Technique</label>
-        <select class="ctl" id="technique">
-          <option value="dy">Δ → Y transform</option>
-          <option value="yd">Y → Δ transform</option>
-          <option value="req-source">Equivalent resistance — over source</option>
-          <option value="kcl">KCL — node-voltage</option>
-          <option value="kvl">KVL — mesh-current</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="circuit-set">Circuit Set</label>
-        <select class="ctl" id="circuit-set"></select>
-      </div>
-
-      <div class="field">
-        <label class="field-label" for="topology">Topology</label>
-        <select class="ctl" id="topology"></select>
-      </div>
-
-      <button type="button" class="btn btn--primary btn--block" id="generate">Generate Circuit</button>
-
-      <div class="field filemenu rail-spacer">
-        <span class="field-label">File</span>
-        <button type="button" class="btn btn--soft btn--block" data-file-toggle aria-expanded="false"
-          aria-controls="file-actions"><span class="file-caret" aria-hidden="true"></span> Open or Save</button>
-        <div class="file-actions" id="file-actions" data-file-actions hidden>
-          <label class="file-action" for="file-open">Open Circuit…
-            <small>a .eeri file saved anywhere on this site</small>
-            <input type="file" id="file-open" accept=".eeri,.json,application/json" class="sr-only" />
-          </label>
-          <button type="button" class="file-action" data-save="native">Save Circuit
-            <small>.eeri — reopens on any page here</small></button>
-          <button type="button" class="file-action" data-save="asc">Save LTspice Schematic
-            <small>.asc — open and simulate it in LTspice</small></button>
-          <button type="button" class="file-action" data-save="cir">Save LTspice Netlist
-            <small>.cir — simulates any circuit, dependent sources included</small></button>
+  <!-- Two regions, not the solver pages' three: there is no circuit to generate and no
+       technique to pick, so there is nothing for a rail to hold. See structure/TUTORIALS.md. -->
+  <main class="lab">
+    <section class="board panel" aria-label="The two networks">
+      <div class="board-head">
+        <span class="eyebrow">Δ and Y, side by side</span>
+        <div class="seg" role="group" aria-label="Which way to transform">
+          <button type="button" id="dir-dy" aria-pressed="true">Δ → Y</button>
+          <button type="button" id="dir-yd" aria-pressed="false">Y → Δ</button>
         </div>
-        <p class="field-note" data-file-note role="status"></p>
+        <div class="seg" role="group" aria-label="Starting values">
+          <button type="button" data-preset="equal">Equal</button>
+          <button type="button" data-preset="spread">10 · 20 · 30</button>
+          <button type="button" data-preset="random">Random</button>
+        </div>
+        <button type="button" class="btn btn--ghost btn--sm" id="practice" aria-pressed="false">
+          Practice mode: off</button>
       </div>
-    </aside>
 
-    <section class="stage panel" aria-label="Circuit diagram">
-      <svg id="canvas" role="img" aria-label="The circuit being analysed"></svg>
+      <div class="figure">
+        <svg id="figure" viewBox="0 0 720 360" preserveAspectRatio="xMidYMid meet" role="img"
+          aria-label="A delta network of three resistors beside a wye network of three resistors, sharing terminals A, B and C"></svg>
+      </div>
+
+      <div class="board-foot">
+        <div class="board-col">
+          <span class="eyebrow" id="given-label">Given — the Δ</span>
+          <div id="dials"></div>
+        </div>
+        <div class="board-col board-col--out">
+          <span class="eyebrow" id="out-label">Computed — the Y</span>
+          <div id="results"></div>
+        </div>
+      </div>
     </section>
 
-    <aside class="workbench panel" id="workbench" aria-label="Method workbench">
-      <header class="wb-head">
-        <div class="wb-head-top">
-          <span class="eyebrow">Workbench</span>
-          <span class="step-count" id="step-count"></span>
+    <aside class="lesson panel" aria-label="Guide">
+      <header class="lesson-head">
+        <div class="lesson-head-top">
+          <span class="eyebrow">Guide</span>
+          <span class="lesson-count" id="lesson-count" aria-live="polite"></span>
         </div>
-        <h2 class="step-title" id="step-title" aria-live="polite"></h2>
+        <h2 class="lesson-title" id="lesson-title"></h2>
       </header>
 
-      <div class="wb-scroll scroller">
-        <div class="step-body" id="step-body"></div>
-        <div class="step-eq" id="step-eq"></div>
-      </div>
+      <div class="lesson-body scroller" id="lesson-body"></div>
 
-      <div class="step-board scroller" id="step-board"></div>
-
-      <footer class="wb-nav">
-        <div class="step-nav">
-          <button type="button" class="btn btn--soft" id="step-prev" aria-label="Previous step">‹ Prev</button>
-          <button type="button" class="btn btn--primary" id="step-next" aria-label="Next step">Next ›</button>
-        </div>
-        <div class="substep-nav">
-          <button type="button" class="btn btn--ghost btn--sm" id="sub-prev" aria-label="Previous detail">‹</button>
-          <span class="step-subcount" id="step-subcount"></span>
-          <button type="button" class="btn btn--ghost btn--sm" id="sub-next" aria-label="Next detail">›</button>
-        </div>
-        <button type="button" class="btn btn--ghost btn--sm btn--block" id="ask-midnjoy">Ask Midnjoy about this step</button>
-        <span class="sr-only" id="midnjoy-note" role="status"></span>
+      <footer class="lesson-nav">
+        <button type="button" class="btn btn--soft btn--sm" id="lesson-prev">‹ Back</button>
+        <div class="lesson-dots" id="lesson-dots" role="group" aria-label="Jump to a chapter"></div>
+        <button type="button" class="btn btn--primary btn--sm" id="lesson-next">Next ›</button>
       </footer>
     </aside>
+  </main>
 
-    <button type="button" class="scrim" aria-label="Close the open panel"></button>
-  </div>
-
-  <script src="../../js/circuit.js"></script>
-  <script src="../../js/generators/delta-wye.js"></script>
-  <script src="../../js/generators/wheatstone.js"></script>
   <script src="../../js/solve.js"></script>
-  <script src="../../js/techniques/kit.js"></script>
-  <script src="../../js/techniques/controls.js"></script>
-  <script src="../../js/techniques/node-voltage.js"></script>
-  <script src="../../js/techniques/mesh-current.js"></script>
-  <script src="../../js/techniques/equivalent-resistance.js"></script>
-  <script src="../../js/techniques/delta-wye.js"></script>
-  <script src="../../js/stepper.js"></script>
-  <script src="../../js/formats/native.js"></script>
-  <script src="../../js/formats/ltspice.js"></script>
-  <script src="../../js/ui/filemenu.js"></script>
-  <script src="../../js/ui/step-prompt.js"></script>
-  <script src="../../js/solver-page.js"></script>
-  <script src="../../js/ui/shell.js"></script>
+  <script src="../../js/tutorial/draw.js"></script>
+  <script src="../../js/tutorial/lesson.js"></script>
+  <script src="../../js/tutorial/delta-wye.js"></script>
   <script>
-    // §3's Δ-Y deep dive. Two circuit sets, deliberately in this order: learn the formulas on a
-    // π or a T, where series/parallel ALSO works and the two answers must agree — then take them
-    // to a bridge, where series/parallel stalls and the transform is the only way through.
-    SolverPage({
-      elements: ['R', 'V', 'W'],
-      sets: [
-        { value: 'shapes', label: 'Δ and Y networks — learn the formulas', filter: { tags: ['delta-wye'] } },
-        { value: 'bridge', label: 'Bridges — where you need them', filter: { tags: ['wheatstone'] } },
-      ],
-    });
+    // js/solve.js is loaded for Solve.si alone — every displayed quantity on the site goes
+    // through it, so "0.1 Ω" and "2.2 kΩ" read the same here as on a solver page. None of the
+    // rest of the solver is used: this page's arithmetic is the three transform formulas and
+    // two series/parallel readings, which IS the lesson and so is worked in the open.
+    DeltaWyeLab();
   </script>
 </body>
 

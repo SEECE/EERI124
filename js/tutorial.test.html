@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>tutorial pages self-check</title>
+  <style>
+    body { font-family: ui-monospace, monospace; background: #14102a; color: #ece9fb; padding: 16px; }
+    #stage { position: absolute; left: -10000px; top: 0; width: 1200px; }
+  </style>
+</head>
+
+<body>
+  <pre id="out"></pre>
+
+  <!-- The pages' own markup, off-screen: these labs are mounted for real and driven, rather
+       than having their arithmetic re-implemented here. Keep the ids in step with
+       topics/delta-wye/index.html and topics/wheatstone-bridge/index.html. -->
+  <div id="stage" aria-hidden="true">
+    <div class="seg">
+      <button type="button" id="dir-dy" aria-pressed="true">Δ → Y</button>
+      <button type="button" id="dir-yd" aria-pressed="false">Y → Δ</button>
+      <button type="button" data-preset="equal">Equal</button>
+      <button type="button" data-preset="spread">Spread</button>
+      <button type="button" data-preset="random">Random</button>
+      <button type="button" id="practice" aria-pressed="false">Practice mode: off</button>
+    </div>
+    <svg id="figure" viewBox="0 0 720 360"></svg>
+    <span id="given-label"></span><span id="out-label"></span>
+    <div id="dials"></div>
+    <div id="results"></div>
+    <span id="lesson-count"></span>
+    <h2 id="lesson-title"></h2>
+    <div id="lesson-body"></div>
+    <button type="button" id="lesson-prev"></button>
+    <div id="lesson-dots"></div>
+    <button type="button" id="lesson-next"></button>
+  </div>
+
+  <script src="solve.js"></script>
+  <script src="tutorial/draw.js"></script>
+  <script src="tutorial/lesson.js"></script>
+  <script src="tutorial/delta-wye.js"></script>
+  <script>
+    var out = [];
+    function check(label, fn) {
+      try { fn(); out.push('PASS ' + label); }
+      catch (err) { out.push('FAIL ' + label + ' — ' + err.message); }
+    }
+    function assert(cond, msg) { if (!cond) throw new Error(msg); }
+    function near(a, b, t) { return Math.abs(a - b) <= (t || 1e-9) * (Math.abs(a) + Math.abs(b) + 1); }
+    function rnd() { return 1 + Math.random() * 900; }
+
+    // ================= Δ-Y: the transform, as pure arithmetic =================
+
+    check('hand-worked Δ 30/30/30 ↔ Y 10/10/10', function () {
+      var y = DeltaWyeLab.toWye({ ab: 30, bc: 30, ca: 30 });
+      assert(near(y.a, 10) && near(y.b, 10) && near(y.c, 10), 'Δ→Y gave ' + JSON.stringify(y));
+      var d = DeltaWyeLab.toDelta({ a: 10, b: 10, c: 10 });
+      assert(near(d.ab, 30) && near(d.bc, 30) && near(d.ca, 30), 'Y→Δ gave ' + JSON.stringify(d));
+    });
+
+    // A Δ-Y transform is an IDENTITY. If a round trip moves a value the formulas are wrong,
+    // and every number the page shows a student is wrong with them.
+    check('Δ→Y→Δ returns the same network (200 random)', function () {
+      for (var i = 0; i < 200; i++) {
+        var d = { ab: rnd(), bc: rnd(), ca: rnd() }, back = DeltaWyeLab.toDelta(DeltaWyeLab.toWye(d));
+        assert(near(back.ab, d.ab) && near(back.bc, d.bc) && near(back.ca, d.ca),
+          JSON.stringify(d) + ' → ' + JSON.stringify(back));
+      }
+    });
+
+    check('Y→Δ→Y returns the same network (200 random)', function () {
+      for (var i = 0; i < 200; i++) {
+        var y = { a: rnd(), b: rnd(), c: rnd() }, back = DeltaWyeLab.toWye(DeltaWyeLab.toDelta(y));
+        assert(near(back.a, y.a) && near(back.b, y.b) && near(back.c, y.c),
+          JSON.stringify(y) + ' → ' + JSON.stringify(back));
+      }
+    });
+
+    // …and this is the reason it is an identity, which is what chapters 2–4 teach: the three
+    // terminal-pair readings are all an outside observer can ever measure.
+    check('all three terminal-pair readings agree (200 random)', function () {
+      for (var i = 0; i < 200; i++) {
+        var d = { ab: rnd(), bc: rnd(), ca: rnd() };
+        var rd = DeltaWyeLab.readsD(d), ry = DeltaWyeLab.readsY(DeltaWyeLab.toWye(d));
+        assert(near(rd.AB, ry.AB) && near(rd.BC, ry.BC) && near(rd.CA, ry.CA),
+          JSON.stringify(rd) + ' vs ' + JSON.stringify(ry));
+      }
+    });
+
+    // ================= Δ-Y: the page =================
+
+    var dy = DeltaWyeLab();
+
+    function figureText() { return document.getElementById('figure').textContent; }
+    function resultsText() { return document.getElementById('results').textContent; }
+
+    check('the figure draws both networks — six resistors', function () {
+      var n = document.getElementById('figure').querySelectorAll('polyline').length;
+      assert(n === 6, 'drew ' + n + ' resistors');
+    });
+
+    check('three dials and three results', function () {
+      var d = document.getElementById('dials').querySelectorAll('input').length;
+      var r = document.getElementById('results').querySelectorAll('.result').length;
+      assert(d === 6 && r === 3, 'inputs=' + d + ' results=' + r);
+    });
+
+    // Every chapter is re-rendered from the LIVE values on each refresh, so a chapter that
+    // captured a stale number would print it here — and a missing one prints "undefined".
+    function walkChapters(label) {
+      var dots = document.getElementById('lesson-dots').children.length;
+      assert(dots >= 8, label + ': only ' + dots + ' chapters');
+      for (var i = 0; i < dots; i++) {
+        dy.lesson.go(i);
+        var t = document.getElementById('lesson-title').textContent +
+          ' ' + document.getElementById('lesson-body').textContent;
+        assert(!/undefined|NaN|\[object/.test(t), label + ' chapter ' + (i + 1) + ': ' + t.slice(0, 160));
+        assert(t.length > 80, label + ' chapter ' + (i + 1) + ' is empty');
+      }
+    }
+
+    check('every Δ→Y chapter renders', function () { walkChapters('Δ→Y'); });
+
+    check('moving a dial keeps the student on their chapter', function () {
+      dy.lesson.go(5);
+      dy.set([220, 47, 15]);
+      assert(dy.lesson.index() === 5, 'the refresh jumped to chapter ' + (dy.lesson.index() + 1));
+      assert(!/undefined|NaN/.test(document.getElementById('lesson-body').textContent), 'chapter broke');
+    });
+
+    // The page-level version of the identity above: flipping the direction hands the computed
+    // values back as givens, so Δ→Y→Δ must land on the numbers the student started with.
+    check('flipping the direction twice restores the Δ', function () {
+      dy.setDir('dy');
+      dy.set([30, 20, 10]);
+      var before = dy.state().delta, was = { ab: before.ab, bc: before.bc, ca: before.ca };
+      dy.setDir('yd');
+      dy.setDir('dy');
+      var now = dy.state().delta;
+      assert(near(now.ab, was.ab) && near(now.bc, was.bc) && near(now.ca, was.ca),
+        JSON.stringify(was) + ' → ' + JSON.stringify(now));
+    });
+
+    check('every Y→Δ chapter renders', function () {
+      dy.setDir('yd');
+      walkChapters('Y→Δ');
+      assert(document.getElementById('figure').querySelectorAll('polyline').length === 6,
+        'the figure lost a resistor on the flip');
+      assert(!/undefined|NaN/.test(resultsText()), 'results: ' + resultsText());
+      dy.setDir('dy');
+    });
+
+    check('practice mode hides every answer, and a peek returns one', function () {
+      dy.set([30, 20, 10]);
+      document.getElementById('practice').click();
+      var chips = document.getElementById('results').querySelectorAll('.peek');
+      assert(chips.length === 3, 'expected 3 hidden results, got ' + chips.length);
+      assert(figureText().indexOf('?') >= 0, 'the figure still shows the answers');
+      chips[0].click();
+      assert(document.getElementById('results').querySelectorAll('.peek').length === 2,
+        'revealing one did not stick');
+      document.getElementById('practice').click();
+      assert(document.getElementById('results').querySelectorAll('.peek').length === 0,
+        'leaving practice mode left an answer hidden');
+    });
+
+    check('every preset gives a usable network', function () {
+      var btns = document.querySelectorAll('[data-preset]');
+      assert(btns.length === 3, 'found ' + btns.length + ' presets');
+      for (var i = 0; i < btns.length; i++) {
+        btns[i].click();
+        var y = dy.state().wye;
+        assert(Object.keys(y).every(function (k) { return isFinite(y[k]) && y[k] > 0; }),
+          btns[i].getAttribute('data-preset') + ' → ' + JSON.stringify(y));
+        assert(!/undefined|NaN/.test(resultsText()), 'results after preset: ' + resultsText());
+      }
+    });
+
+    document.getElementById('out').textContent = out.join('\n') + '\n\n' +
+      (out.filter(function (l) { return l.indexOf('FAIL') === 0; }).length
+        ? '*** FAILURES ***' : 'all ' + out.length + ' passed');
+  </script>
+</body>
+
+</html>

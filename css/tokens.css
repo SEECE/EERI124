@@ -76,6 +76,8 @@
   --wb-w: clamp(310px, 26vw, 404px);
   --ribbon-h: 52px;
   --content-max: 1080px;
+  /* the tutorial pages have two regions instead of three — board + lesson (tutorial.css) */
+  --lesson-w: clamp(330px, 30vw, 440px);
 
   /* ── motion ── */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
