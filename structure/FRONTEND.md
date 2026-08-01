@@ -124,10 +124,10 @@ Split by scope, ≤200 lines each, loaded in this order:
 | `ribbon.css` | the top ribbon: brand, page title, topic nav, panel toggles | every page |
 | `workspace.css` | the rail/stage/workbench grid, collapsing, drawers | topic pages |
 | `controls.css` | `.field` / `.ctl` / `.btn` — the rail's vocabulary | topic pages |
-| `circuit.css` | how the rendered SVG looks: highlights, reveals | solver pages |
+| `circuit.css` | how the rendered SVG looks: highlights, reveals — names `.stage` **and** `.figure` | solver pages, and the philosophy tutorial |
 | `workbench.css` | the step panel: head, equations, tables, board, nav | solver pages |
 | `builder.css` | palette, properties, canvas chrome, everything drawn on the grid | builder page |
-| `tutorial.css` | the two-region lab shell: board, dials, results, lesson, hand-drawn figure | tutorial pages |
+| `tutorial.css` | the two-region lab shell: board, dials, results, lesson, tallies. Its SVG vocabulary is scoped to `.figure--drawn`, so it never fights the renderer on the philosophy page | tutorial pages |
 | `home.css` | hero, section labels, topic cards | home, about |
 | `about.css` | acknowledgement cards, colophon facts | about |
 

@@ -122,10 +122,13 @@ Rules:
 1. **One file per topology family**, not per template. `basic.js`, `bridge-ladder.js`,
    `grid.js`, `random-grid.js`, `current-source.js`, `dependent.js`. Group by what a student
    would call the shape.
-   Note that **the two §3 deep dives have no generators at all**: `topics/wheatstone-bridge/`
-   and `topics/delta-wye/` are tutorial pages that draw one fixed figure each and let the
-   student dial its values, so there is nothing for the registry to hold. See
-   [TUTORIALS.md](TUTORIALS.md) before adding a generator "for" either of them.
+   Note that **no tutorial page has a generator**. `topics/wheatstone-bridge/` and
+   `topics/delta-wye/` draw one fixed figure each and let the student dial its values, so there
+   is nothing for the registry to hold. `topics/philosophy/` does hold five real circuits, but
+   they live in `js/tutorial/philosophy.js` and are deliberately **not** registered: they are
+   teaching specimens, each built to make one point about equation counts, and a solver page
+   filtering the registry by element type would pick them up and start setting them as
+   problems. See [TUTORIALS.md](TUTORIALS.md) before adding a generator "for" any of the three.
 2. **Register, don't export.** The file's only side effect is `C.register()` calls.
 3. **Everything shared goes through `C`** — `C.build`, `C.pick`, `C.pickR`, `C.pickV`,
    `C.degenerate`. Never re-declare the E12 value list or re-implement union-find locally.

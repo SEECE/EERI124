@@ -161,6 +161,22 @@
 .lesson-eq .frac { font-size: 0.95em; }
 .lesson-eq-note { display: block; margin-top: var(--sp-2); font-family: var(--font); font-size: 11.5px; color: var(--text-faint); }
 
+/* ── the equation count, one table per method (the philosophy tutorial) ──
+   Deliberately shaped like a till receipt: a starting count, the discounts under it, a rule,
+   and the total. The winning total is the one thing on the page worth colouring. */
+.tally { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tally th {
+  font-weight: 500;
+  text-align: left;
+  color: var(--text-faint);
+  padding: 3px 0;
+}
+.tally td { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-dim); padding: 3px 0; }
+.tally .tally-sum th { color: var(--text); font-weight: 650; padding-top: 6px; }
+.tally .tally-sum td { color: var(--text); font-size: 14px; padding-top: 6px; }
+.tally .tally-sum th, .tally .tally-sum td { border-top: 1px solid var(--line-hi); }
+.tally .tally-sum.is-win th, .tally .tally-sum.is-win td { color: var(--aqua-300); }
+
 /* the side-by-side reading table (Δ reads / Y reads) that closes the Δ-Y guide */
 .pair-table { width: 100%; border-collapse: collapse; font-family: var(--font); font-size: 12.5px; }
 .pair-table th {
@@ -199,33 +215,36 @@
 .lesson-dot:hover { background: var(--violet-400); }
 .lesson-dot[aria-current='true'] { background: var(--violet-400); border-color: var(--violet-300); }
 
-/* ── what the figure is drawn with (paper palette; see structure/FRONTEND.md) ── */
-.figure .wire { stroke: var(--ink); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
-.figure .res { stroke: var(--ink); stroke-width: 2.2; fill: none; stroke-linejoin: round; }
-.figure .term { fill: var(--ink); }
-.figure .hub { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
-.figure text { font-family: var(--font); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; stroke-linejoin: round; }
-.figure .t-term { font-size: 15px; font-weight: 700; }
-.figure .t-tag { font-size: 12.5px; font-weight: 600; }
-.figure .t-cap { font-size: 12px; font-weight: 600; fill: var(--ink-faint); }
-.figure .t-sub { font-size: 0.72em; }
+/* ── what a HAND-DRAWN figure is made of (paper palette; see structure/FRONTEND.md) ──
+   Scoped to .figure--drawn, not .figure: the philosophy tutorial renders the real model into
+   its .figure with js/circuit.js, and these rules would out-specify the presentation
+   attributes that renderer writes — recolouring every value label and node letter on it. */
+.figure--drawn .wire { stroke: var(--ink); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.figure--drawn .res { stroke: var(--ink); stroke-width: 2.2; fill: none; stroke-linejoin: round; }
+.figure--drawn .term { fill: var(--ink); }
+.figure--drawn .hub { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.figure--drawn text { font-family: var(--font); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; stroke-linejoin: round; }
+.figure--drawn .t-term { font-size: 15px; font-weight: 700; }
+.figure--drawn .t-tag { font-size: 12.5px; font-weight: 600; }
+.figure--drawn .t-cap { font-size: 12px; font-weight: 600; fill: var(--ink-faint); }
+.figure--drawn .t-sub { font-size: 0.72em; }
 /* a derived quantity — the side of the figure the student is solving FOR */
-.figure .is-out { fill: var(--accent-deep); }
+.figure--drawn .is-out { fill: var(--accent-deep); }
 /* the detector needle: the one moving part on the site, and the whole point of the bridge
    page — a null is something you watch happen, not a number you are told */
-.figure .needle { stroke: var(--accent-deep); stroke-width: 2.6; stroke-linecap: round; }
+.figure--drawn .needle { stroke: var(--accent-deep); stroke-width: 2.6; stroke-linecap: round; }
 @media (prefers-reduced-motion: no-preference) {
-  .figure .needle { transition: none; }
+  .figure--drawn .needle { transition: none; }
 }
 
 /* the chapter's subject, and everything the chapter is not about */
-.figure .is-lit { stroke: var(--accent-hover); stroke-width: 3.4; }
-.figure text.is-lit { stroke: var(--surface); fill: var(--accent-hover); }
-.figure .is-dim { opacity: 0.26; }
-.figure .flow { stroke: var(--accent); fill: var(--accent); }
+.figure--drawn .is-lit { stroke: var(--accent-hover); stroke-width: 3.4; }
+.figure--drawn text.is-lit { stroke: var(--surface); fill: var(--accent-hover); }
+.figure--drawn .is-dim { opacity: 0.26; }
+.figure--drawn .flow { stroke: var(--accent); fill: var(--accent); }
 
 @media (prefers-reduced-motion: no-preference) {
-  .figure .wire, .figure .res, .figure text { transition: opacity var(--dur) var(--ease); }
+  .figure--drawn .wire, .figure--drawn .res, .figure--drawn text { transition: opacity var(--dur) var(--ease); }
 }
 
 /* ── narrow: one column, and the LAB is the single scroller (the shell still never scrolls) ── */

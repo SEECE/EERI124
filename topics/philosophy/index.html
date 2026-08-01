@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e0920" />
+  <title>Which method, and why — EERI 124</title>
+  <link rel="stylesheet" href="../../css/tokens.css" />
+  <link rel="stylesheet" href="../../css/base.css" />
+  <link rel="stylesheet" href="../../css/ribbon.css" />
+  <link rel="stylesheet" href="../../css/controls.css" />
+  <link rel="stylesheet" href="../../css/circuit.css" />
+  <link rel="stylesheet" href="../../css/tutorial.css" />
+</head>
+
+<body class="app">
+  <a class="skip-link" href="#figure">Skip to the circuit</a>
+
+  <header class="ribbon">
+    <a class="ribbon-brand" href="../../index.html">
+      <span class="ribbon-mark" aria-hidden="true"></span>
+      <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
+    </a>
+    <span class="ribbon-sep" aria-hidden="true"></span>
+    <h1 class="ribbon-title">Which Method, and Why</h1>
+    <nav class="ribbon-nav" data-nav data-base="../../" data-current="philosophy"
+      aria-label="Sections"></nav>
+  </header>
+
+  <!-- A tutorial page: board + lesson, no rail. The circuits are fixed teaching specimens,
+       not generated problems, and there is no technique to run. See structure/TUTORIALS.md. -->
+  <main class="lab">
+    <section class="board panel" aria-label="A worked comparison">
+      <div class="board-head">
+        <span class="eyebrow">Count before you solve</span>
+        <span class="badge badge--ok" id="verdict" role="status"></span>
+        <div class="seg" id="specimens" role="group" aria-label="Which circuit to count"></div>
+      </div>
+
+      <div class="figure">
+        <svg id="figure" role="img"
+          aria-label="The circuit being counted, with its node letters and mesh loops"></svg>
+      </div>
+
+      <div class="board-foot">
+        <div class="board-col">
+          <span class="eyebrow">Node-voltage — KCL</span>
+          <div id="node-tally"></div>
+        </div>
+        <div class="board-col">
+          <span class="eyebrow">Mesh-current — KVL</span>
+          <div id="mesh-tally"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="lesson panel" aria-label="Guide">
+      <header class="lesson-head">
+        <div class="lesson-head-top">
+          <span class="eyebrow">Guide</span>
+          <span class="lesson-count" id="lesson-count" aria-live="polite"></span>
+        </div>
+        <h2 class="lesson-title" id="lesson-title"></h2>
+      </header>
+
+      <div class="lesson-body scroller" id="lesson-body"></div>
+
+      <footer class="lesson-nav">
+        <button type="button" class="btn btn--soft btn--sm" id="lesson-prev">‹ Back</button>
+        <div class="lesson-dots" id="lesson-dots" role="group" aria-label="Jump to a chapter"></div>
+        <button type="button" class="btn btn--primary btn--sm" id="lesson-next">Next ›</button>
+      </footer>
+    </aside>
+  </main>
+
+  <script src="../../js/circuit.js"></script>
+  <script src="../../js/solve.js"></script>
+  <script src="../../js/tutorial/lesson.js"></script>
+  <script src="../../js/tutorial/philosophy.js"></script>
+  <script>
+    // The one tutorial page that uses the REAL renderer rather than js/tutorial/draw.js: these
+    // are ordinary circuits, which is exactly what js/circuit.js draws well, and reusing it
+    // gets the node letters and mesh loop-arrows for free — which are the two things this
+    // page needs the student to count. js/solve.js supplies the node lettering and the planar
+    // face extraction; the equation counts are worked out from the model, never written down.
+    PhilosophyLab();
+  </script>
+  <script src="../../js/ui/nav.js"></script>
+</body>
+
+</html>

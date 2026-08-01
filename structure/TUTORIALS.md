@@ -1,18 +1,18 @@
-# Tutorial pages — the two Study Unit 3 deep dives
+# Tutorial pages — the deep dives and the philosophy page
 
-**Read this before touching `topics/delta-wye/`, `topics/wheatstone-bridge/`, `css/tutorial.css`
-or anything in `js/tutorial/`.** The solver pages are [SOLVER.md](SOLVER.md); the shell they
+**Read this before touching `topics/delta-wye/`, `topics/wheatstone-bridge/`,
+`topics/philosophy/`, `css/tutorial.css` or anything in `js/tutorial/`.** The solver pages are [SOLVER.md](SOLVER.md); the shell they
 share is [FRONTEND.md](FRONTEND.md). This is the third kind of page on the site, and the point
 of the doc is to stop it drifting back into the second.
 
-## Why these two are not solver pages
+## Why these are not solver pages
 
 Every other topic page asks the same question: *here is a randomly generated circuit — apply a
 technique to it.* That is the right question for §3's networks and §4's sources, where the
 circuit changes every time and the method is what stays.
 
-It is the wrong question for these two topics, and they were built as solver pages first, which
-is how we found out:
+It is the wrong question for the two §3 deep dives, and they were built as solver pages first,
+which is how we found out:
 
 - **Δ-Y is not circuit analysis.** It is a rewriting rule for three resistors. Generating a
   random π network, running a nine-step solve on it and redrawing the result taught the student
@@ -23,12 +23,18 @@ is how we found out:
   reading nine steps about one frozen set of values. Nulling a bridge to measure an unknown —
   the thing the instrument exists for — cannot be expressed as a step list at all.
 
-So these pages have **no generator, no technique, no stepper, and no File menu**. There is
-nothing to import or export because there is no problem instance — the numbers are dialled in
-by the student and the figure is the same figure every visit.
+`topics/philosophy/` is here for a third reason: it is *about* the methods rather than being
+one. It answers the question every solver page leaves open — the Technique dropdown offers both
+KCL and KVL, so which do you pick? — and the answer is a count you do before any algebra starts.
 
-**Do not add a topology dropdown, a Technique dropdown or a Generate button to either page.**
-If a topic genuinely needs those, it is a solver page and belongs in [SOLVER.md](SOLVER.md).
+So these pages have **no generator, no technique, no stepper, and no File menu**. There is
+nothing to import or export because there is no problem instance.
+
+**The line that matters: no Technique dropdown and no stepper.** That is what makes a page a
+solver page ([SOLVER.md](SOLVER.md)), and a topic that needs them belongs there. Fixed circuits
+are fine — the philosophy page steps through five of them — but they are hand-picked
+*specimens*, chosen to make one point each, never generated. **Do not add a Generate button, a
+topology dropdown or a Technique dropdown to any of these three pages.**
 
 ## The shell: two regions, not three
 
@@ -45,20 +51,29 @@ the dials, and they belong next to the thing they change. Every [FRONTEND.md](FR
 still applies: grid rows, `min-height: 0`, exactly one `.scroller`, no magic-number heights.
 Under 1000px the two columns stack and `.lab` itself becomes the single scroller.
 
-## The figure is drawn by hand
+## The figure: hand-drawn, except once
 
-`js/tutorial/draw.js` (`Draw`) is a handful of SVG primitives — `wire`, `resistor` along an
+Two of the three pages draw their own figure. `js/tutorial/draw.js` (`Draw`) is a handful of SVG primitives — `wire`, `resistor` along an
 arbitrary segment, `dot`, `text` with subscripts, `arrow`. Each page builds its own figure from
 them and **throws the whole thing away and rebuilds on every change**; twenty-odd elements is
 cheaper to redraw than to diff, and a rebuilt figure cannot go stale.
 
-This does **not** replace `js/circuit.js`'s renderer, and neither page uses it. That renderer
-draws the `{nodes, edges}` model on an orthogonal grid, which is exactly right for a generated
-circuit and exactly wrong here: a Δ is a triangle, a Y is a star and a bridge is a diamond, and
-**the shape is the lesson**. Drawing a Δ as a grid rectangle would teach the wrong picture.
+This does **not** replace `js/circuit.js`'s renderer. That renderer draws the `{nodes, edges}`
+model on an orthogonal grid, which is exactly right for an ordinary circuit and exactly wrong
+for these two: a Δ is a triangle, a Y is a star and a bridge is a diamond, and **the shape is
+the lesson**. Drawing a Δ as a grid rectangle would teach the wrong picture.
 
-`Draw` sets no paint attributes — colour is `css/tutorial.css`'s job (`.figure .wire`, `.res`,
-`.is-lit`, `.is-out`). The figure sits on `--paper` and uses the same six renderer token names
+**`topics/philosophy/` is the exception and uses the real renderer**, because its specimens are
+ordinary circuits — precisely what `js/circuit.js` draws well — and reusing it also gets the
+node letters and the mesh loop-arrows for free, which are the two things that page needs the
+student to count. That is why `css/circuit.css` names `.figure` alongside `.stage` on every
+rule, and why `css/tutorial.css`'s SVG vocabulary is scoped to **`.figure--drawn`**: those
+rules would otherwise out-specify the presentation attributes the renderer writes and recolour
+every value label on the philosophy page. A hand-drawn page carries both classes; the
+philosophy page carries only `.figure`.
+
+`Draw` sets no paint attributes — colour is `css/tutorial.css`'s job (`.figure--drawn .wire`,
+`.res`, `.is-lit`, `.is-out`). The figure sits on `--paper` and uses the same six renderer token names
 FRONTEND.md pins down, so it matches the solver pages' stage.
 
 **Label positions are hand-placed constants** (`TAGPOS`), not computed offsets. The figures are
@@ -87,7 +102,7 @@ at A" is something the student sees rather than something they are told.
 
 ## Practice mode
 
-Both pages hide their computed values behind a `?` the student clicks, and swap the worked
+The two deep dives hide their computed values behind a `?` the student clicks, and swap the worked
 numeric formula for the symbolic rule while hidden — so the exercise is *substitute and
 divide*, not *read the answer off a filled-in fraction*. Any change to the inputs clears every
 reveal: new numbers mean a revealed answer is no longer the answer.
@@ -147,6 +162,38 @@ The last chapter hands off to `topics/delta-wye/`: an unbalanced bridge is exact
 series/parallel cannot reduce, and the Δ-Y page is where that gets fixed. The Δ-Y page's last
 chapter points back. Keep both links alive.
 
+## `topics/philosophy/` — which method, and why
+
+`js/tutorial/philosophy.js` (`PhilosophyLab`). Prof Holm's slides settle the choice in a
+parenthesis on step 1 — *"select to use node-voltage — least no of eq's"* — and this page makes
+that count visible.
+
+- **The counts are computed, never written down.** `tally()` reduces the real model to
+  Nilsson's **essential nodes** (three or more branches meet) and **essential branches** (a path
+  between two essential nodes through no other), then reads off
+
+      node-voltage equations = n_e − 1 − (whole-branch voltage sources)
+      mesh-current equations = (b_e − n_e + 1) − (current-source branches)
+
+  A source in series with a resistor collapses into one essential branch, which is exactly why
+  it does **not** hand the node method a free node — the supply-with-source-resistance specimen
+  turns on that detail.
+- **Sources are discounts, not obstacles.** A voltage source hands the *node* method one unknown
+  (pinned against the reference, or a supernode whose constraint gives one node from another); a
+  current source does the mirror thing for the *mesh* method. Which is the rule worth
+  remembering: **supernode ⇒ node-voltage, supermesh ⇒ mesh-current.**
+- **Five fixed specimens**, each chosen to make one point — node wins by a little, node wins
+  outright (nothing left to solve), mesh wins, supernode, and a bridge that ties three against
+  three. Their intended counts are pinned in `want` and asserted in the self-check, so an edit
+  to a coordinate cannot quietly turn a lesson into a different lesson.
+- **They are deliberately not registered as generators.** A solver page filtering the registry
+  by element type would pick them up and start setting them as problems; they are teaching
+  specimens. See [GENERATORS.md](GENERATORS.md).
+
+The last two chapters are the *why the steps run in that order* half of the page — each step of
+both methods exists to stop one specific mistake, and every one is cheaper than the step after
+it. Keep that grounded in the slides rather than in invention.
+
 ## Verifying
 
 `js/tutorial.test.html` — open in a browser, every line must read `PASS`. It mounts both pages'
@@ -163,6 +210,11 @@ which each real page leaves unset.) It covers:
   loading an unbalanced bridge (and power still balancing), the output scaling with the supply
   while the verdict does not, the needle centring at balance, and twenty generated unknowns all
   landing on the slider grid without starting balanced.
+- **Philosophy** — every specimen still producing the count it was chosen for, the mesh count
+  agreeing with `Solve.faces` (two independent routes to the same number), every specimen being
+  a real connected circuit whose power balances, no reduced node keeping fewer than three
+  branches, the gallery still covering node-wins / mesh-wins / a tie, and exactly one total
+  being flagged as the winner — none on a tie.
 
 Two things it cannot check, both of which need eyes:
 
