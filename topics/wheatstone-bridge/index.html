@@ -23,16 +23,8 @@
     </a>
     <span class="ribbon-sep" aria-hidden="true"></span>
     <h1 class="ribbon-title">Wheatstone Bridge</h1>
-    <nav class="ribbon-nav" aria-label="Topics">
-      <a href="../../index.html">Home</a>
-      <a href="../simple-resistive-circuits/index.html">Resistive</a>
-      <a href="../wheatstone-bridge/index.html" aria-current="page">Bridge</a>
-      <a href="../delta-wye/index.html">Δ-Y</a>
-      <a href="../current-sources/index.html">Current Sources</a>
-      <a href="../dependent-sources/index.html">Dependent Sources</a>
-      <a href="../circuit-builder/index.html">Builder</a>
-      <a href="../../about.html">About</a>
-    </nav>
+    <nav class="ribbon-nav" data-nav data-base="../../" data-current="wheatstone-bridge"
+      aria-label="Sections"></nav>
   </header>
 
   <!-- A tutorial page: board + lesson, no rail. There is no circuit to generate and no
@@ -106,6 +98,7 @@
     // visible: load the bridge with a real detector and the two stop agreeing.
     WheatstoneLab();
   </script>
+  <script src="../../js/ui/nav.js"></script>
 </body>
 
 </html>

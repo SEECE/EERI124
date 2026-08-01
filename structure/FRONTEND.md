@@ -94,6 +94,7 @@ freely — but the ids themselves cannot change without changing the script that
 
 | Ids | Read by |
 |---|---|
+| `[data-nav]` with `data-base` / `data-current` | `js/ui/nav.js` |
 | `#technique` `#topology` `#generate` `#canvas` `#circuit-set` `#terminals` `#termA` `#termB` | `js/solver-page.js` |
 | `#step-count` `#step-subcount` `#step-title` `#step-body` `#step-eq` `#step-board` `#step-prev` `#step-next` `#sub-prev` `#sub-next` | `js/stepper.js`, wired by `solver-page.js` |
 | everything in the `CircuitBuilder({…})` call | `js/builder.js` |
@@ -106,7 +107,9 @@ line, and the one `input[type=file]` inside is Open. See [FORMATS.md](FORMATS.md
 Class names the scripts emit or toggle are equally binding: `.edge` `.node` `.hl` `.show`
 `.node-label` `.ctrl-mark` `.pol-mark` `.flow-mark` `.dep-body` `.ground-symbol` (renderer,
 styled in `css/circuit.css`), `.eq-line` `.eq-peek` `.frac` `.kcl-status` `.eq-board`
-`.row-ready` `.step-badge` (step content, styled in `css/workbench.css`), `.palette-btn`
+`.row-ready` `.step-badge` (step content, styled in `css/workbench.css`), `.nav-top` `.nav-group`
+`.nav-menu` `.nav-item` `.nav-caret` `.nav-long` `.nav-short` (nav, styled in `css/ribbon.css`),
+`.palette-btn`
 `.grid-dot` `.grid-dot-bg` `.builder-edge` `.be-*` `.is-anchor` `.is-hover` `.is-ghost`
 `.is-selected` (builder, styled in `css/builder.css`).
 
@@ -135,10 +138,31 @@ shell it was given** — check that first. `tutorial.css` is the one earned exce
 deep dives are not solver pages at all (no generated circuit, so no rail), and they say so with
 a shell of their own. See [TUTORIALS.md](TUTORIALS.md).
 
-**The ribbon nav is repeated per page, and there are eight pages.** Adding a topic means editing
-the `.ribbon-nav` in all of them (home, about, and the six topic pages) — there is no template.
-Keep the labels short (`Bridge`, `Δ-Y`): the nav scrolls horizontally rather than wrapping, so a
-long label pushes the others out of sight on a laptop.
+## The ribbon nav
+
+**The nav is built by `js/ui/nav.js` from one site map — that file is the only place a page is
+named.** It used to be a flat row of links repeated in every page's markup, which meant adding a
+topic edited eight files, and by the eighth link the row no longer fitted a laptop ribbon. Now
+each page carries an empty
+
+    <nav class="ribbon-nav" data-nav data-base="../../" data-current="delta-wye"></nav>
+
+and loads `js/ui/nav.js` at the end of `<body>`; the script fills every `[data-nav]` it finds, so
+no page makes a call. `data-base` is the path back to the site root (`''` at the root, `'../../'`
+inside `topics/`) and `data-current` is the page's id in the map.
+
+The map's groups **mirror the home page's sections** — Study Unit 3, Study Unit 4, Other — and
+the two must be kept in step. Adding a page is one entry in `MAP` plus one `.card` on home.
+
+A group opens on hover, on click, and whenever focus enters it; it closes on `Escape`, on a click
+elsewhere, and when the pointer or focus leaves. All three are needed: hover alone strands
+keyboard and touch users. `.ribbon-nav` therefore **must not** be a scroll container — an
+`overflow-x` there clips the open menu — so at narrow widths the group labels shorten
+(`.nav-long` / `.nav-short`) instead of the row scrolling.
+
+Without JavaScript there is no nav; the brand mark still links home. Every page on the site
+already needs JavaScript for its own content, so this is not a new dependency for anything but
+home and about.
 
 ## Verifying
 

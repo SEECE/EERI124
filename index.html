@@ -22,16 +22,8 @@
     </a>
     <span class="ribbon-sep" aria-hidden="true"></span>
     <span class="ribbon-title">Electrotechnique 1</span>
-    <nav class="ribbon-nav" aria-label="Topics">
-      <a href="index.html" aria-current="page">Home</a>
-      <a href="topics/simple-resistive-circuits/index.html">Resistive</a>
-      <a href="topics/wheatstone-bridge/index.html">Bridge</a>
-      <a href="topics/delta-wye/index.html">Δ-Y</a>
-      <a href="topics/current-sources/index.html">Current Sources</a>
-      <a href="topics/dependent-sources/index.html">Dependent Sources</a>
-      <a href="topics/circuit-builder/index.html">Builder</a>
-      <a href="about.html">About</a>
-    </nav>
+    <nav class="ribbon-nav" data-nav data-base="" data-current="home"
+      aria-label="Sections"></nav>
   </header>
 
   <main class="doc-main" id="main">
@@ -84,13 +76,18 @@
       </div>
     </section>
 
-    <!-- ── Build your own — hand-build a circuit, export it for the pages above ── -->
+    <!-- ── Other — everything that is not tied to one study unit ── -->
     <section class="home-section">
-      <h2 class="section-label">Build Your Own</h2>
+      <h2 class="section-label">Other</h2>
       <div class="card-grid">
         <a class="card" href="topics/circuit-builder/index.html">
           <h3 class="card-title">Circuit Builder</h3>
           <p class="card-sub">Draw a circuit on a grid, export the JSON, import it on any solver page</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+        <a class="card" href="about.html">
+          <h3 class="card-title">About</h3>
+          <p class="card-sub">Who built this, what it covers, and how it is put together</p>
           <span class="card-go" aria-hidden="true">→</span>
         </a>
       </div>
@@ -98,6 +95,7 @@
   </main>
 
   <footer class="site-foot">EERI 124 — Electrotechnique 1 · Ohm’s &amp; Kirchhoff’s laws, resistive networks</footer>
+  <script src="js/ui/nav.js"></script>
 </body>
 
 </html>

@@ -24,16 +24,8 @@
     </a>
     <span class="ribbon-sep" aria-hidden="true"></span>
     <h1 class="ribbon-title">Build a Circuit</h1>
-    <nav class="ribbon-nav" aria-label="Topics">
-      <a href="../../index.html">Home</a>
-      <a href="../simple-resistive-circuits/index.html">Resistive</a>
-      <a href="../wheatstone-bridge/index.html">Bridge</a>
-      <a href="../delta-wye/index.html">Δ-Y</a>
-      <a href="../current-sources/index.html">Current Sources</a>
-      <a href="../dependent-sources/index.html">Dependent Sources</a>
-      <a href="../circuit-builder/index.html" aria-current="page">Builder</a>
-      <a href="../../about.html">About</a>
-    </nav>
+    <nav class="ribbon-nav" data-nav data-base="../../" data-current="circuit-builder"
+      aria-label="Sections"></nav>
     <div class="ribbon-tools">
       <button type="button" class="icon-btn icon-btn--rail" data-panel="rail" aria-pressed="true"
         aria-label="Show or hide the controls panel"><span class="ptg" aria-hidden="true"></span></button>
@@ -159,6 +151,7 @@
       zoomIn: 'zoom-in', zoomOut: 'zoom-out', zoomFit: 'zoom-fit',
     });
   </script>
+  <script src="../../js/ui/nav.js"></script>
 </body>
 
 </html>
