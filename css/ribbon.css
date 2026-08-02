@@ -109,7 +109,7 @@
 .nav-menu {
   display: none;
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 40;
   min-width: 264px;
@@ -119,6 +119,17 @@
   border: 1px solid var(--line-hi);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+}
+/* Bridge the gap between the button and the panel. An absolutely positioned menu does not
+   extend its parent's box, so without this the pointer leaves .nav-group on the way down,
+   mouseleave fires, and the menu you were reaching for shuts under the cursor. */
+.nav-menu::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
 }
 .nav-group[data-open='true'] .nav-menu { display: block; }
 

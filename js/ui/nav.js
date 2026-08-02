@@ -13,12 +13,16 @@
    topics/), and `data-current` is the id of the page you are on — the group holding it is marked
    so a student can see where they are.
 
-   Behaviour: a group opens on hover, on click/tap, and whenever focus enters it; it closes on
-   Escape, on a click elsewhere, and when focus or the pointer leaves. That combination is what
-   makes it work with a mouse, a keyboard AND a touchscreen — a CSS-only :hover menu fails the
-   last two. */
+   Behaviour: a group opens on hover (pointing devices only), whenever focus enters it, and on
+   click; it closes on Escape, on a click elsewhere, and when focus or the pointer leaves. That
+   combination is what makes it work with a mouse, a keyboard AND a touchscreen — a CSS-only
+   :hover menu fails the last two, while hover bound on a touchscreen makes the first tap open
+   a menu and the click that follows immediately shut it again. */
 (function () {
   'use strict';
+
+  // Does this device actually hover? A touchscreen says no and gets click-to-toggle instead.
+  var HOVER = !!(window.matchMedia && window.matchMedia('(hover: hover)').matches);
 
   /* The site map. Groups mirror the home page's sections; keep them in step. `note` is the
      one-line hint shown under an item — the same job the card blurb does on home. */
@@ -118,18 +122,36 @@
     function isOpen(g) { return g.group.getAttribute('data-open') === 'true'; }
 
     groups.forEach(function (g) {
-      g.group.addEventListener('mouseenter', function () { open(g); });
-      g.group.addEventListener('mouseleave', function () { close(g); });
+      var timer = null;
+      function cancel() { if (timer) { clearTimeout(timer); timer = null; } }
+      function openNow() { cancel(); open(g); }
+      /* Closing on a delay, not immediately: a pointer travelling diagonally from the button
+         to the item it is aiming at clips the corner of the menu, and an instant close pulls
+         the menu out from under it. 160 ms is long enough to forgive that and short enough
+         that a menu never feels stuck open. */
+      function closeSoon() {
+        cancel();
+        if (typeof setTimeout !== 'function') { close(g); return; }
+        timer = setTimeout(function () { timer = null; close(g); }, 160);
+      }
+
+      if (HOVER) {
+        g.group.addEventListener('mouseenter', openNow);
+        g.group.addEventListener('mouseleave', closeSoon);
+      }
       // focusin/out covers the keyboard: tabbing into the button opens the menu, so the links
       // inside are reachable without ever needing a click
-      g.group.addEventListener('focusin', function () { open(g); });
+      g.group.addEventListener('focusin', openNow);
       g.group.addEventListener('focusout', function (e) {
-        if (!g.group.contains(e.relatedTarget)) close(g);
+        if (!g.group.contains(e.relatedTarget)) { cancel(); close(g); }
       });
-      // …and the click is what makes it work on a touchscreen, where hover never happens
+      // …and the click is what makes it work on a touchscreen, where hover never happens.
+      // On a device that DOES hover, the pointer has already opened the menu, so a toggle
+      // here would shut it the instant someone clicks the label they are pointing at.
       g.btn.addEventListener('click', function (e) {
         e.preventDefault();
-        if (isOpen(g)) close(g); else open(g);
+        if (HOVER) { openNow(); return; }
+        if (isOpen(g)) close(g); else openNow();
       });
     });
 

@@ -155,10 +155,23 @@ The map's groups **mirror the home page's sections** — Study Unit 3, Study Uni
 the two must be kept in step. Adding a page is one entry in `MAP` plus one `.card` on home.
 
 A group opens on hover, on click, and whenever focus enters it; it closes on `Escape`, on a click
-elsewhere, and when the pointer or focus leaves. All three are needed: hover alone strands
-keyboard and touch users. `.ribbon-nav` therefore **must not** be a scroll container — an
-`overflow-x` there clips the open menu — so at narrow widths the group labels shorten
+elsewhere, and when the pointer or focus leaves. All three routes are needed: hover alone
+strands keyboard and touch users. `.ribbon-nav` therefore **must not** be a scroll container —
+an `overflow-x` there clips the open menu — so at narrow widths the group labels shorten
 (`.nav-long` / `.nav-short`) instead of the row scrolling.
+
+Three details that a hover menu does not work without, all of them learned the hard way:
+
+1. **`.nav-menu::before` bridges the gap** between the button and the panel. An absolutely
+   positioned menu does not extend its parent's box, so without the bridge the pointer leaves
+   `.nav-group` on the way down, `mouseleave` fires, and the menu shuts under the cursor before
+   it can be clicked. If you change the menu's `top` offset, change the bridge with it.
+2. **Closing runs on a ~160 ms delay.** A pointer travelling diagonally to the item it is aiming
+   at clips the corner of the menu; an instant close pulls the menu out from under it.
+3. **Hover is bound only when the device hovers** (`matchMedia('(hover: hover)')`). On a
+   touchscreen a tap fires `mouseenter` *and* `click`, so binding both makes one tap open a menu
+   and immediately close it again. Hover devices get hover-to-open and no click toggle; the rest
+   get click-to-toggle.
 
 Without JavaScript there is no nav; the brand mark still links home. Every page on the site
 already needs JavaScript for its own content, so this is not a new dependency for anything but
