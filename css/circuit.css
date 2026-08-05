@@ -32,9 +32,10 @@
 .figure svg .node.hl { fill: var(--accent-hover); stroke: var(--accent); stroke-width: 3; r: 5.5px; }
 
 /* ── revealed on demand ── */
-/* node letters: hidden until the step that names them */
+/* node letters: shown from the start (like ctrl-mark below) so the drawing reads
+   against an LTspice schematic or a generation prompt without waiting for a step to name them */
 .stage svg .node-label,
-.figure svg .node-label { opacity: 0; }
+.figure svg .node-label { opacity: 1; }
 
 /* a dependent source's control variable (the iφ arrow / the + vΔ − pair on the resistor it
    reads) is shown from the start — the student must see which measured quantity the source is

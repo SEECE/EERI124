@@ -595,7 +595,7 @@
     var circleOf = {};
     circuit.nodes.forEach(function (n) {
       var p = byId[n.id];
-      circleOf[n.id] = el('circle', { 'class': 'node', 'data-nid': n.id, cx: p.x, cy: p.y, r: 3.5, fill: 'var(--ink)' }, svg);
+      circleOf[n.id] = el('circle', { 'class': 'node', 'data-nid': n.id, cx: p.x, cy: p.y, r: 3.5, fill: 'var(--surface)', stroke: 'var(--ink)', 'stroke-width': 2 }, svg);
     });
 
     // angular gaps around each node, widest first, so letters/ground/voltage readings drop
@@ -646,7 +646,7 @@
       fit(lx, ly, n.label);
       // hidden by default; a solver step reveals it via highlight({ labels: [nodeId] })
       // so letters appear when the method names them, not from the start
-      el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, svg)
+      el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 14, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, svg)
         .textContent = n.label;
     });
 
