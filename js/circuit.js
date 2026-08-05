@@ -483,7 +483,13 @@
         var deg = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
         var g = el('g', { transform: 'translate(' + mx + ',' + my + ') rotate(' + deg + ')' }, eg);
         el('rect', { x: -20, y: -8, width: 40, height: 16, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, rx: 2 }, g);
-        label(lx, ly, fmtR(e.value), eg);
+        // value sits inside the body, upright regardless of the resistor's own rotation — a
+        // second text node in the unrotated <g> would double the halo/stroke passes, so this
+        // one lives in the rotated group and is counter-rotated back to level
+        el('text', { transform: 'rotate(' + (-deg) + ')', 'text-anchor': 'middle', 'dominant-baseline': 'central',
+          fill: 'var(--ink-soft)', 'font-size': 11, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 3 }, g)
+          .textContent = fmtR(e.value);
+        fit(mx, my, fmtR(e.value));
         return;
       }
 
