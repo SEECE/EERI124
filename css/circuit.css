@@ -14,6 +14,12 @@
 .stage svg,
 .figure svg { -webkit-user-select: none; user-select: none; }
 
+/* hover a node or an edge to see which node letters it touches (its native title tooltip) */
+.stage svg .node,
+.figure svg .node,
+.stage svg .edge,
+.figure svg .edge { cursor: help; }
+
 .stage svg text,
 .figure svg text { paint-order: stroke; }
 

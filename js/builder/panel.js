@@ -15,7 +15,7 @@
   var LABEL = { select: 'Select', W: 'Wire', R: 'Resistor', V: 'Voltage source', I: 'Current source',
     DEP: 'Dependent source', E: 'VCVS', F: 'CCCS', G: 'VCCS', H: 'CCVS' };
   var KEY = { select: 'S', W: 'W', R: 'R', V: 'V', I: 'I', DEP: 'D' };
-  var UNIT = { R: 'Ω', V: 'V', I: 'A', E: '×', F: '×', G: 'Ω', H: 'Ω' };
+  var UNIT = { R: 'Ω', V: 'V', I: 'A', E: 'multiplier', F: 'multiplier', G: 'Ω', H: 'Ω' };
   var DEFAULT_SHOWN = { R: 220, V: 12, I: 0.05, E: 2, F: 2, G: 500, H: 220 };
   var DESC = {
     select: 'Click an element to edit its value, flip it or delete it.',

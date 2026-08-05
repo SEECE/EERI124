@@ -260,7 +260,13 @@
     function ang(hi) { var h = H[hi], t = pos[h.tail], d = pos[h.head]; return Math.atan2(d.y - t.y, d.x - t.x); }
     Object.keys(out).forEach(function (v) { out[v].sort(function (a, b) { return ang(a) - ang(b); }); });
     var rank = {}; Object.keys(out).forEach(function (v) { out[v].forEach(function (hi, k) { rank[hi] = k; }); });
-    function next(hi) { var t = hi ^ 1, v = H[t].tail, lst = out[v]; return lst[(rank[t] + 1) % lst.length]; }
+    // previous (not next) in ascending-angle order at v: ascending atan2 sweeps clockwise on
+    // screen (y grows downward), so stepping backward is what traces bounded faces clockwise —
+    // the convention meshCurrents() and every drawn loop arrow assume. Stepping forward traces
+    // bounded faces counterclockwise instead (verified against a 2×1 grid of squares): mesh
+    // currents still solve correctly since the system is internally consistent either way, but
+    // a current source aligned with the drawn clockwise arrow would report a negative current.
+    function next(hi) { var t = hi ^ 1, v = H[t].tail, lst = out[v]; return lst[(rank[t] - 1 + lst.length) % lst.length]; }
 
     var seen = {}, faceList = [], faceOf = {};
     H.forEach(function (_, hi) {

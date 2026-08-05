@@ -394,7 +394,7 @@
     return e;
   }
   function fmtR(v) { return v >= 1000 ? (v / 1000) + ' kΩ' : v + ' Ω'; }
-  function fmtI(v) { return v >= 1 ? v + ' A' : Math.round(v * 1000) + ' mA'; }
+  function fmtI(v) { return v >= 1 ? v + ' A' : Math.round(v * 10000) / 10 + ' mA'; }
 
   function render(circuit, svg) {
     // PX = grid spacing in user units; the viewBox scales to the canvas, so symbols/text (fixed
@@ -422,6 +422,8 @@
 
     var byId = {};
     circuit.nodes.forEach(function (n) { byId[n.id] = { x: n.x * PX, y: n.y * PX }; });
+    var nodeLabelOf = {};
+    circuit.nodes.forEach(function (n) { nodeLabelOf[n.id] = n.label || n.id; });
     var ctl = controls(circuit);
 
     function line(x1, y1, x2, y2, parent) {
@@ -442,6 +444,12 @@
         (x - ux * 7 + vx * 4) + ',' + (y - uy * 7 + vy * 4) + ' ' +
         (x - ux * 7 - vx * 4) + ',' + (y - uy * 7 - vy * 4),
         fill: colour }, parent);
+    }
+    // a shaft ending AT the tip (x,y) draws straight through the arrowhead — stop it 7 short,
+    // at the head's base, so the head reads as an arrow rather than a line poking out its point
+    function arrowLine(x1, y1, x, y, ux, uy, vx, vy, colour, parent) {
+      el('line', { x1: x1, y1: y1, x2: x - ux * 7, y2: y - uy * 7, stroke: colour, 'stroke-width': 2 }, parent);
+      arrowAt(x, y, ux, uy, vx, vy, colour, parent);
     }
     function label(x, y, text, parent, opts) {
       opts = opts || {};
@@ -468,6 +476,7 @@
       var loff = e.type === 'R' ? 34 : 42;
       var lx = mx - uy * loff * side, ly = my + ux * loff * side;
       var eg = el('g', { 'class': 'edge edge-' + e.type, 'data-eid': e.id }, svg);
+      el('title', {}, eg).textContent = (nodeLabelOf[e.a] || e.a) + ' – ' + (nodeLabelOf[e.b] || e.b);
 
       if (e.type === 'W') { line(a.x, a.y, b.x, b.y, eg); return; }
 
@@ -483,7 +492,14 @@
         var deg = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
         var g = el('g', { transform: 'translate(' + mx + ',' + my + ') rotate(' + deg + ')' }, eg);
         el('rect', { x: -20, y: -8, width: 40, height: 16, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, rx: 2 }, g);
-        label(lx, ly, fmtR(e.value), eg);
+        // value sits inside the body, read along the resistor's own long axis so it fits the
+        // rect at any angle — a vertical resistor's rect is only 16px wide, too narrow for
+        // level text. Snapped to the (-90,90] equivalent of deg so it is never upside down.
+        var tdeg = ((deg % 180) + 180) % 180; if (tdeg > 90) tdeg -= 180;
+        el('text', { transform: 'rotate(' + (tdeg - deg) + ')', 'text-anchor': 'middle', 'dominant-baseline': 'central',
+          fill: 'var(--ink-soft)', 'font-size': 11, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 3 }, g)
+          .textContent = fmtR(e.value);
+        fit(mx, my, fmtR(e.value));
         return;
       }
 
@@ -505,8 +521,7 @@
         // pushes current out of its b terminal.
         var reach = dep ? 12 : 10;
         var tx = mx + ux * reach, ty = my + uy * reach;   // arrow tip, inside the body
-        el('line', { x1: mx - ux * reach, y1: my - uy * reach, x2: tx, y2: ty, stroke: 'var(--accent-deep)', 'stroke-width': 2 }, eg);
-        arrowAt(tx, ty, ux, uy, vx, vy, 'var(--accent-deep)', eg);
+        arrowLine(mx - ux * reach, my - uy * reach, tx, ty, ux, uy, vx, vy, 'var(--accent-deep)', eg);
       } else {
         // V / E / H — b is the + terminal
         var off = dep ? 10 : 7;
@@ -535,8 +550,7 @@
         // a current arrow beside the resistor, running the control edge's own a → b sense
         var base = 24 + tier * 22;
         var p0 = at(-14, base), p1 = at(14, base);
-        el('line', { x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: 'var(--accent-hover)', 'stroke-width': 2 }, mg);
-        arrowAt(p1.x, p1.y, ux, uy, G.vx, G.vy, 'var(--accent-hover)', mg);
+        arrowLine(p0.x, p0.y, p1.x, p1.y, ux, uy, G.vx, G.vy, 'var(--accent-hover)', mg);
         var it = at(0, base + 15);
         label(it.x, it.y, mk.plain, mg, { fill: 'var(--accent-hover)', size: 13, weight: 700, halo: 4 });
       } else {
@@ -581,8 +595,7 @@
         var s = pr[1];                               // +1: the a end, at −ux from the middle
         function at(al) { return { x: G.mx - G.ux * al * s + G.vx * 12 * G.side, y: G.my - G.uy * al * s + G.vy * 12 * G.side }; }
         var p0 = at(40), p1 = at(26);                // on the lead, between the node and the body
-        el('line', { x1: p0.x, y1: p0.y, x2: p1.x, y2: p1.y, stroke: 'var(--accent-hover)', 'stroke-width': 2 }, g);
-        arrowAt(p1.x, p1.y, G.ux * s, G.uy * s, G.vx, G.vy, 'var(--accent-hover)', g);   // tip points away from the node
+        arrowLine(p0.x, p0.y, p1.x, p1.y, G.ux * s, G.uy * s, G.vx, G.vy, 'var(--accent-hover)', g);   // tip points away from the node
       });
     });
 
@@ -590,6 +603,7 @@
     circuit.nodes.forEach(function (n) {
       var p = byId[n.id];
       circleOf[n.id] = el('circle', { 'class': 'node', 'data-nid': n.id, cx: p.x, cy: p.y, r: 3.5, fill: 'var(--ink)' }, svg);
+      el('title', {}, circleOf[n.id]).textContent = nodeLabelOf[n.id];
     });
 
     // angular gaps around each node, widest first, so letters/ground/voltage readings drop
@@ -757,7 +771,11 @@
       var sa = -70 * Math.PI / 180, ea = 250 * Math.PI / 180;
       var sx = cx + rx * Math.cos(sa), sy = cy + ry * Math.sin(sa);
       var ex = cx + rx * Math.cos(ea), ey = cy + ry * Math.sin(ea);
-      el('path', { d: 'M ' + sx + ' ' + sy + ' A ' + rx + ' ' + ry + ' 0 1 1 ' + ex + ' ' + ey, fill: 'none', stroke: 'var(--accent-hover)', 'stroke-width': 2 }, g);
+      // the stroke stops a touch before the true end angle so the arrowhead (drawn at ex,ey
+      // below) reads as an arrow rather than the curve running straight through its point
+      var eaLine = ea - 8 / ((rx + ry) / 2);
+      var exL = cx + rx * Math.cos(eaLine), eyL = cy + ry * Math.sin(eaLine);
+      el('path', { d: 'M ' + sx + ' ' + sy + ' A ' + rx + ' ' + ry + ' 0 1 1 ' + exL + ' ' + eyL, fill: 'none', stroke: 'var(--accent-hover)', 'stroke-width': 2 }, g);
       // arrowhead at the arc end, along the clockwise tangent of the ellipse at that angle
       var fwd = Math.atan2(ry * Math.cos(ea), -rx * Math.sin(ea)), ah = 8;
       var c1 = fwd + Math.PI + 0.4, c2 = fwd + Math.PI - 0.4;
