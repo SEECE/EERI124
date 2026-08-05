@@ -394,7 +394,7 @@
     return e;
   }
   function fmtR(v) { return v >= 1000 ? (v / 1000) + ' kΩ' : v + ' Ω'; }
-  function fmtI(v) { return v >= 1 ? v + ' A' : Math.round(v * 1000) + ' mA'; }
+  function fmtI(v) { return v >= 1 ? v + ' A' : Math.round(v * 10000) / 10 + ' mA'; }
 
   function render(circuit, svg) {
     // PX = grid spacing in user units; the viewBox scales to the canvas, so symbols/text (fixed
@@ -422,6 +422,8 @@
 
     var byId = {};
     circuit.nodes.forEach(function (n) { byId[n.id] = { x: n.x * PX, y: n.y * PX }; });
+    var nodeLabelOf = {};
+    circuit.nodes.forEach(function (n) { nodeLabelOf[n.id] = n.label || n.id; });
     var ctl = controls(circuit);
 
     function line(x1, y1, x2, y2, parent) {
@@ -474,6 +476,7 @@
       var loff = e.type === 'R' ? 34 : 42;
       var lx = mx - uy * loff * side, ly = my + ux * loff * side;
       var eg = el('g', { 'class': 'edge edge-' + e.type, 'data-eid': e.id }, svg);
+      el('title', {}, eg).textContent = (nodeLabelOf[e.a] || e.a) + ' – ' + (nodeLabelOf[e.b] || e.b);
 
       if (e.type === 'W') { line(a.x, a.y, b.x, b.y, eg); return; }
 
@@ -489,10 +492,11 @@
         var deg = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
         var g = el('g', { transform: 'translate(' + mx + ',' + my + ') rotate(' + deg + ')' }, eg);
         el('rect', { x: -20, y: -8, width: 40, height: 16, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 2, rx: 2 }, g);
-        // value sits inside the body, upright regardless of the resistor's own rotation — a
-        // second text node in the unrotated <g> would double the halo/stroke passes, so this
-        // one lives in the rotated group and is counter-rotated back to level
-        el('text', { transform: 'rotate(' + (-deg) + ')', 'text-anchor': 'middle', 'dominant-baseline': 'central',
+        // value sits inside the body, read along the resistor's own long axis so it fits the
+        // rect at any angle — a vertical resistor's rect is only 16px wide, too narrow for
+        // level text. Snapped to the (-90,90] equivalent of deg so it is never upside down.
+        var tdeg = ((deg % 180) + 180) % 180; if (tdeg > 90) tdeg -= 180;
+        el('text', { transform: 'rotate(' + (tdeg - deg) + ')', 'text-anchor': 'middle', 'dominant-baseline': 'central',
           fill: 'var(--ink-soft)', 'font-size': 11, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 3 }, g)
           .textContent = fmtR(e.value);
         fit(mx, my, fmtR(e.value));
@@ -598,7 +602,8 @@
     var circleOf = {};
     circuit.nodes.forEach(function (n) {
       var p = byId[n.id];
-      circleOf[n.id] = el('circle', { 'class': 'node', 'data-nid': n.id, cx: p.x, cy: p.y, r: 3.5, fill: 'var(--surface)', stroke: 'var(--ink)', 'stroke-width': 2 }, svg);
+      circleOf[n.id] = el('circle', { 'class': 'node', 'data-nid': n.id, cx: p.x, cy: p.y, r: 3.5, fill: 'var(--ink)' }, svg);
+      el('title', {}, circleOf[n.id]).textContent = nodeLabelOf[n.id];
     });
 
     // angular gaps around each node, widest first, so letters/ground/voltage readings drop
@@ -649,7 +654,7 @@
       fit(lx, ly, n.label);
       // hidden by default; a solver step reveals it via highlight({ labels: [nodeId] })
       // so letters appear when the method names them, not from the start
-      el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 14, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, svg)
+      el('text', { 'class': 'node-label', 'data-nlabel': n.id, x: lx, y: ly, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: 'var(--accent-deep)', 'font-size': 14, 'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, svg)
         .textContent = n.label;
     });
 

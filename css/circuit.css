@@ -14,6 +14,12 @@
 .stage svg,
 .figure svg { -webkit-user-select: none; user-select: none; }
 
+/* hover a node or an edge to see which node letters it touches (its native title tooltip) */
+.stage svg .node,
+.figure svg .node,
+.stage svg .edge,
+.figure svg .edge { cursor: help; }
+
 .stage svg text,
 .figure svg text { paint-order: stroke; }
 
@@ -32,10 +38,9 @@
 .figure svg .node.hl { fill: var(--accent-hover); stroke: var(--accent); stroke-width: 3; r: 5.5px; }
 
 /* ── revealed on demand ── */
-/* node letters: shown from the start (like ctrl-mark below) so the drawing reads
-   against an LTspice schematic or a generation prompt without waiting for a step to name them */
+/* node letters: hidden until the step that names them */
 .stage svg .node-label,
-.figure svg .node-label { opacity: 1; }
+.figure svg .node-label { opacity: 0; }
 
 /* a dependent source's control variable (the iφ arrow / the + vΔ − pair on the resistor it
    reads) is shown from the start — the student must see which measured quantity the source is
