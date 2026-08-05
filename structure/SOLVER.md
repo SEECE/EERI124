@@ -16,11 +16,19 @@ offers whichever techniques make sense for its circuits, through the same **Tech
 | `topics/current-sources/` (§4) | the above **plus independent current sources** | KCL, KVL only |
 | `topics/dependent-sources/` (§4) | the above **plus the four controlled sources** | KCL, KVL only |
 
-Both solver pages share **`js/solver-page.js`** (registry → topology dropdown, stepper wiring,
+Every solver page shares **`js/solver-page.js`** (registry → topology dropdown, stepper wiring,
 technique switch). A page differs only in which generator files it loads, its `Circuit.list`
 filter(s), and which `<option>`s its Technique dropdown carries — never in logic. Equivalent
 resistance stays on §3: it needs sources to *deactivate*, and deactivating a current source
 (open circuit) is a Thévenin-era idea, not this page's.
+
+**Neither §3 deep dive is on this list — they are tutorial pages**
+([TUTORIALS.md](TUTORIALS.md)). Both were built as solver pages first, which is how we learned
+they should not be: a Δ-Y transform is a rewriting rule for three resistors rather than an
+analysis technique, and a Wheatstone bridge is an instrument whose behaviour you learn by moving
+an arm and watching the detector. Running either as generate-a-circuit-then-walk-nine-steps
+taught the student how the *page* worked. They now have no generator, no technique and no
+stepper of their own.
 
 `topics/current-sources/` loads §3's generator files too and offers a **Circuit set** dropdown
 (`#circuit-set`) alongside Topology: its own I-bearing circuits (`tags: ['current-source']`),
@@ -94,7 +102,7 @@ so, rather than dividing by zero.
 | **Controls** | `js/techniques/controls.js` | `ControlVars` — everything a step list says about a dependent source (type names, symbol, gain label, sign-aware term text, marker key) plus `Lin`, the key-agnostic linear form. |
 | **Engine** | `js/solve.js` | `si` (SI/engineering value formatting), `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (**MNA**, any number of sources), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
 | **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — sets up equations in step 6, hand-works the solve in step 8), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
-| **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view, highlights the circuit via `Circuit.highlight`. |
+| **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view and highlights the circuit via `Circuit.highlight`. |
 | **Page wiring** | `js/solver-page.js` | shared by every solver page: fills the topology dropdown from the registry, maps the technique dropdown to a builder, renders the circuit + drives the stepper. |
 | **Page** | `topics/<slug>/index.html` | picks generator files, the registry filter(s) and the technique options, then calls `SolverPage({ filter })` or, for a page with more than one topology set, `SolverPage({ sets })`. No logic of its own. |
 
@@ -113,7 +121,7 @@ A technique returns an array of steps:
 - `todo: true` → a muted **"Nothing to do"** badge.
 - `hl` → highlighted elements. The renderer wraps each edge in `<g class="edge" data-eid>` and tags
   each node circle `data-nid`; `Circuit.highlight(svg, hl)` toggles a `.hl` class (styled in
-  `css/solver.css`, which beats the renderer's presentation attributes). `hl.marks` reveals a
+  `css/circuit.css`, which beats the renderer's presentation attributes). `hl.marks` reveals a
   control variable's notation, keyed `'i:<edgeId>'` / `'v:<edgeId>'` — like `hl.labels`, a view
   that omits it *erases* the markers, so both techniques stamp the full set onto any view that
   is not about one particular source. `hl.pol` is the same idea for **resistor polarity** (step 4 of
@@ -125,11 +133,15 @@ A technique returns an array of steps:
   answered; both ends of a resistor between two unknown nodes carry one, at opposite ends of the
   element. **Once marked, both kinds stay for the rest of the method** — like the mesh loops, they
   ride on every later `hl` (KVL through `H()`, KCL through the step-list post-pass), and a view that
-  omits them erases the marks.
+  omits them erases the marks. `hl.ground` draws the earth symbol and `hl.volts` writes a node's
+  solved reading — and **a node can carry those two plus its letter at once**, so the renderer
+  spreads them over the node's open gaps (`data-gaps`) instead of each picking a spot on its own.
+  That is placement logic, not decoration: getting it wrong prints the reading over the letter.
 - `board` (optional) → the **running board** html (KCL: node voltages, KVL: mesh currents). The
   stepper renders it into its own element (`#step-board`), **pinned to the bottom of the panel**
-  (`css/solver.css`, `position: sticky`), so it stays in one place while the derivation scrolls
-  above it. Never concatenate the board into `body` — that was what made it jump around and vanish.
+  (its own grid row in the workbench — see [FRONTEND.md](FRONTEND.md)), so it stays in one place
+  while the derivation scrolls above it. Never concatenate the board into `body` — that was what
+  made it jump around and vanish.
   Build it with the technique's local `WB()` helper **at the point the view is created**: the board
   is time-varying, so stamping it later records the wrong state. A view with no `board` hides the
   panel — intended only for steps 1–5, before the first equation exists.
@@ -274,18 +286,15 @@ per step, over the **source** (remove it, reduce between its terminals → also 
 `P = V²/Req`) or between **two chosen nodes** (deactivate the source — a voltage source becomes a
 short — then reduce). Edge cases: hanging/dead-end branches carry no current and are pruned; no path
 → `Req = ∞` (open); a **bridge** (non-series-parallel) can't be collapsed by hand → the step says so
-and gives `Req` from nodal analysis. The **authoritative `Req` is the nodal value**; the reduction
-is the pedagogy and is verified to match `V/I` for every generator.
+and gives `Req` from nodal analysis (`topics/delta-wye/` is the tutorial that teaches the transform).
+The **authoritative `Req` is the nodal value**; the reduction is the pedagogy and is verified to
+match `V/I` for every **single-source** generator.
 
-## Adding a technique
-
-1. `js/techniques/<name>.js` exposing `window.<Name>(circuit[, opts]) → steps[]`; reuse
-   `js/solve.js` — never re-implement the linear solve or node contraction — and reuse
-   `js/techniques/kit.js` for the tables, formatting and expression objects rather than growing
-   a third copy of them.
-2. `<script>` it on the page, add a dropdown `<option>`, map it in `buildSteps()` in
-   `js/solver-page.js` (one switch, shared by every page).
-3. Add a case to `js/solve.test.html`.
+**Known limit — more than one source.** `over: 'source'` removes the *first* voltage source and
+reduces the resistor network between its terminals, while the other sources go on pushing current
+through it. So on a multi-source topology the reported `Req` is not `V/I` at the source, and the
+self-check deliberately skips those. Fixing it is a pedagogy decision (deactivate every source, or
+refuse the technique), not a bug fix — so it is written down here rather than quietly patched.
 
 ## The self-check
 

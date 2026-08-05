@@ -1,41 +1,68 @@
-/* Design tokens — the only file you edit to reskin the whole site.
-   Palette values are unchanged from the original; everything else is the shared
-   scale (spacing, elevation, motion) the rebuilt stylesheets consume. */
+/* Design tokens — the only file to edit to reskin the whole site.
+
+   Two palettes live here and they are NOT interchangeable:
+
+   1. CHROME (dark) — the app frame: ribbon, rail, workbench, cards. Purple leads, blue and
+      aqua support it. Use --panel / --text / --line / --violet-* for anything the student
+      clicks or reads in the UI.
+   2. PAPER (light) — the sheet the circuit is drawn on. js/circuit.js writes
+      var(--surface), var(--ink), var(--ink-soft), var(--accent), var(--accent-hover) and
+      var(--accent-deep) straight into the SVG as presentation attributes, so those six names
+      are a contract with the renderer: they must stay legible on --paper, and they must never
+      be used for chrome. --surface is the label halo colour and therefore has to equal the
+      paper it sits on. */
 :root {
-  /* ── palette (unchanged) ── */
-  --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  --surface: rgba(255, 255, 255, 0.95);
-  --accent: #8b5cf6;
-  --accent-hover: #7c3aed;
-  --accent-deep: #6b21a8;
-  --ink: #333;
-  --ink-soft: #4b5563;
-  --ink-faint: #9ca3af;
-  --danger: #c0392b;
+  color-scheme: dark;
 
-  /* derived surface tints (built from the accent above — no new hues) */
-  --accent-wash: rgba(139, 92, 246, 0.08);   /* 8b5cf6 @ 8%  — equation blocks, tags */
-  --accent-line: rgba(139, 92, 246, 0.18);   /* 8b5cf6 @ 18% — hairlines on wash */
-  --sunken: rgba(17, 24, 39, 0.04);          /* faint inset panels on white surface */
+  /* ── brand ramp ── */
+  --violet-100: #ede9fe;
+  --violet-200: #ddd6fe;
+  --violet-300: #c4b5fd;
+  --violet-400: #a78bfa;
+  --violet-500: #8b5cf6;
+  --violet-600: #7c3aed;
+  --violet-700: #6d28d9;
+  --blue-400: #60a5fa;
+  --aqua-400: #22d3ee;
+  --aqua-300: #67e8f9;
 
-  /* text on the coloured background */
-  --on-bg: #fff;
-  --on-bg-soft: rgba(255, 255, 255, 0.75);
-  --on-bg-faint: rgba(255, 255, 255, 0.5);
-  --hairline: rgba(255, 255, 255, 0.15);
+  /* ── chrome ── */
+  --shell: #0e0920;
+  --shell-2: #16102e;
+  --panel: #191233;
+  --panel-hi: #221a42;          /* inset block inside a panel (equations, boards, wells) */
+  --line: rgba(167, 139, 250, 0.16);
+  --line-hi: rgba(167, 139, 250, 0.38);
+  --text: #ece9fb;
+  --text-dim: #aba0cc;
+  --text-faint: #8f84b0;        /* 5.2:1 on --panel — the floor for 12px secondary text */
+  --danger: #fda4af;
+  --tint: rgba(139, 92, 246, 0.12);       /* accent wash on chrome */
+  --tint-aqua: rgba(34, 211, 238, 0.14);
+
+  /* ── paper + the six names js/circuit.js reads ── */
+  --paper: #fbfaff;
+  --surface: var(--paper);
+  --ink: #22193c;
+  --ink-soft: #574d78;
+  --ink-faint: #9a92b4;
+  --accent: var(--violet-500);
+  --accent-hover: var(--violet-600);
+  --accent-deep: #5b21b6;
 
   /* ── shape ── */
-  --radius: 14px;
+  --radius: 12px;
   --radius-sm: 8px;
+  --radius-xs: 6px;
   --radius-pill: 999px;
 
   /* ── elevation ── */
-  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.12);
-  --shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
-  --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.30);
-  --ring: 0 0 0 3px rgba(139, 92, 246, 0.45);   /* focus-visible outline */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --glow: 0 4px 16px rgba(124, 58, 237, 0.35);
+  --ring: 2px solid var(--aqua-400);       /* :focus-visible — reads on chrome AND on paper */
 
-  /* ── spacing scale (4px base) ── */
+  /* ── spacing (4px base) ── */
   --sp-1: 4px;
   --sp-2: 8px;
   --sp-3: 12px;
@@ -44,17 +71,23 @@
   --sp-6: 32px;
   --sp-7: 48px;
 
+  /* ── layout: the three regions. Collapsing a panel sets its track to 0 (workspace.css). ── */
+  --rail-w: clamp(196px, 15vw, 232px);
+  --wb-w: clamp(310px, 26vw, 404px);
+  --ribbon-h: 52px;
+  --content-max: 1080px;
+  /* the tutorial pages have two regions instead of three — board + lesson (tutorial.css) */
+  --lesson-w: clamp(330px, 30vw, 440px);
+
   /* ── motion ── */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --dur: 0.2s;
+  --dur: 0.18s;
 
   /* ── type ── */
-  --font: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  --font: ui-sans-serif, system-ui, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-math: 'STIX Two Math', 'Cambria Math', Cambria, 'Times New Roman', serif;
-  --content-max: 1040px;
 }
 
-/* respect users who ask the OS to reduce motion */
 @media (prefers-reduced-motion: reduce) {
   :root { --dur: 0s; }
 }

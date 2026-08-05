@@ -21,6 +21,7 @@
   <script src="techniques/controls.js"></script>
   <script src="techniques/mesh-current.js"></script>
   <script src="techniques/node-voltage.js"></script>
+  <script src="techniques/equivalent-resistance.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -303,6 +304,41 @@
             assert(mb.indexOf('<td>' + Solve.si(mc.i[mc.meshOf[f]], 'A') + '</td>') >= 0,
               'KVL board never reached i' + (idx + 1) + ' = ' + Solve.si(mc.i[mc.meshOf[f]], 'A'));
           });
+        }
+      });
+    });
+
+    // ---- shared assertions for any technique's step list ----
+    function noNaN(steps, label) {
+      assert(steps.length, label + ': no steps');
+      assert(!/undefined|NaN|Infinity/.test(JSON.stringify(steps)), label + ' step text has undefined/NaN/Infinity');
+      steps.forEach(function (s, k) {
+        assert(s.n === k + 1, label + ': steps numbered ' + steps.map(function (x) { return x.n; }).join(','));
+        [s].concat(s.subs || []).forEach(function (view) {
+          assert(String(view.title || s.title).trim(), label + ' step ' + s.n + ' has no title');
+          assert(String(view.body != null ? view.body : s.body).trim(), label + ' step ' + s.n + ' has no body');
+          assert(!/eq-board/.test(view.body || ''), label + ' step ' + s.n + ' baked the board into its body');
+        });
+      });
+    }
+    function reqOf(c) {
+      var v = c.edges.filter(function (e) { return e.type === 'V'; })[0];
+      var b = Solve.branches(c, Solve.nodeVoltages(c));
+      return v.value / Math.abs(b.filter(function (r) { return r.edge.id === v.id; })[0].current);
+    }
+
+    /* ---- equivalent resistance: the reduction is pedagogy, V/I is the truth ----
+       Single-source circuits only. With more than one source, "the resistance the source sees"
+       is not V/I at all: EquivResistance removes the FIRST source and reduces the resistor
+       network between its terminals, while the others go on pushing current through it. That is
+       a known limit of the technique, not a slip in the reduction. */
+    check('equivalent resistance agrees with V/I', function () {
+      Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
+        for (var i = 0; i < 8; i++) {
+          var c = g.generate(), st = EquivResistance(c, { over: 'source' });
+          noNaN(st, 'Req/' + g.name);
+          if (c.edges.filter(function (e) { return e.type === 'V'; }).length !== 1) continue;
+          assert(near(st.req, reqOf(c)), g.name + ': Req ' + st.req + ' ≠ V/I ' + reqOf(c));
         }
       });
     });

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e0920" />
+  <title>Δ-Y transformations — EERI 124</title>
+  <link rel="stylesheet" href="../../css/tokens.css" />
+  <link rel="stylesheet" href="../../css/base.css" />
+  <link rel="stylesheet" href="../../css/ribbon.css" />
+  <link rel="stylesheet" href="../../css/controls.css" />
+  <link rel="stylesheet" href="../../css/tutorial.css" />
+</head>
+
+<body class="app">
+  <a class="skip-link" href="#figure">Skip to the two networks</a>
+
+  <header class="ribbon">
+    <a class="ribbon-brand" href="../../index.html">
+      <span class="ribbon-mark" aria-hidden="true"></span>
+      <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
+    </a>
+    <span class="ribbon-sep" aria-hidden="true"></span>
+    <h1 class="ribbon-title">Δ-Y Transformations</h1>
+    <nav class="ribbon-nav" data-nav data-base="../../" data-current="delta-wye"
+      aria-label="Sections"></nav>
+  </header>
+
+  <!-- Two regions, not the solver pages' three: there is no circuit to generate and no
+       technique to pick, so there is nothing for a rail to hold. See structure/TUTORIALS.md. -->
+  <main class="lab">
+    <section class="board panel" aria-label="The two networks">
+      <div class="board-head">
+        <span class="eyebrow">Δ and Y, side by side</span>
+        <div class="seg" role="group" aria-label="Which way to transform">
+          <button type="button" id="dir-dy" aria-pressed="true">Δ → Y</button>
+          <button type="button" id="dir-yd" aria-pressed="false">Y → Δ</button>
+        </div>
+        <div class="seg" role="group" aria-label="Starting values">
+          <button type="button" data-preset="equal">Equal</button>
+          <button type="button" data-preset="spread">10 · 20 · 30</button>
+          <button type="button" data-preset="random">Random</button>
+        </div>
+        <button type="button" class="btn btn--ghost btn--sm" id="practice" aria-pressed="false">
+          Practice mode: off</button>
+      </div>
+
+      <div class="figure figure--drawn">
+        <svg id="figure" viewBox="0 0 720 360" preserveAspectRatio="xMidYMid meet" role="img"
+          aria-label="A delta network of three resistors beside a wye network of three resistors, sharing terminals A, B and C"></svg>
+      </div>
+
+      <div class="board-foot">
+        <div class="board-col">
+          <span class="eyebrow" id="given-label">Given — the Δ</span>
+          <div id="dials"></div>
+        </div>
+        <div class="board-col board-col--out">
+          <span class="eyebrow" id="out-label">Computed — the Y</span>
+          <div id="results"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="lesson panel" aria-label="Guide">
+      <header class="lesson-head">
+        <div class="lesson-head-top">
+          <span class="eyebrow">Guide</span>
+          <span class="lesson-count" id="lesson-count" aria-live="polite"></span>
+        </div>
+        <h2 class="lesson-title" id="lesson-title"></h2>
+      </header>
+
+      <div class="lesson-body scroller" id="lesson-body"></div>
+
+      <footer class="lesson-nav">
+        <button type="button" class="btn btn--soft btn--sm" id="lesson-prev">‹ Back</button>
+        <div class="lesson-dots" id="lesson-dots" role="group" aria-label="Jump to a chapter"></div>
+        <button type="button" class="btn btn--primary btn--sm" id="lesson-next">Next ›</button>
+      </footer>
+    </aside>
+  </main>
+
+  <script src="../../js/solve.js"></script>
+  <script src="../../js/tutorial/draw.js"></script>
+  <script src="../../js/tutorial/lesson.js"></script>
+  <script src="../../js/tutorial/delta-wye.js"></script>
+  <script>
+    // js/solve.js is loaded for Solve.si alone — every displayed quantity on the site goes
+    // through it, so "0.1 Ω" and "2.2 kΩ" read the same here as on a solver page. None of the
+    // rest of the solver is used: this page's arithmetic is the three transform formulas and
+    // two series/parallel readings, which IS the lesson and so is worked in the open.
+    DeltaWyeLab();
+  </script>
+  <script src="../../js/ui/nav.js"></script>
+</body>
+
+</html>

@@ -60,10 +60,12 @@ nodes, edges }` — `meta.elements` is just the distinct type codes present, a c
 can reject on before even validating. `Circuit.importJSON(data, allowedElements?)` is the
 reverse: parses, `validate()`s, requires the result connected and carrying at least one
 independent source (`V`/`I` — the same rule a generator's output must already satisfy), and,
-if `allowedElements` is given, rejects any type outside it. Every solver page's Import button
-calls this with its own element set (see `SolverPage`'s `opts.elements` in
-[SOLVER.md](SOLVER.md)); `topics/circuit-builder/` (`js/builder.js`) is what writes these files
-by hand, and calls the same function on its own Export to catch a bad circuit before saving it.
+if `allowedElements` is given, rejects any type outside it.
+
+Both are wrapped by **`js/formats/native.js`**, which is what the File button actually calls —
+it adds the `.eeri` header and the friendly error messages. See [FORMATS.md](FORMATS.md) for the
+on-disk shape, and for the LTspice writers that consume the same model. Nothing outside
+`js/formats/` should be building a file by hand.
 
 ## Dependent sources
 
@@ -120,6 +122,13 @@ Rules:
 1. **One file per topology family**, not per template. `basic.js`, `bridge-ladder.js`,
    `grid.js`, `random-grid.js`, `current-source.js`, `dependent.js`. Group by what a student
    would call the shape.
+   Note that **no tutorial page has a generator**. `topics/wheatstone-bridge/` and
+   `topics/delta-wye/` draw one fixed figure each and let the student dial its values, so there
+   is nothing for the registry to hold. `topics/philosophy/` does hold five real circuits, but
+   they live in `js/tutorial/philosophy.js` and are deliberately **not** registered: they are
+   teaching specimens, each built to make one point about equation counts, and a solver page
+   filtering the registry by element type would pick them up and start setting them as
+   problems. See [TUTORIALS.md](TUTORIALS.md) before adding a generator "for" any of the three.
 2. **Register, don't export.** The file's only side effect is `C.register()` calls.
 3. **Everything shared goes through `C`** — `C.build`, `C.pick`, `C.pickR`, `C.pickV`,
    `C.degenerate`. Never re-declare the E12 value list or re-implement union-find locally.

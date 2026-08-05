@@ -103,6 +103,14 @@
     return {
       load: function (s) { steps = s || []; i = 0; sub = 0; render(); },
       go: go,
+      /* The resolved view the student is looking at right now, plus where it sits in the walk.
+         Anything that wants to act on "this step" (js/ui/step-prompt.js) reads it from here
+         rather than scraping the rendered panel. */
+      current: function () {
+        var s = steps[i], v = view();
+        if (!v) return null;
+        return { step: s, view: v, index: i, total: steps.length, sub: sub, subTotal: subsOf(s).length };
+      },
     };
   };
 })();
