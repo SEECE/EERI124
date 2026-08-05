@@ -20,12 +20,10 @@
    ['R','V','I','W'] for current-sources). Only used to validate an imported file (see below);
    unrelated to opts.filter/sets, which pick generators, not imports.
 
-   #export-circuit (button) and #import-circuit (file input), if present in the DOM, get
-   Export/Import wired automatically: Export downloads the current circuit as JSON
-   (Circuit.exportJSON); Import reads a chosen file, validates it (Circuit.importJSON,
-   rejecting element types outside opts.elements) and, on success, solves/renders it — same
-   circuit-builder JSON format topics/circuit-builder/ writes. Errors show in #import-error if
-   present, else alert(). */
+   A `.filemenu` element in the rail, if present, gets the shared File button wired to it
+   (js/ui/filemenu.js): Open reads a .eeri circuit file, validates it against opts.elements and
+   solves/renders it; Save writes .eeri, an LTspice schematic (.asc) or an LTspice netlist
+   (.cir). See structure/FORMATS.md. */
 (function () {
   'use strict';
 
@@ -126,36 +124,30 @@
       runTechnique();
     }
 
-    var exportBtn = document.getElementById('export-circuit');
-    var importInput = document.getElementById('import-circuit');
-    var importError = document.getElementById('import-error');
-    if (exportBtn) {
-      exportBtn.addEventListener('click', function () {
-        if (!circuit) return;
-        var blob = new Blob([JSON.stringify(Circuit.exportJSON(circuit), null, 2)], { type: 'application/json' });
-        var a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = (topoSel.value || 'circuit').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.json';
-        a.click();
-        URL.revokeObjectURL(a.href);
+    // Open/Save live behind the rail's File button (js/ui/filemenu.js) — the same control on
+    // every page, and the only route to the LTspice writers. A page without one just has no
+    // file support; nothing else here depends on it.
+    var fileRoot = document.querySelector('.filemenu');
+    if (fileRoot && window.FileMenu) {
+      FileMenu({
+        root: fileRoot,
+        getCircuit: function () { return circuit; },
+        name: function () { return topoSel.value; },
+        elements: opts.elements,
+        onOpen: function (c) { circuit = c; runTechnique(); },
       });
     }
-    if (importInput) {
-      importInput.addEventListener('change', function () {
-        var file = importInput.files[0];
-        importInput.value = '';
-        if (!file) return;
-        var reader = new FileReader();
-        reader.onload = function () {
-          if (importError) importError.textContent = '';
-          try {
-            circuit = Circuit.importJSON(JSON.parse(reader.result), opts.elements);
-            runTechnique();
-          } catch (err) {
-            if (importError) importError.textContent = err.message; else alert(err.message);
-          }
-        };
-        reader.readAsText(file);
+
+    // "Ask Midnjoy about this step" — copies a prompt for the step the student is on
+    if (window.StepPrompt) {
+      StepPrompt({
+        button: document.getElementById('ask-midnjoy'),
+        note: document.getElementById('midnjoy-note'),
+        stepper: stepper,
+        circuit: function () { return circuit; },
+        context: function () {
+          return { technique: techSel.options[techSel.selectedIndex].text, topology: topoSel.value };
+        },
       });
     }
 

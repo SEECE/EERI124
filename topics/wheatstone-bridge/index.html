@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e0920" />
+  <title>Wheatstone bridge — EERI 124</title>
+  <link rel="stylesheet" href="../../css/tokens.css" />
+  <link rel="stylesheet" href="../../css/base.css" />
+  <link rel="stylesheet" href="../../css/ribbon.css" />
+  <link rel="stylesheet" href="../../css/controls.css" />
+  <link rel="stylesheet" href="../../css/tutorial.css" />
+</head>
+
+<body class="app">
+  <a class="skip-link" href="#figure">Skip to the bridge</a>
+
+  <header class="ribbon">
+    <a class="ribbon-brand" href="../../index.html">
+      <span class="ribbon-mark" aria-hidden="true"></span>
+      <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
+    </a>
+    <span class="ribbon-sep" aria-hidden="true"></span>
+    <h1 class="ribbon-title">Wheatstone Bridge</h1>
+    <nav class="ribbon-nav" data-nav data-base="../../" data-current="wheatstone-bridge"
+      aria-label="Sections"></nav>
+  </header>
+
+  <!-- A tutorial page: board + lesson, no rail. There is no circuit to generate and no
+       technique to choose. See structure/TUTORIALS.md. -->
+  <main class="lab">
+    <section class="board panel" aria-label="The bridge">
+      <div class="board-head">
+        <span class="eyebrow">The bridge</span>
+        <span class="badge badge--ok" id="verdict" role="status">Balanced — the detector reads zero</span>
+        <div class="seg" role="group" aria-label="What to do with the bridge">
+          <button type="button" id="mode-explore" aria-pressed="true">Explore</button>
+          <button type="button" id="mode-measure" aria-pressed="false">Measure an unknown</button>
+        </div>
+        <div class="seg" id="detectors" role="group" aria-label="Detector resistance">
+          <button type="button" data-detector="ideal" aria-pressed="true">Ideal detector</button>
+          <button type="button" data-detector="100" aria-pressed="false">100 Ω</button>
+          <button type="button" data-detector="10" aria-pressed="false">10 Ω</button>
+        </div>
+      </div>
+
+      <div class="figure figure--drawn">
+        <svg id="figure" viewBox="0 0 760 400" preserveAspectRatio="xMidYMid meet" role="img"
+          aria-label="A Wheatstone bridge: four resistors in a diamond, a supply across the vertical diagonal and a detector with a needle across the horizontal one"></svg>
+      </div>
+
+      <div class="board-foot">
+        <div class="board-col">
+          <span class="eyebrow">Arms and supply</span>
+          <div id="dials"></div>
+          <div class="unknown" id="unknown" hidden>
+            <span class="unknown-out" id="unknown-out" role="status"></span>
+            <button type="button" class="btn btn--soft btn--sm" id="new-unknown">New unknown</button>
+            <button type="button" class="btn btn--ghost btn--sm" id="reveal">Reveal</button>
+          </div>
+        </div>
+        <div class="board-col board-col--out">
+          <span class="eyebrow">Readings</span>
+          <div id="results"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="lesson panel" aria-label="Guide">
+      <header class="lesson-head">
+        <div class="lesson-head-top">
+          <span class="eyebrow">Guide</span>
+          <span class="lesson-count" id="lesson-count" aria-live="polite"></span>
+        </div>
+        <h2 class="lesson-title" id="lesson-title"></h2>
+      </header>
+
+      <div class="lesson-body scroller" id="lesson-body"></div>
+
+      <footer class="lesson-nav">
+        <button type="button" class="btn btn--soft btn--sm" id="lesson-prev">‹ Back</button>
+        <div class="lesson-dots" id="lesson-dots" role="group" aria-label="Jump to a chapter"></div>
+        <button type="button" class="btn btn--primary btn--sm" id="lesson-next">Next ›</button>
+      </footer>
+    </aside>
+  </main>
+
+  <script src="../../js/solve.js"></script>
+  <script src="../../js/tutorial/draw.js"></script>
+  <script src="../../js/tutorial/lesson.js"></script>
+  <script src="../../js/tutorial/wheatstone.js"></script>
+  <script>
+    // js/solve.js is doing real work here, not just formatting: every reading on this page is
+    // the shared engine solving a four-node model of the bridge by modified nodal analysis —
+    // the same solve the solver pages run. The two-divider formulas the guide derives are
+    // shown BESIDE that answer, never instead of it, which is what makes chapter 7's trap
+    // visible: load the bridge with a real detector and the two stop agreeing.
+    WheatstoneLab();
+  </script>
+  <script src="../../js/ui/nav.js"></script>
+</body>
+
+</html>

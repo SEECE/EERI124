@@ -21,6 +21,7 @@
   <script src="techniques/controls.js"></script>
   <script src="techniques/mesh-current.js"></script>
   <script src="techniques/node-voltage.js"></script>
+  <script src="techniques/equivalent-resistance.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -236,6 +237,28 @@
           // step 6 (first equation written) on it must never blank out — in either technique
           var kcl = NodeVoltage(c);
           assert(!/undefined|NaN/.test(JSON.stringify(kcl)), 'KCL step text has undefined/NaN');
+          // step 4's marks are keyed '<edgeId>:<terminalNodeId>' — KVL's polarity pairs (pol) and
+          // KCL's leaving-current arrows (flow). Only what the renderer pre-drew can be revealed,
+          // so a key naming the wrong terminal shows nothing; and once marked they stay to the end.
+          if (i === 0) {
+            var psvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            Circuit.render(c, psvg);
+            var drawn = {};
+            Array.prototype.forEach.call(psvg.querySelectorAll('.pol-mark'), function (pg) { drawn[pg.getAttribute('data-pol')] = 1; });
+            Array.prototype.forEach.call(psvg.querySelectorAll('.flow-mark'), function (pg) { drawn[pg.getAttribute('data-flow')] = 1; });
+            var marksOf = function (view) { return (((view.hl || {}).pol) || []).concat(((view.hl || {}).flow) || []); };
+            [steps, kcl].forEach(function (list) {
+              if (!marksOf(list[3]).length) return;         // no unknown node → no KCL, nothing marked
+              list.slice(3).forEach(function (s2) {
+                [s2].concat(s2.subs || []).forEach(function (view) {
+                  var keys = marksOf(view);
+                  // inside step 4 the set is still growing (the first walk view has none yet)
+                  if (s2.n > 4) assert(keys.length, 'step ' + s2.n + ' view "' + (view.title || 'overview') + '" lost step 4’s marks');
+                  keys.forEach(function (key) { assert(drawn[key], 'step 4 mark ' + key + ' is not on the drawing'); });
+                });
+              });
+            });
+          }
           [steps, kcl].forEach(function (list) {
             list.forEach(function (s2) {
               [s2].concat(s2.subs || []).forEach(function (view) {
@@ -281,6 +304,41 @@
             assert(mb.indexOf('<td>' + Solve.si(mc.i[mc.meshOf[f]], 'A') + '</td>') >= 0,
               'KVL board never reached i' + (idx + 1) + ' = ' + Solve.si(mc.i[mc.meshOf[f]], 'A'));
           });
+        }
+      });
+    });
+
+    // ---- shared assertions for any technique's step list ----
+    function noNaN(steps, label) {
+      assert(steps.length, label + ': no steps');
+      assert(!/undefined|NaN|Infinity/.test(JSON.stringify(steps)), label + ' step text has undefined/NaN/Infinity');
+      steps.forEach(function (s, k) {
+        assert(s.n === k + 1, label + ': steps numbered ' + steps.map(function (x) { return x.n; }).join(','));
+        [s].concat(s.subs || []).forEach(function (view) {
+          assert(String(view.title || s.title).trim(), label + ' step ' + s.n + ' has no title');
+          assert(String(view.body != null ? view.body : s.body).trim(), label + ' step ' + s.n + ' has no body');
+          assert(!/eq-board/.test(view.body || ''), label + ' step ' + s.n + ' baked the board into its body');
+        });
+      });
+    }
+    function reqOf(c) {
+      var v = c.edges.filter(function (e) { return e.type === 'V'; })[0];
+      var b = Solve.branches(c, Solve.nodeVoltages(c));
+      return v.value / Math.abs(b.filter(function (r) { return r.edge.id === v.id; })[0].current);
+    }
+
+    /* ---- equivalent resistance: the reduction is pedagogy, V/I is the truth ----
+       Single-source circuits only. With more than one source, "the resistance the source sees"
+       is not V/I at all: EquivResistance removes the FIRST source and reduces the resistor
+       network between its terminals, while the others go on pushing current through it. That is
+       a known limit of the technique, not a slip in the reduction. */
+    check('equivalent resistance agrees with V/I', function () {
+      Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
+        for (var i = 0; i < 8; i++) {
+          var c = g.generate(), st = EquivResistance(c, { over: 'source' });
+          noNaN(st, 'Req/' + g.name);
+          if (c.edges.filter(function (e) { return e.type === 'V'; }).length !== 1) continue;
+          assert(near(st.req, reqOf(c)), g.name + ': Req ' + st.req + ' ≠ V/I ' + reqOf(c));
         }
       });
     });

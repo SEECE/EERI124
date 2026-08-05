@@ -372,12 +372,28 @@
       })),
     });
 
-    // Step 4 — KCL prelude, one substep per unknown node
+    // Step 4 — KCL prelude, one substep per unknown node.
+    // What this method assumes is a DIRECTION, not a polarity: every unknown current leaves the
+    // node. So the drawing gets an arrow off each of the node's resistors, pointing away from it —
+    // a + … − pair would only invite the question "which end is +?", whose answer is the direction
+    // we just assumed. Both ends of a resistor between two unknown nodes get one (each belongs to
+    // its own node's sum, and they sit at opposite ends of the element), and once drawn an arrow
+    // stays for the rest of the method: `curFlow` grows through step 4 and rides on every hl after.
+    function flowAt(g, e) { return e.id + ':' + (of[e.a] === g ? e.a : e.b); }
+    var flowDrawn = {}, curFlow = [];
+    function flowAdd(g) {   // mark node g's resistors as "current leaves here", return the set so far
+      resAt(g).forEach(function (e) { flowDrawn[flowAt(g, e)] = 1; });
+      return (curFlow = Object.keys(flowDrawn));
+    }
+    // the full set the walk ends on — a PINNED node writes no sum, so it assumes nothing and
+    // contributes no arrow (step 4 says as much on its own substep)
+    var flowAll = P.unknown.filter(function (g) { return !P.pinnedOf[g]; })
+      .reduce(function (a, g) { resAt(g).forEach(function (e) { a.push(flowAt(g, e)); }); return a; }, []);
     steps.push({
       n: 4, title: 'Set up KCL at each unknown node',
-      body: m ? 'Every node not fixed by a source needs one equation. Assume all unknown currents leave the node; by KCL their sum is zero. Each current is (v<sub>node</sub> − v<sub>neighbour</sub>)/R (Ohm’s law). Step through each node.'
+      body: m ? 'Every node not fixed by a source needs one equation. Assume all unknown currents leave the node; by KCL their sum is zero. Each current is (v<sub>node</sub> − v<sub>neighbour</sub>)/R (Ohm’s law). That assumption is drawn as an arrow on each resistor leaving the node. A resistor between two unknown nodes gets an arrow at <i>both</i> ends — each node writes its own sum, and both assumptions can be made at once; whichever one is backwards simply comes out negative at the end. The arrows stay on for the rest of the solve. Step through each node.'
         : 'Every node voltage is already fixed by the sources — there are no unknowns, so no KCL equation is needed.',
-      hl: { nodes: P.unknown.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
+      hl: { nodes: P.unknown.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []), flow: flowAll },
       subs: P.unknown.map(function (g) {
         var rs = resAt(g), is = isrcAt(g), ds = depIAt(g), pin = P.pinnedOf[g];
         if (pin) {
@@ -387,16 +403,18 @@
             body: 'Node <b>' + L(g) + '</b> is reached from the known node <b>' + L(pin.from) + '</b> through a <b>' + CV.long(pin.e) +
               '</b>. No KCL sum can be written here — the current through that source is an unknown in its own right, not something Ohm’s law gives us. Instead the source’s own equation <i>is</i> node ' + L(g) +
               '’s equation, and it is written in step 7.',
-            hl: { nodes: nodeIdsOf(g), edges: [pin.e.id], marks: [CV.markKey(pin.e)] } };
+            hl: { nodes: nodeIdsOf(g), edges: [pin.e.id], marks: [CV.markKey(pin.e)], flow: curFlow } };
         }
         var body = 'At node <b>' + L(g) + '</b>, sum the currents leaving through ' + rs.length + ' resistor' + (rs.length === 1 ? '' : 's') +
-          ' and set the total to zero:<br>Σ (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R = 0.';
+          ' and set the total to zero:<br>Σ (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R = 0. The arrows now on ' +
+          L(g) + '’s resistors all point away from it — that is the assumption, drawn.';
         if (is.length) body += ' A current source also meets this node, and its current is already known — it joins the sum as a plain number (' +
           is.map(function (e) { return (leaveSign(e, g) > 0 ? 'leaving: +' : 'entering: −') + si(e.value, 'A'); }).join(', ') + ').';
         if (ds.length) body += ' A <b>dependent</b> current source meets it too. It joins the same sum, and in the same place — the only difference is that it goes in as its symbol (' +
           ds.map(function (e) { return CV.gain(e); }).join(', ') + ') rather than as a number, because we do not know its value yet.';
         return { title: 'node ' + L(g), body: body,
           hl: { nodes: nodeIdsOf(g), edges: rs.concat(is).concat(ds).map(function (e) { return e.id; }),
+            flow: flowAdd(g),
             marks: ds.map(function (e) { return CV.markKey(e); }) } };
       }),
     });
@@ -1074,11 +1092,14 @@
       if (s.n < 2) return;
       s.hl = s.hl || {}; s.hl.labels = labelledIds; s.hl.ground = groundIds;
       if (s.n >= 4 && !s.hl.marks) s.hl.marks = CV.marks;
+      // step 4's arrows stay on to the end (its own views carry the growing set and win here)
+      if (s.n >= 4 && !s.hl.flow) s.hl.flow = flowAll;
       if (s.n >= 3 && s.n <= 7) s.hl.volts = extend(fixedVolts, s.hl.volts || {});
       if (s.n >= 9) s.hl.volts = allVolts;
       (s.subs || []).forEach(function (ss) {
         ss.hl = ss.hl || {}; ss.hl.labels = labelledIds; ss.hl.ground = groundIds;
         if (s.n >= 4 && !ss.hl.marks) ss.hl.marks = CV.marks;
+        if (s.n >= 4 && !ss.hl.flow) ss.hl.flow = flowAll;
         if (s.n >= 3 && s.n <= 7) ss.hl.volts = extend(fixedVolts, ss.hl.volts || {});
         if (s.n >= 9) ss.hl.volts = allVolts;
       });

@@ -4,133 +4,154 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e0920" />
   <title>Build a circuit — EERI 124</title>
   <link rel="stylesheet" href="../../css/tokens.css" />
   <link rel="stylesheet" href="../../css/base.css" />
-  <link rel="stylesheet" href="../../css/circuit-page.css" />
+  <link rel="stylesheet" href="../../css/ribbon.css" />
+  <link rel="stylesheet" href="../../css/workspace.css" />
+  <link rel="stylesheet" href="../../css/controls.css" />
   <link rel="stylesheet" href="../../css/builder.css" />
 </head>
 
-<body>
-  <nav class="nav">
-    <a class="nav-brand" href="../../index.html">EERI 124 <span>· Electrotechnique 1</span></a>
-    <div class="nav-links">
-      <a href="../../index.html">Topics</a>
+<body class="app">
+  <a class="skip-link" href="#canvas">Skip to the grid</a>
+
+  <header class="ribbon">
+    <a class="ribbon-brand" href="../../index.html">
+      <span class="ribbon-mark" aria-hidden="true"></span>
+      <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
+    </a>
+    <span class="ribbon-sep" aria-hidden="true"></span>
+    <h1 class="ribbon-title">Build a Circuit</h1>
+    <nav class="ribbon-nav" data-nav data-base="../../" data-current="circuit-builder"
+      aria-label="Sections"></nav>
+    <div class="ribbon-tools">
+      <button type="button" class="icon-btn icon-btn--rail" data-panel="rail" aria-pressed="true"
+        aria-label="Show or hide the controls panel"><span class="ptg" aria-hidden="true"></span></button>
     </div>
-  </nav>
+  </header>
 
-  <main class="page circuit-page">
-    <header class="circuit-topbar">
-      <nav class="breadcrumb"><a href="../../index.html">Topics</a> / Build a circuit</nav>
-      <h1>Build a circuit</h1>
-    </header>
+  <div class="workspace workspace--duo" data-rail="open">
+    <aside class="rail panel scroller" id="rail" aria-label="Builder controls">
+      <div class="field">
+        <label class="field-label" for="level">Complexity</label>
+        <select class="ctl" id="level"></select>
+      </div>
 
-    <div class="circuit-layout">
-      <aside class="circuit-sidebar builder-sidebar">
-        <div class="control-group">
-          <h3>Complexity</h3>
-          <select id="level"></select>
-        </div>
+      <div class="field">
+        <span class="field-label">Tool</span>
+        <div class="palette" id="palette"></div>
+      </div>
 
-        <div class="sidebar-split">
-          <div class="sidebar-pane">
-            <h3>Element</h3>
-            <div class="palette" id="palette"></div>
+      <div class="field props">
+        <span class="field-label" id="prop-title"></span>
+
+        <div class="field" id="dep-toggles">
+          <div class="toggle-group">
+            <span>Controlled by</span>
+            <label><input type="radio" name="dep-ctrl" value="v" checked /> Voltage</label>
+            <label><input type="radio" name="dep-ctrl" value="i" /> Current</label>
           </div>
-          <div class="sidebar-divider"></div>
-          <div class="sidebar-pane">
-            <h3>Tune</h3>
-            <div class="dep-toggles" id="dep-toggles">
-              <div class="toggle-group">
-                <span>Controlled by</span>
-                <label><input type="radio" name="dep-ctrl" value="v" checked /> Voltage</label>
-                <label><input type="radio" name="dep-ctrl" value="i" /> Current</label>
-              </div>
-              <div class="toggle-group">
-                <span>Delivers</span>
-                <label><input type="radio" name="dep-out" value="v" checked /> Voltage</label>
-                <label><input type="radio" name="dep-out" value="i" /> Current</label>
-              </div>
-            </div>
-            <div class="value-row" id="value-row">
-              <input type="number" id="value-input" step="any" />
-              <span id="value-unit"></span>
-            </div>
-            <div class="control-row" id="control-row">
-              <span>reads</span>
-              <select id="control-select"></select>
-              <select id="control-dir"></select>
-            </div>
-            <p class="type-desc" id="type-desc"></p>
-
-            <h3 class="pane-subhead">Grid size</h3>
-            <div class="grid-size-pair">
-              <div class="grid-size-row">
-                <span>Cols</span>
-                <button id="cols-minus">−</button>
-                <span id="cols-count"></span>
-                <button id="cols-plus">+</button>
-              </div>
-              <div class="grid-size-row">
-                <span>Rows</span>
-                <button id="rows-minus">−</button>
-                <span id="rows-count"></span>
-                <button id="rows-plus">+</button>
-              </div>
-            </div>
+          <div class="toggle-group">
+            <span>Delivers</span>
+            <label><input type="radio" name="dep-out" value="v" checked /> Voltage</label>
+            <label><input type="radio" name="dep-out" value="i" /> Current</label>
           </div>
         </div>
 
-        <div class="control-group">
-          <p class="builder-hint">Click a grid dot, then an adjacent dot to add the selected
-            element between them. Click an existing element to remove it.</p>
+        <div class="field" id="value-row">
+          <div class="field-row">
+            <input class="ctl" type="number" id="value-input" step="any" inputmode="decimal"
+              autocomplete="off" aria-label="Element value" />
+            <span class="value-unit" id="value-unit"></span>
+          </div>
         </div>
-        <div class="control-group">
-          <button id="clear">Clear</button>
+
+        <div class="field" id="control-row">
+          <div class="field-row">
+            <select class="ctl" id="control-select" aria-label="Control resistor"></select>
+            <select class="ctl" id="control-dir" aria-label="Control direction"></select>
+          </div>
         </div>
-        <div class="control-group">
-          <h3>Import / Export</h3>
-          <button id="export-circuit">Export JSON</button>
-          <label class="file-label">Import JSON
-            <input type="file" id="import-circuit" accept="application/json" hidden />
+
+        <div class="btn-row" id="prop-actions">
+          <button type="button" class="btn btn--soft btn--sm" id="flip">Flip</button>
+          <button type="button" class="btn btn--ghost btn--sm" id="delete">Delete</button>
+        </div>
+
+        <p class="field-note" id="type-desc"></p>
+      </div>
+
+      <div class="field">
+        <span class="field-label">Edit</span>
+        <div class="btn-row">
+          <button type="button" class="btn btn--soft" id="undo">↶ Undo</button>
+          <button type="button" class="btn btn--soft" id="redo">↷ Redo</button>
+        </div>
+        <button type="button" class="btn btn--ghost btn--block" id="clear">Clear the Grid</button>
+      </div>
+
+      <div class="field filemenu rail-spacer">
+        <span class="field-label">File</span>
+        <button type="button" class="btn btn--soft btn--block" data-file-toggle aria-expanded="false"
+          aria-controls="file-actions"><span class="file-caret" aria-hidden="true"></span> Open or Save</button>
+        <div class="file-actions" id="file-actions" data-file-actions hidden>
+          <label class="file-action" for="file-open">Open Circuit…
+            <small>a .eeri file saved anywhere on this site</small>
+            <input type="file" id="file-open" accept=".eeri,.json,application/json" class="sr-only" />
           </label>
-          <div class="import-error" id="builder-error"></div>
+          <button type="button" class="file-action" data-save="native">Save Circuit
+            <small>.eeri — solve it on any topic page</small></button>
+          <button type="button" class="file-action" data-save="asc">Save LTspice Schematic
+            <small>.asc — open and simulate it in LTspice</small></button>
+          <button type="button" class="file-action" data-save="cir">Save LTspice Netlist
+            <small>.cir — simulates any circuit, dependent sources included</small></button>
         </div>
-      </aside>
+        <p class="field-note" data-file-note role="status"></p>
+      </div>
+    </aside>
 
-      <div class="circuit-canvas"><svg id="canvas"></svg></div>
-    </div>
-  </main>
+    <section class="stage panel" aria-label="Circuit grid">
+      <svg id="canvas" class="builder-canvas" role="img"
+        aria-label="Circuit grid — empty"></svg>
+      <div class="canvas-bar">
+        <p class="canvas-status" id="builder-status" role="status"></p>
+        <div class="canvas-zoom">
+          <button type="button" class="canvas-btn" id="zoom-out" aria-label="Zoom out">−</button>
+          <button type="button" class="canvas-btn" id="zoom-fit" aria-label="Fit the circuit to the canvas">⤢</button>
+          <button type="button" class="canvas-btn" id="zoom-in" aria-label="Zoom in">+</button>
+        </div>
+      </div>
+    </section>
 
-  <footer>EERI 124 — Electrotechnique 1</footer>
+    <button type="button" class="scrim" aria-label="Close the open panel"></button>
+  </div>
 
   <script src="../../js/circuit.js"></script>
+  <script src="../../js/formats/native.js"></script>
+  <script src="../../js/formats/ltspice.js"></script>
+  <script src="../../js/ui/filemenu.js"></script>
+  <script src="../../js/builder/model.js"></script>
+  <script src="../../js/builder/view.js"></script>
+  <script src="../../js/builder/editor.js"></script>
+  <script src="../../js/builder/panel.js"></script>
   <script src="../../js/builder.js"></script>
+  <script src="../../js/ui/shell.js"></script>
   <script>
     CircuitBuilder({
-      canvas: 'canvas',
-      level: 'level',
-      palette: 'palette',
-      valueRow: 'value-row',
-      valueInput: 'value-input',
-      unit: 'value-unit',
+      canvas: 'canvas', status: 'builder-status',
+      level: 'level', palette: 'palette',
+      propTitle: 'prop-title', typeDesc: 'type-desc',
       depToggles: 'dep-toggles',
-      controlRow: 'control-row',
-      controlSelect: 'control-select',
-      controlDir: 'control-dir',
-      typeDesc: 'type-desc',
-      error: 'builder-error',
-      clear: 'clear',
-      exportBtn: 'export-circuit',
-      importInput: 'import-circuit',
-      colsMinus: 'cols-minus',
-      colsPlus: 'cols-plus',
-      colsCount: 'cols-count',
-      rowsMinus: 'rows-minus',
-      rowsPlus: 'rows-plus',
-      rowsCount: 'rows-count',
+      valueRow: 'value-row', valueInput: 'value-input', unit: 'value-unit',
+      controlRow: 'control-row', controlSelect: 'control-select', controlDir: 'control-dir',
+      propActions: 'prop-actions', flip: 'flip', delete: 'delete',
+      undo: 'undo', redo: 'redo', clear: 'clear',
+      zoomIn: 'zoom-in', zoomOut: 'zoom-out', zoomFit: 'zoom-fit',
     });
   </script>
+  <script src="../../js/ui/nav.js"></script>
 </body>
 
 </html>

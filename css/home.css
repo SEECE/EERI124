@@ -1,83 +1,93 @@
-/* Home page: hero header, section labels, topic card grid. */
-.home-header { text-align: center; margin-bottom: var(--sp-7); }
+/* Home — hero, section headings, topic cards. The only .doc page on the site. */
 
-.home-header h1 {
-  font-size: clamp(26px, 5vw, 44px);
-  color: var(--on-bg);
-  text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.3);
-  margin-bottom: var(--sp-2);
-  letter-spacing: -0.01em;
+.hero { max-width: 60ch; margin-bottom: clamp(28px, 5vh, 48px); }
+
+.hero-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--violet-300);
+  margin-bottom: var(--sp-3);
 }
-.home-header p { color: var(--on-bg-soft); font-size: 14px; }
+.hero h1 {
+  font-size: clamp(28px, 4.4vw, 42px);
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  background: linear-gradient(112deg, #fff 18%, var(--violet-300) 62%, var(--aqua-300));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero-sub { margin-top: var(--sp-4); font-size: 14.5px; line-height: 1.65; color: var(--text-dim); }
+
+.home-section + .home-section { margin-top: clamp(24px, 4vh, 40px); }
 
 .section-label {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
   font-size: 11px;
-  letter-spacing: 0.15em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--on-bg-faint);
-  padding-bottom: var(--sp-2);
-  border-bottom: 1px solid var(--hairline);
-  margin: var(--sp-6) 0 var(--sp-4);
+  color: var(--text-faint);
+  margin-bottom: var(--sp-4);
 }
+/* the rule that runs out from the label to the edge of the column */
+.section-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: var(--sp-4);
-}
+.card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(248px, 1fr)); gap: var(--sp-3); }
 
 .card {
-  display: block;
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: var(--sp-5) var(--sp-5) var(--sp-4);
-  box-shadow: var(--shadow);
-  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  padding: var(--sp-4) var(--sp-4) var(--sp-5);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
   overflow: hidden;
+  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
 }
-/* accent bar along the top edge, revealed on hover — same purple, no new colour */
+/* accent edge along the top, drawn in on hover */
 .card::before {
   content: '';
   position: absolute;
   inset: 0 0 auto 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-deep));
+  height: 2px;
+  background: linear-gradient(90deg, var(--violet-400), var(--aqua-400));
   transform: scaleX(0);
   transform-origin: left;
   transition: transform var(--dur) var(--ease);
 }
-.card::after {
-  content: '→';
+.card:hover { transform: translateY(-3px); border-color: var(--line-hi); box-shadow: var(--shadow), var(--glow); }
+.card:hover::before { transform: scaleX(1); }
+.card:hover .card-go { opacity: 1; transform: none; }
+
+/* No kicker badge on a card: the study-unit section heading above the grid already says
+   which unit these are, so repeating "§3" on every card in the §3 section was noise. */
+.card-title { font-size: 16px; color: var(--text); letter-spacing: -0.01em; }
+.card-sub { font-size: 12.5px; line-height: 1.55; color: var(--text-faint); overflow-wrap: break-word; }
+
+.card-go {
   position: absolute;
-  bottom: var(--sp-4);
-  right: var(--sp-5);
-  font-size: 18px;
-  color: var(--accent);
+  right: var(--sp-4);
+  bottom: var(--sp-3);
+  font-size: 15px;
+  color: var(--violet-300);
   opacity: 0;
-  transform: translateX(-6px);
+  transform: translateX(-5px);
   transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-.card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
-.card:hover::before { transform: scaleX(1); }
-.card:hover::after { opacity: 1; transform: translateX(0); }
 
-.card-title { font-size: 18px; font-weight: 700; color: var(--accent-deep); margin-bottom: var(--sp-1); letter-spacing: -0.01em; }
-.card-sub { font-size: 12px; color: var(--ink-faint); line-height: 1.5; }
+/* a topic whose visualiser is not built yet */
+.card--soon { opacity: 0.6; pointer-events: none; }
+.card--soon .card-go { display: none; }
 
-/* placeholder cards (visualiser not built yet) */
-.card--todo { opacity: 0.85; }
-.card--todo .card::after,
-.card--todo::after,
-.card--todo::before { content: none; }
-.card .tag {
-  display: inline-block;
-  margin-top: var(--sp-3);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--accent-hover);
-  background: #ede9fe;
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
+/* gradient text has no colour to fall back on in a forced-colours theme */
+@media (forced-colors: active) {
+  .hero h1 { color: CanvasText; -webkit-text-fill-color: CanvasText; }
 }

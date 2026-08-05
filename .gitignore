@@ -3,3 +3,5 @@ visualizations/
 Animations/
 fin-EERI124PBC2026.pdf
 *.ppt
+.agents
+skills-lock.json

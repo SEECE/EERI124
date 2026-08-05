@@ -4,58 +4,104 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e0920" />
   <title>EERI 124 — Electrotechnique 1 · Interactive Visualisations</title>
   <link rel="stylesheet" href="css/tokens.css" />
   <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/ribbon.css" />
   <link rel="stylesheet" href="css/home.css" />
 </head>
 
-<body>
-  <nav class="nav">
-    <a class="nav-brand" href="index.html">EERI 124 <span>· Electrotechnique 1</span></a>
-    <div class="nav-links">
-      <a href="index.html" aria-current="page">Topics</a>
-    </div>
-  </nav>
+<body class="doc">
+  <a class="skip-link" href="#main">Skip to content</a>
 
-  <main class="page">
-    <header class="home-header">
-      <h1>Electrotechnique 1 — Visualisations</h1>
-      <p>DC resistive-network analysis · North-West University</p>
-    </header>
+  <header class="ribbon">
+    <a class="ribbon-brand" href="index.html">
+      <span class="ribbon-mark" aria-hidden="true"></span>
+      <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
+    </a>
+    <span class="ribbon-sep" aria-hidden="true"></span>
+    <span class="ribbon-title">Electrotechnique 1</span>
+    <nav class="ribbon-nav" data-nav data-base="" data-current="home"
+      aria-label="Sections"></nav>
+  </header>
 
-
-
-    <!-- ── §2 Techniques in circuit analysis — the same techniques on harder circuits ── -->
-    <div class="section-label">Techniques in circuit analysis</div>
-
-    <div class="grid">
-      <a class="card" href="topics/simple-resistive-circuits/index.html">
-        <div class="card-title">Resistors &amp; voltage sources</div>
-        <div class="card-sub">KCL · KVL · equivalent resistance</div>
-      </a>
-      <a class="card" href="topics/current-sources/index.html">
-        <div class="card-title">Circuits with current sources</div>
-        <div class="card-sub">KCL &amp; KVL · known mesh currents · supermesh</div>
-      </a>
-      <a class="card" href="topics/dependent-sources/index.html">
-        <div class="card-title">Circuits with dependent sources</div>
-        <div class="card-sub">KCL &amp; KVL · VCVS, CCCS, VCCS, CCVS · constraint equations</div>
-      </a>
+  <main class="doc-main" id="main">
+    <div class="hero">
+      <p class="hero-eyebrow">North-West University</p>
+      <h1>Electrotechnique 1 — Interactive Visualisations</h1>
+      <p class="hero-sub">Generate a DC resistive network, then walk the method one step at a
+        time: node-voltage, mesh-current and equivalent resistance, worked on the circuit in
+        front of you.</p>
     </div>
 
-    <!-- ── Build your own — hand-build a circuit, export it for the pages above ── -->
-    <div class="section-label">Build your own</div>
+    <!-- ── Study unit 3 — simple resistive circuits, plus its two deep dives ── -->
+    <section class="home-section">
+      <h2 class="section-label">Study Unit 3 — Simple Resistive Circuits</h2>
+      <div class="card-grid">
+        <a class="card" href="topics/simple-resistive-circuits/index.html">
+          <h3 class="card-title">Resistors &amp; Voltage Sources</h3>
+          <p class="card-sub">KCL · KVL · equivalent resistance over the source or over any 2 points</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+        <a class="card" href="topics/wheatstone-bridge/index.html">
+          <h3 class="card-title">Wheatstone Bridge</h3>
+          <p class="card-sub">Turn an arm and watch the needle · the balance condition derived from two
+            dividers · then null the bridge yourself to measure a hidden resistor</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+        <a class="card" href="topics/delta-wye/index.html">
+          <h3 class="card-title">Δ-Y Transformations</h3>
+          <p class="card-sub">An interactive guide, not a problem set · a Δ and a Y side by side · dial the
+            resistors and watch the transform run both ways</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+      </div>
+    </section>
 
-    <div class="grid">
-      <a class="card" href="topics/circuit-builder/index.html">
-        <div class="card-title">Circuit builder</div>
-        <div class="card-sub">Draw a circuit on a grid · export JSON · import it on any solver page</div>
-      </a>
-    </div>
+    <!-- ── Study unit 4 — the same techniques, on circuits with harder sources ── -->
+    <section class="home-section">
+      <h2 class="section-label">Study Unit 4 — Techniques in Circuit Analysis</h2>
+      <div class="card-grid">
+        <a class="card" href="topics/current-sources/index.html">
+          <h3 class="card-title">Circuits with Current Sources</h3>
+          <p class="card-sub">KCL &amp; KVL · known mesh currents · supermesh · supernodes</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+        <a class="card" href="topics/dependent-sources/index.html">
+          <h3 class="card-title">Circuits with Dependent Sources</h3>
+          <p class="card-sub">KCL &amp; KVL · VCVS, CCCS, VCCS, CCVS · constraint equations</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- ── Other — everything that is not tied to one study unit ── -->
+    <section class="home-section">
+      <h2 class="section-label">Other</h2>
+      <div class="card-grid">
+        <a class="card" href="topics/circuit-builder/index.html">
+          <h3 class="card-title">Circuit Builder</h3>
+          <p class="card-sub">Draw a circuit on a grid, export the JSON, import it on any solver page</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+        <a class="card" href="topics/philosophy/index.html">
+          <h3 class="card-title">Which Method, and Why</h3>
+          <p class="card-sub">Both methods are offered on every page — this is how you pick one · count the
+            equations before you write any · why the steps run in that order</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+        <a class="card" href="about.html">
+          <h3 class="card-title">About</h3>
+          <p class="card-sub">Who built this, what it covers, and how it is put together</p>
+          <span class="card-go" aria-hidden="true">→</span>
+        </a>
+      </div>
+    </section>
   </main>
 
-  <footer>EERI 124 — Electrotechnique 1 · Ohm's &amp; Kirchhoff's laws, resistive networks</footer>
+  <footer class="site-foot">EERI 124 — Electrotechnique 1 · Ohm’s &amp; Kirchhoff’s laws, resistive networks</footer>
+  <script src="js/ui/nav.js"></script>
 </body>
 
 </html>

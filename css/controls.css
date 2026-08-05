@@ -1,0 +1,162 @@
+/* Control primitives — the field/select/button vocabulary the rail is built from, shared by
+   the solver pages and the builder. Compact on purpose: the rail is a 200px column that has to
+   hold a whole page's controls without scrolling on a laptop. */
+
+.field { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.field-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--violet-300);
+}
+.field-row { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+.field-row > .ctl { flex: 1 1 0; min-width: 0; }
+.field-sep { color: var(--text-faint); flex: none; }
+.field-note { font-size: 11.5px; line-height: 1.45; color: var(--text-faint); }
+/* the error note is a live region (role="status"), so it stays in the DOM even when empty —
+   a screen reader does not announce a change made while the element is display:none */
+.field-note--error { color: var(--danger); }
+
+/* ── select / text input ── */
+.ctl {
+  width: 100%;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+  background-color: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  cursor: pointer;
+  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.ctl:hover { border-color: var(--line-hi); }
+.ctl option { background-color: var(--panel-hi); color: var(--text); }
+.ctl:disabled { opacity: 0.45; cursor: default; }
+
+/* native arrow replaced so the control matches on every platform; the chevron is a data URI so
+   the page still works straight off the filesystem with no asset requests */
+select.ctl {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 26px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 2 6 6.2 10.5 2' fill='none' stroke='%23aba0cc' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
+  background-size: 10px;
+  text-overflow: ellipsis;
+}
+
+input.ctl { cursor: text; font-variant-numeric: tabular-nums; }
+
+/* ── buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--dur) var(--ease), border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease), transform var(--dur) var(--ease), opacity var(--dur) var(--ease);
+}
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.35; cursor: default; }
+
+.btn--primary {
+  background: linear-gradient(140deg, var(--violet-500), var(--violet-700));
+  border-color: var(--violet-600);
+  color: #fff;
+  box-shadow: var(--glow);
+}
+.btn--primary:hover:not(:disabled) { background: linear-gradient(140deg, var(--violet-400), var(--violet-600)); }
+
+.btn--soft {
+  background-color: var(--panel-hi);
+  border-color: var(--line);
+  color: var(--text);
+}
+.btn--soft:hover:not(:disabled) { background-color: var(--tint); border-color: var(--line-hi); }
+
+.btn--ghost {
+  background-color: transparent;
+  border-color: var(--line);
+  color: var(--text-dim);
+}
+.btn--ghost:hover:not(:disabled) { color: var(--text); background-color: var(--tint); border-color: var(--line-hi); }
+
+.btn--block { width: 100%; }
+.btn--sm { padding: 6px 10px; font-size: 12px; }
+
+.btn-row { display: flex; gap: var(--sp-2); }
+.btn-row > .btn { flex: 1 1 0; min-width: 0; }
+
+/* file picker dressed as a button: the input stays focusable (.sr-only), and the label shows
+   the ring on its behalf so keyboard users still see where they are */
+.btn--file { position: relative; }
+.btn--file:focus-within { outline: var(--ring); outline-offset: 2px; }
+
+/* ── small labelled well, used for standing information in the rail ── */
+.well {
+  background-color: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+.well b { color: var(--violet-200); font-weight: 650; }
+
+/* pushes the last rail group to the bottom when there is spare height */
+.rail-spacer { margin-top: auto; }
+
+/* ── File menu (js/ui/filemenu.js) ──
+   Expands inline instead of popping over: the rail is a scroll container, and an absolutely
+   positioned menu would be clipped by it. */
+.file-caret {
+  width: 0;
+  height: 0;
+  border: 4px solid transparent;
+  border-left-color: currentColor;
+  transition: transform var(--dur) var(--ease);
+}
+[aria-expanded='true'] > .file-caret { transform: rotate(90deg); }
+
+.file-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: var(--sp-1);
+  background-color: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.file-action {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-xs);
+  padding: 6px 8px;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+}
+.file-action:hover { color: var(--text); background-color: var(--tint); }
+.file-action:focus-within { outline: var(--ring); outline-offset: -2px; }
+.file-action small { display: block; font-size: 10.5px; font-weight: 400; color: var(--text-faint); margin-top: 1px; }
+.file-action + .file-action { border-top: 1px solid var(--line); }

@@ -1,0 +1,120 @@
+/* The workspace — the three regions every topic page is built from:
+
+     rail   (left)   controls
+     stage  (middle) the circuit, on paper — the whole point of the page, so it gets the 1fr
+     workbench (right) the stepwise method
+
+   The whole thing is ONE grid inside a bounded row of body.app, so nothing can push the page
+   taller than the viewport. Each region owns its overflow: the rail scrolls, the workbench
+   scrolls its derivation, and the stage never scrolls at all (the SVG viewBox scales to fit).
+   Regions cannot overlap — they are grid tracks, not floated cards.
+
+   Either side panel collapses (ribbon toggles, wired by js/ui/shell.js): on a wide screen the
+   track is removed and the stage grows into it; under 1080px the panels become overlay drawers
+   so the stage always has the full width. */
+
+.workspace {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--rail-w) minmax(0, 1fr) var(--wb-w);
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* pages with no workbench (the builder) run two columns and a roomier rail */
+.workspace--duo { --rail-w: clamp(250px, 25vw, 330px); grid-template-columns: var(--rail-w) minmax(0, 1fr); }
+
+/* ── collapsed panels: drop the track entirely, don't leave a gap behind ── */
+.workspace[data-rail='closed'] { grid-template-columns: minmax(0, 1fr) var(--wb-w); }
+.workspace[data-workbench='closed'] { grid-template-columns: var(--rail-w) minmax(0, 1fr); }
+.workspace[data-rail='closed'][data-workbench='closed'] { grid-template-columns: minmax(0, 1fr); }
+.workspace--duo[data-rail='closed'] { grid-template-columns: minmax(0, 1fr); }
+.workspace[data-rail='closed'] > .rail,
+.workspace[data-workbench='closed'] > .workbench { display: none; }
+
+/* ── rail ── */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-4);
+}
+
+/* ── stage: the sheet the circuit is drawn on ── */
+.stage {
+  position: relative;              /* the builder floats its status/zoom bar over the paper */
+  background: var(--paper);
+  border-color: rgba(255, 255, 255, 0.10);
+  display: grid;
+  padding: var(--sp-3);
+  overflow: hidden;
+}
+.stage > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+
+/* ── workbench: header / scrolling derivation / pinned board / nav. Four grid rows, so the
+   board can never ride over the text the way the old sticky+negative-margin version did. ── */
+.workbench {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  overflow: hidden;
+}
+
+/* ── overlay scrim, drawer mode only ── */
+.scrim {
+  display: none;
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  border: 0;
+  padding: 0;
+  background: rgba(8, 4, 20, 0.58);
+  backdrop-filter: blur(2px);
+  cursor: pointer;
+}
+
+/* ── narrow: side panels become drawers over a full-width stage ── */
+@media (max-width: 1080px) {
+  .workspace,
+  .workspace--duo,
+  .workspace[data-rail='closed'],
+  .workspace[data-workbench='closed'],
+  .workspace[data-rail='closed'][data-workbench='closed'],
+  .workspace--duo[data-rail='closed'] { grid-template-columns: minmax(0, 1fr); }
+
+  /* the wide rules above hide a closed panel; in drawer mode it stays laid out and slides */
+  .workspace[data-rail='closed'] > .rail { display: flex; }
+  .workspace[data-workbench='closed'] > .workbench { display: grid; }
+
+  .workspace > .rail,
+  .workspace > .workbench {
+    position: absolute;
+    top: var(--sp-3);
+    bottom: var(--sp-3);
+    width: min(340px, 86vw);
+    z-index: 20;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+    transition: transform var(--dur) var(--ease);
+  }
+  .workspace > .rail { left: var(--sp-3); transform: translateX(calc(-100% - var(--sp-4))); }
+  .workspace > .workbench { right: var(--sp-3); transform: translateX(calc(100% + var(--sp-4))); }
+  .workspace[data-rail='open'] > .rail,
+  .workspace[data-workbench='open'] > .workbench { transform: none; }
+
+  .workspace[data-rail='open'] > .scrim,
+  .workspace[data-workbench='open'] > .scrim { display: block; }
+}
+
+/* ── short screens: trim the chrome so the stage keeps its height ── */
+@media (max-height: 620px) {
+  .workspace { gap: var(--sp-2); padding: var(--sp-2); }
+  :root { --ribbon-h: 44px; }
+}
