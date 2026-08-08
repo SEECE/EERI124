@@ -54,7 +54,7 @@
      the edge starts from. `arrow` is drawn a→b; a backwards guess just reverses it. */
   var EL = [
     { k: 'v', edge: 0, name: 'V', sub: 's', kind: 'V', value: '12 V',
-      arrow: [141, 152, 141, 112], ilab: [150, 136, 'start'],
+      arrow: [141, 152, 141, 112], ilab: [150, 160, 'start'],
       pm: { a: [99, 244], b: [99, 142] }, tag: [80, 196, 'end'] },
     { k: 'r1', edge: 1, name: 'R', sub: '1', kind: 'R', value: '40 Ω',
       arrow: [200, 72, 310, 72], ilab: [255, 56, 'middle'],
@@ -73,7 +73,7 @@
      left, B upwards, C down from a bare stretch of the bottom rail. */
   var NODES = {
     A: { at: [XL, YT], letter: [XL, 72, 'middle'], stem: [XL, YT, 84, YT], away: [-1, 0],
-         cap: [70, 130, 'middle'] },
+         cap: [58, 132, 'middle'] },
     B: { at: [XM, YT], letter: [416, 78, 'start'], stem: [XM, YT, XM, 58], away: [0, -1],
          cap: [390, 30, 'middle'] },
     C: { at: [450, YB], letter: [255, 310, 'middle'], stem: [450, YB, 450, 304], away: [0, 1],
