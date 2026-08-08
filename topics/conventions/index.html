@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0e0920" />
+  <title>Conventions — EERI 124</title>
+  <link rel="stylesheet" href="../../css/tokens.css" />
+  <link rel="stylesheet" href="../../css/base.css" />
+  <link rel="stylesheet" href="../../css/ribbon.css" />
+  <link rel="stylesheet" href="../../css/controls.css" />
+  <link rel="stylesheet" href="../../css/tutorial.css" />
+</head>
+
+<body class="app">
+  <a class="skip-link" href="#figure">Skip to the circuit</a>
+
+  <header class="ribbon">
+    <a class="ribbon-brand" href="../../index.html">
+      <span class="ribbon-mark" aria-hidden="true"></span>
+      <span class="ribbon-name" translate="no">EERI&nbsp;124</span>
+    </a>
+    <span class="ribbon-sep" aria-hidden="true"></span>
+    <h1 class="ribbon-title">Conventions</h1>
+    <nav class="ribbon-nav" data-nav data-base="../../" data-current="conventions"
+      aria-label="Sections"></nav>
+  </header>
+
+  <!-- A tutorial page: board + lesson, no rail. One fixed circuit, no generator, no technique
+       and no stepper — the dials here are CONVENTION CHOICES rather than component values.
+       See structure/TUTORIALS.md. -->
+  <main class="lab">
+    <section class="board panel" aria-label="One circuit, your conventions">
+      <div class="board-head">
+        <span class="eyebrow">Pick your conventions — the answer does not move</span>
+        <span class="badge badge--ok" id="verdict" role="status"></span>
+        <button type="button" class="btn btn--soft btn--sm" id="reset">Reset to the site default</button>
+      </div>
+
+      <div class="figure figure--drawn">
+        <svg id="figure" viewBox="0 0 720 360" role="img"
+          aria-label="A 12 volt source feeding one resistor in series with two in parallel, marked up with the conventions you have chosen"></svg>
+      </div>
+
+      <div class="board-foot">
+        <div class="board-col">
+          <span class="eyebrow">Your conventions</span>
+          <div id="choices"></div>
+        </div>
+        <div class="board-col">
+          <span class="eyebrow">What you wrote down</span>
+          <div id="wrote"></div>
+        </div>
+        <div class="board-col board-col--out">
+          <span class="eyebrow">What never changes</span>
+          <div id="invariant"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="lesson panel" aria-label="Guide">
+      <header class="lesson-head">
+        <div class="lesson-head-top">
+          <span class="eyebrow">Guide</span>
+          <span class="lesson-count" id="lesson-count" aria-live="polite"></span>
+        </div>
+        <h2 class="lesson-title" id="lesson-title"></h2>
+      </header>
+
+      <div class="lesson-body scroller" id="lesson-body"></div>
+
+      <footer class="lesson-nav">
+        <button type="button" class="btn btn--soft btn--sm" id="lesson-prev">‹ Back</button>
+        <div class="lesson-dots" id="lesson-dots" role="group" aria-label="Jump to a chapter"></div>
+        <button type="button" class="btn btn--primary btn--sm" id="lesson-next">Next ›</button>
+      </footer>
+    </aside>
+  </main>
+
+  <script src="../../js/circuit.js"></script>
+  <script src="../../js/solve.js"></script>
+  <script src="../../js/tutorial/draw.js"></script>
+  <script src="../../js/tutorial/lesson.js"></script>
+  <script src="../../js/tutorial/conventions.js"></script>
+  <script>
+    // The circuit is fixed and solved ONCE by js/solve.js. Every choice below only changes how
+    // the answer is WRITTEN DOWN — which is the whole lesson, so the invariants column is
+    // computed from that one solve rather than re-derived per choice.
+    ConventionsLab();
+  </script>
+  <script src="../../js/ui/nav.js"></script>
+</body>
+
+</html>
