@@ -73,6 +73,22 @@
     <button type="button" id="ph-lesson-prev"></button>
     <div id="ph-lesson-dots"></div>
     <button type="button" id="ph-lesson-next"></button>
+
+    <!-- Conventions -->
+    <div class="board">
+      <span id="cv-verdict"></span>
+      <button type="button" id="cv-reset"></button>
+      <div class="figure"><svg id="cv-figure" viewBox="0 0 720 360"></svg></div>
+      <div id="cv-choices"></div>
+      <div id="cv-wrote"></div>
+      <div id="cv-invariant"></div>
+    </div>
+    <span id="cv-lesson-count"></span>
+    <h2 id="cv-lesson-title"></h2>
+    <div id="cv-lesson-body"></div>
+    <button type="button" id="cv-lesson-prev"></button>
+    <div id="cv-lesson-dots"></div>
+    <button type="button" id="cv-lesson-next"></button>
   </div>
 
   <script src="circuit.js"></script>
@@ -82,6 +98,7 @@
   <script src="tutorial/delta-wye.js"></script>
   <script src="tutorial/wheatstone.js"></script>
   <script src="tutorial/philosophy.js"></script>
+  <script src="tutorial/conventions.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -453,6 +470,130 @@
           assert(winner === ph.state().tally.pick, s.id + ': flagged ' + winner);
         }
       });
+    });
+
+    // ============ Conventions: nothing you are allowed to pick changes the answer ============
+
+    var cv = ConventionsLab({ prefix: 'cv-' });
+
+    /* The whole page rests on one claim, so it is the one asserted hardest: every LEGAL set of
+       conventions leaves every physical quantity identical. Signs move, wording moves, node
+       numbers move; magnitudes, differences and powers do not. */
+    function invariants(st) {
+      var mags = st.marked.map(function (m) {
+        return [Math.abs(m.i), Math.abs(m.v), Math.abs(m.p)];
+      });
+      return JSON.stringify({
+        mags: mags,
+        // potentials are measured from the chosen reference, so only DIFFERENCES may be compared
+        AC: st.pot.A - st.pot.C, AB: st.pot.A - st.pot.B, BC: st.pot.B - st.pot.C,
+      });
+    }
+
+    function legalCombos() {
+      var combos = [];
+      ['positive', 'electron'].forEach(function (flow) {
+        ['A', 'B', 'C'].forEach(function (ref) {
+          ['guess', 'actual'].forEach(function (arrows) {
+            ['leaving', 'inout'].forEach(function (kcl) {
+              combos.push({ flow: flow, ref: ref, zero: 'chosen', arrows: arrows,
+                polarity: 'psc', kcl: kcl });
+            });
+          });
+        });
+      });
+      return combos;
+    }
+
+    check('conventions — the fixed circuit still gives the numbers the guide quotes', function () {
+      var c = ConventionsLab.circuit(), s = Solve.nodeVoltages(c), b = Solve.branches(c, s);
+      assert(near(s.v[s.of.n0] - s.v[s.of.n3], 12), 'A−C is not 12 V');
+      assert(near(s.v[s.of.n1] - s.v[s.of.n3], 6), 'B−C is not 6 V');
+      assert(near(b[1].current, 0.15) && near(b[2].current, 0.1) && near(b[3].current, 0.05),
+        'the 150 / 100 / 50 mA split moved');
+      assert(near(b[1].power, 0.9) && near(b[2].power, 0.6) && near(b[3].power, 0.3),
+        'the 0.9 / 0.6 / 0.3 W powers moved');
+      assert(Solve.powerCheck(b).ok, 'powers do not balance');
+    });
+
+    check('conventions — every legal set of conventions gives the same answer', function () {
+      var combos = legalCombos(), first = null;
+      combos.forEach(function (p) {
+        cv.set(p);
+        var st = cv.state();
+        assert(!st.faults.length, JSON.stringify(p) + ' was flagged: ' + st.faults[0].kind);
+        assert(Math.abs(st.residual) < 1e-9, JSON.stringify(p) + ' leaves KCL residual ' + st.residual);
+        var inv = invariants(st);
+        if (first === null) first = inv;
+        assert(inv === first, JSON.stringify(p) + ' moved something:\n  ' + inv + '\n  ' + first);
+      });
+      assert(combos.length === 24, 'expected 24 legal combinations, drove ' + combos.length);
+    });
+
+    check('conventions — the signs really do move, or the claim above is vacuous', function () {
+      cv.set({ arrows: 'guess', ref: 'C' });
+      var a = cv.state();
+      cv.set({ arrows: 'actual', ref: 'A' });
+      var b = cv.state();
+      assert(a.marked[3].i * b.marked[3].i < 0, 'R₃ current did not change sign with the arrow');
+      assert(a.pot.A !== b.pot.A, 'node A read the same from two different references');
+    });
+
+    /* The three mistakes, each flagged from the figure rather than from the button. */
+    check('conventions — a + mark that ignores the arrow makes a resistor produce power', function () {
+      cv.set({ zero: 'chosen', arrows: 'guess', polarity: 'fixed' });
+      var st = cv.state();
+      var psc = st.faults.filter(function (f) { return f.kind === 'psc'; });
+      assert(psc.length === 1, 'expected one PSC fault, got ' + st.faults.length);
+      assert(st.marked[3].p < 0, 'R₃ power is ' + st.marked[3].p + ', so nothing was contradicted');
+    });
+
+    check('conventions — the same bad habit is invisible when the guess happens to be right', function () {
+      cv.set({ zero: 'chosen', arrows: 'actual', polarity: 'fixed' });
+      assert(!cv.state().faults.length, 'flagged a marking that does not contradict its arrow');
+    });
+
+    check('conventions — one branch drawn twice breaks KCL', function () {
+      cv.set({ zero: 'chosen', arrows: 'both', polarity: 'psc' });
+      var st = cv.state();
+      assert(st.faults.some(function (f) { return f.kind === 'dupe'; }), 'not flagged');
+      assert(Math.abs(st.residual) > 1e-9, 'residual is still zero, so nothing was double-counted');
+    });
+
+    check('conventions — calling the reference earthed is flagged from every node', function () {
+      ['A', 'B', 'C'].forEach(function (ref) {
+        cv.set({ ref: ref, zero: 'earth', arrows: 'guess', polarity: 'psc' });
+        var st = cv.state();
+        assert(st.faults.some(function (f) { return f.kind === 'earth'; }), ref + ' not flagged');
+        // …and it is a claim about the label only: the physics must be untouched
+        assert(Math.abs(st.residual) < 1e-9, ref + ' broke KCL, which earthing cannot do');
+      });
+    });
+
+    check('conventions — reset restores exactly the conventions the rest of the site uses', function () {
+      cv.set({ flow: 'electron', ref: 'A', zero: 'earth', arrows: 'both', polarity: 'fixed', kcl: 'inout' });
+      cv.reset();
+      var p = cv.state().pick;
+      Object.keys(ConventionsLab.defaults).forEach(function (k) {
+        assert(p[k] === ConventionsLab.defaults[k], k + ' reset to ' + p[k]);
+      });
+      assert(!cv.state().faults.length, 'the default conventions are flagged');
+      // the two defaults that are a promise about other files, not a preference
+      var c = ConventionsLab.circuit(), s = Solve.nodeVoltages(c);
+      assert(ConventionsLab.defaults.ref === 'C' && s.v[s.of.n3] === 0,
+        'js/solve.js no longer references the node this page calls C');
+      assert(ConventionsLab.defaults.kcl === 'leaving',
+        'js/techniques/node-voltage.js writes Σ leaving = 0; this page must agree');
+    });
+
+    check('conventions — every chapter renders, right and wrong', function () {
+      cv.reset();
+      walkChapters(cv, 'cv-', 'conventions (default)');
+      cv.set({ ref: 'B', zero: 'earth', arrows: 'both', polarity: 'fixed', kcl: 'inout' });
+      walkChapters(cv, 'cv-', 'conventions (every mistake on)');
+      var board = text('cv-wrote') + text('cv-invariant') + text('cv-verdict');
+      assert(!/undefined|NaN/.test(board), 'readout: ' + board.slice(0, 160));
+      cv.reset();
     });
 
     $('out').textContent = out.join('\n') + '\n\n' +
