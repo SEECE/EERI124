@@ -648,7 +648,7 @@
 
     function chapters() {
       return [
-        { title: 'A convention is something we agreed to', lit: [],
+        { title: 'A convention is something we agreed to', lit: [], mode: 'kcl',
           html: function () {
             return '<p>Charge really does flow in this circuit, and what actually moves is ' +
               '<b>electrons</b> — negative, and therefore travelling the opposite way to every ' +
@@ -664,7 +664,7 @@
                 'We use a convention because we <em>agree</em> to it. That is it.');
           } },
 
-        { title: 'A potential on its own means nothing', lit: ['r1'],
+        { title: 'A potential on its own means nothing', lit: ['r1'], mode: 'kcl',
           html: function () {
             return '<p>Ask "what is the voltage at node B?" and the honest answer is: compared ' +
               'to <em>what</em>? A single potential is not a measurable thing. Put one probe on ' +
@@ -678,7 +678,7 @@
               'that node and one node you nominated. Which one is the next chapter.</p>';
           } },
 
-        { title: 'The reference node is a choice', lit: ['ref'],
+        { title: 'The reference node is a choice', lit: ['ref'], mode: 'kcl',
           html: function () {
             return '<p>Pick any node, call it 0 V, and measure everything from there. That node ' +
               'is the <b>reference</b>. Right now it is node <b>' + pick.ref + '</b>, so the ' +
@@ -697,7 +697,7 @@
               'solver page on this site.</p>';
           } },
 
-        { title: 'Ground is not the same thing as 0 V', lit: ['ref'],
+        { title: 'Ground is not the same thing as 0 V', lit: ['ref'], mode: 'kcl',
           html: function () {
             return '<p>This is the one that catches people. <b>Ground</b> — earth — is a ' +
               'physically enormous volume of charge. It is so large that adding or removing a ' +
@@ -713,7 +713,7 @@
                 'node that is not, and you have wired a short circuit through the instrument.');
           } },
 
-        { title: 'Draw the arrows before you know the answer', lit: ['r3'],
+        { title: 'Draw the arrows before you know the answer', lit: ['r3'], mode: 'kcl',
           html: function () {
             var r3 = m('r3');
             return '<p>You have to mark a direction on every branch before you can write a ' +
@@ -729,7 +729,7 @@
               ' either way — the sign was only ever about the arrow.</p>';
           } },
 
-        { title: 'One branch carries one current', lit: ['r2'],
+        { title: 'One branch carries one current', lit: ['r2'], mode: 'kcl',
           html: function () {
             return '<p>There is a habit that looks like a shortcut: at each node, draw one ' +
               'current going <em>in</em> and let the rest go <em>out</em>. Applied node by node ' +
@@ -743,7 +743,7 @@
               'end and entering at the other — automatically, without deciding anything.</p>';
           } },
 
-        { title: 'The passive sign convention', lit: ['r1'],
+        { title: 'The passive sign convention', lit: ['r1'], mode: 'kcl',
           html: function () {
             return '<p>Now the ± marks. For a passive component — a resistor here — the rule is ' +
               'one line: <b>current enters at the + terminal</b>. You drew the arrow, so the ' +
@@ -758,7 +758,7 @@
                 'on a real problem you will not be told which day that is.');
           } },
 
-        { title: 'What the sign of the power means', lit: [],
+        { title: 'What the sign of the power means', lit: [], mode: 'kcl',
           html: function () {
             return '<p>Multiply the marked voltage by the marked current and the sign tells you ' +
               'what the element <em>is</em>. Nothing else is needed — not the shape of the ' +
@@ -778,7 +778,7 @@
               'it can be any size and either polarity.</p>';
           } },
 
-        { title: 'A source is allowed to absorb', lit: ['v'],
+        { title: 'A source is allowed to absorb', lit: ['v'], mode: 'kcl',
           html: function () {
             var v = m('v');
             return '<p>A source\'s ± is <em>printed on its symbol</em> — it is given, not chosen ' +
@@ -795,7 +795,64 @@
                 'multiply, and read the sign. Trust the maths.');
           } },
 
-        { title: 'Stick to it, and the books balance', lit: [],
+        { title: 'The other law, and the choices it needs', lit: ['m1', 'm2'], mode: 'kvl',
+          html: function () {
+            return '<p>Everything so far was <b>KCL</b> at a node. The other half of the module ' +
+              'is <b>KVL</b> around a loop: go all the way round any closed path and the ' +
+              'potential differences must sum to zero, because you finished where you started ' +
+              'and a node cannot be at two potentials at once.</p>' +
+              '<p>Walking a loop needs two more agreements. <b>Which way round</b> — the two ' +
+              'loop arrows now on the figure — and <b>what counts as positive</b>, a drop or a ' +
+              'rise. We walk <em>clockwise</em> and add up <em>drops</em>, and so does every ' +
+              'mesh solve on this site.</p>' +
+              meshHtml(0) +
+              '<p>One rule covers every element: walking from a to b, you drop by v<sub>ab</sub>. ' +
+              'For a resistor that is Ohm\'s law; for the source it is minus its value, because ' +
+              'walking − to + is a rise. Press <b>Σ rises = 0</b> and watch every sign flip at ' +
+              'once — that is the same equation multiplied by −1, and it has the same roots.</p>';
+          } },
+
+        { title: 'Reverse a loop and nothing breaks', lit: ['m1', 'm2'], mode: 'kvl',
+          html: function () {
+            var I = meshI();
+            return '<p>Press <b>Both anticlockwise</b>. Both loop arrows spin round, ' +
+              'I<sub>1</sub> becomes ' + sig(I[0], 'A') + ' and I<sub>2</sub> becomes ' +
+              sig(I[1], 'A') + ' — and both mesh equations still close on zero.</p>' +
+              '<p>They have to, because a <b>mesh current is not a thing you could measure</b>. ' +
+              'There is no wire carrying I<sub>1</sub>. It is a bookkeeping variable invented so ' +
+              'that KCL is satisfied automatically at every node, and the only quantities with ' +
+              'physical meaning are the branch currents you build out of it — which the ' +
+              'right-hand column shows have not moved at all.</p>' +
+              '<p>So the direction is free, exactly like an arrow on a branch. Clockwise is a ' +
+              'convention because a room full of people all drawing clockwise can read each ' +
+              'other\'s work, not because a loop knows which way round it is.</p>';
+          } },
+
+        { title: 'Where the loop directions finally matter', lit: ['r2', 'm1', 'm2'], mode: 'kvl',
+          html: function () {
+            var agree = loopSigns()[0] === loopSigns()[1];
+            return '<p>R<sub>2</sub> is in <em>both</em> meshes, so its current is a combination ' +
+              'of the two. With both loops running the same way, mesh 1 walks R<sub>2</sub> ' +
+              'downwards and mesh 2 walks it upwards, so they oppose and the branch carries ' +
+              'I<sub>1</sub> − I<sub>2</sub>.</p>' +
+              '<p>Press <b>Mesh 2 reversed</b>. Now both loops walk R<sub>2</sub> the same way, ' +
+              'so they <em>add</em>: the branch carries I<sub>1</sub> + I<sub>2</sub>. Right now ' +
+              'it reads <b>I<sub>1</sub> ' + (sharedCoef() < 0 ? '−' : '+') + ' I<sub>2</sub></b>' +
+              (agree ? ', because your two loops agree' : ', because your two loops oppose') +
+              '. Both are legal, both close, both give ' +
+              si(Math.abs(truth(BY_KEY.r2).iab), 'A') + '.</p>' +
+              '<p>Now press <b>Always I₁ − I₂</b>, the habit almost everyone forms while all ' +
+              'their loops still agree. With both loops the same way nothing happens — it is the ' +
+              'right answer there. With mesh 2 reversed the board goes red: R<sub>2</sub> ' +
+              'becomes ' + si(0.2, 'A') + ', both mesh equations are left holding ' + si(6, 'V') +
+              ', and node B stops balancing.</p>' +
+              flag('This is the same shape as the + mark that always went on top. A convention ' +
+                'you chose is safe. A habit you never chose is safe right up until the ' +
+                'circumstance it was never true in — and nothing warns you that you have ' +
+                'reached it.');
+          } },
+
+        { title: 'Stick to it, and the books balance', lit: [], mode: 'kcl',
           html: function () {
             var pc = Solve.powerCheck(brs);
             return '<p>The check that catches almost everything: add up every power in the ' +
@@ -809,9 +866,10 @@
               'means for something to be a convention rather than a fact.</p>' +
               '<p><b>Reset to the site default</b> puts back the ones the rest of this site ' +
               'uses: positive current, the reference on the source\'s − terminal, + where the ' +
-              'arrow enters, and KCL written as Σ leaving = 0. Every solve on every other page ' +
-              'is written that way — including <a href="../philosophy/index.html">Which Method, ' +
-              'and Why</a>, which is where to go next.</p>';
+              'arrow enters, KCL written as Σ leaving = 0, and every mesh walked clockwise ' +
+              'adding drops. Every solve on every other page is written that way — including ' +
+              '<a href="../philosophy/index.html">Which Method, and Why</a>, which takes the ' +
+              'next question: both laws work, so which one do you actually pick?</p>';
           } },
       ];
     }
