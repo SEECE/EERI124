@@ -180,7 +180,7 @@
 
     var pick = {};
     Object.keys(DEFAULTS).forEach(function (k) { pick[k] = DEFAULTS[k]; });
-    var parts = {}, lit = [];
+    var parts = {}, lit = [], atChapter = -1;
 
     /* ---------- the convention layer: one solve, seen the way you asked for it ----------
        dir  — which way the student drew the arrow, as a sign on a→b
@@ -222,6 +222,12 @@
       var s = loopSigns();
       return pick.shared === 'minus' ? -s[0] : -s[1];
     }
+    /* …and the sign the student actually WRITES, which is the ratio of the two coefficients,
+       not the coefficient on I₂ alone. Both loops anticlockwise puts −1 on I₁ and +1 on I₂ —
+       raw signs that look like an addition but are −(I₁ − I₂), a subtraction. Reading the
+       expression along mesh 1's own walk cancels that and leaves the honest answer: agree and
+       they subtract, oppose and they add. */
+    function sharedRatio() { return sharedCoef() * loopSigns()[0]; }
 
     /* What the student's markings SAY the branch carries. Identical to the truth everywhere
        except one place: a shared branch subtracted when it should have been added. That one
@@ -592,7 +598,7 @@
       if (pick.mode === 'kvl') {
         wroteWrap.appendChild(el('div', { class: 'result' },
           '<span class="result-name">' + nm(BY_KEY.r2) + ' carries</span>' +
-          '<span class="result-val">I<sub>1</sub> ' + (sharedCoef() < 0 ? '−' : '+') +
+          '<span class="result-val">I<sub>1</sub> ' + (sharedRatio() < 0 ? '−' : '+') +
           ' I<sub>2</sub></span>'));
         wroteWrap.appendChild(el('div', {}, meshHtml(0) + meshHtml(1)));
       } else {
@@ -837,7 +843,7 @@
               'I<sub>1</sub> − I<sub>2</sub>.</p>' +
               '<p>Press <b>Mesh 2 reversed</b>. Now both loops walk R<sub>2</sub> the same way, ' +
               'so they <em>add</em>: the branch carries I<sub>1</sub> + I<sub>2</sub>. Right now ' +
-              'it reads <b>I<sub>1</sub> ' + (sharedCoef() < 0 ? '−' : '+') + ' I<sub>2</sub></b>' +
+              'it reads <b>I<sub>1</sub> ' + (sharedRatio() < 0 ? '−' : '+') + ' I<sub>2</sub></b>' +
               (agree ? ', because your two loops agree' : ', because your two loops oppose') +
               '. Both are legal, both close, both give ' +
               si(Math.abs(truth(BY_KEY.r2).iab), 'A') + '.</p>' +
@@ -881,9 +887,12 @@
       prev: id('lesson-prev'),
       next: id('lesson-next'),
       dots: id('lesson-dots'),
-      onView: function (ch) {
-        // a chapter may carry the board with it: the KVL chapters switch the figure to loops
-        if (ch.mode) setMode(ch.mode, true);
+      onView: function (ch, i) {
+        /* A chapter may carry the board with it: the KVL chapters switch the figure to loops.
+           Only on ARRIVAL though — onView also fires on every refresh, and re-applying the
+           chapter's mode there would undo the mode button the moment it was pressed. */
+        if (ch.mode && i !== atChapter) setMode(ch.mode, true);
+        atChapter = i;
         lit = ch.lit || [];
         applyLit();
       },
@@ -943,7 +952,7 @@
         return { pick: pick, faults: faults(), residual: residual(),
           marked: EL.map(function (e2) { return marked(e2); }),
           mesh: { i: meshI(), residual: [meshEq(0).residual, meshEq(1).residual],
-            sharedCoef: sharedCoef() },
+            sharedRatio: sharedRatio() },
           pot: { A: pot('A'), B: pot('B'), C: pot('C') } };
       },
     };

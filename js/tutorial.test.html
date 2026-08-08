@@ -77,6 +77,10 @@
     <!-- Conventions -->
     <div class="board">
       <span id="cv-verdict"></span>
+      <div class="seg" id="cv-mode">
+        <button type="button" data-mode="kcl" aria-pressed="true">KCL</button>
+        <button type="button" data-mode="kvl" aria-pressed="false">KVL</button>
+      </div>
       <button type="button" id="cv-reset"></button>
       <div class="figure"><svg id="cv-figure" viewBox="0 0 720 360"></svg></div>
       <div id="cv-choices"></div>
@@ -480,24 +484,48 @@
        conventions leaves every physical quantity identical. Signs move, wording moves, node
        numbers move; magnitudes, differences and powers do not. */
     function invariants(st) {
+      // to 9 significant figures: the KVL half reaches the shared branch by adding two mesh
+      // currents and the KCL half reads it straight off the solve, so the two agree to about
+      // 1e-16 and not to the bit. Anything a student could see is far coarser than this.
+      function r9(x) { return Number(x.toPrecision(9)); }
       var mags = st.marked.map(function (m) {
-        return [Math.abs(m.i), Math.abs(m.v), Math.abs(m.p)];
+        return [r9(Math.abs(m.i)), r9(Math.abs(m.v)), r9(Math.abs(m.p))];
       });
       return JSON.stringify({
         mags: mags,
+        // a mesh current is a bookkeeping variable and flips with its loop, but its SIZE is
+        // fixed by the circuit, so it belongs here alongside the branch magnitudes
+        mesh: st.mesh.i.map(function (x) { return r9(Math.abs(x)); }),
         // potentials are measured from the chosen reference, so only DIFFERENCES may be compared
-        AC: st.pot.A - st.pot.C, AB: st.pot.A - st.pot.B, BC: st.pot.B - st.pot.C,
+        AC: r9(st.pot.A - st.pot.C), AB: r9(st.pot.A - st.pot.B), BC: r9(st.pot.B - st.pot.C),
       });
     }
 
+    /* Every set of conventions a student is ALLOWED to hold, both laws. The KVL half includes
+       "always I₁ − I₂" with the loops agreeing, because there it is not a mistake — it is the
+       right expression, arrived at by a habit that has not been tested yet. */
     function legalCombos() {
+      function with_(base, extra) {
+        var o = {}, k;
+        for (k in base) o[k] = base[k];
+        for (k in extra) o[k] = extra[k];
+        return o;
+      }
       var combos = [];
+      var loopShared = [['cw', 'signed'], ['cw', 'minus'], ['ccw', 'signed'], ['ccw', 'minus'],
+        ['mixed', 'signed']];
       ['positive', 'electron'].forEach(function (flow) {
         ['A', 'B', 'C'].forEach(function (ref) {
           ['guess', 'actual'].forEach(function (arrows) {
+            var base = { flow: flow, ref: ref, zero: 'chosen', arrows: arrows, polarity: 'psc' };
             ['leaving', 'inout'].forEach(function (kcl) {
-              combos.push({ flow: flow, ref: ref, zero: 'chosen', arrows: arrows,
-                polarity: 'psc', kcl: kcl });
+              combos.push(with_(base, { mode: 'kcl', kcl: kcl }));
+            });
+            loopShared.forEach(function (ls) {
+              ['drops', 'rises'].forEach(function (kvlsign) {
+                combos.push(with_(base, { mode: 'kvl', loops: ls[0],
+                  shared: ls[1], kvlsign: kvlsign }));
+              });
             });
           });
         });
@@ -521,17 +549,62 @@
       combos.forEach(function (p) {
         cv.set(p);
         var st = cv.state();
-        assert(!st.faults.length, JSON.stringify(p) + ' was flagged: ' + st.faults[0].kind);
+        assert(!st.faults.length, JSON.stringify(p) + ' was flagged: ' +
+          (st.faults[0] || {}).kind);
         assert(Math.abs(st.residual) < 1e-9, JSON.stringify(p) + ' leaves KCL residual ' + st.residual);
+        st.mesh.residual.forEach(function (r, mi) {
+          assert(Math.abs(r) < 1e-9, JSON.stringify(p) + ' leaves mesh ' + (mi + 1) + ' at ' + r);
+        });
         var inv = invariants(st);
         if (first === null) first = inv;
         assert(inv === first, JSON.stringify(p) + ' moved something:\n  ' + inv + '\n  ' + first);
       });
-      assert(combos.length === 24, 'expected 24 legal combinations, drove ' + combos.length);
+      assert(combos.length === 144, 'expected 144 legal combinations, drove ' + combos.length);
+    });
+
+    /* The mesh half. A mesh current is a bookkeeping variable: reversing its loop must reverse
+       it and change nothing else, and the branch it shares must come out of the two variables
+       equal to what the engine solved — otherwise the equations on screen are decoration. */
+    check('conventions — reversing a loop reverses only its own variable', function () {
+      cv.set({ mode: 'kvl', loops: 'cw', shared: 'signed', arrows: 'guess', polarity: 'psc' });
+      var cw = cv.state().mesh.i;
+      cv.set({ loops: 'ccw' });
+      var ccw = cv.state().mesh.i;
+      cv.set({ loops: 'mixed' });
+      var mix = cv.state().mesh.i;
+      assert(near(ccw[0], -cw[0]) && near(ccw[1], -cw[1]), 'anticlockwise did not negate both');
+      assert(near(mix[0], cw[0]) && near(mix[1], -cw[1]), 'reversing mesh 2 moved mesh 1');
+    });
+
+    check('conventions — the shared branch adds when the loops oppose', function () {
+      var want = Math.abs(cv.state().marked[2].i);
+      [['cw', -1], ['ccw', -1], ['mixed', 1]].forEach(function (c) {
+        cv.set({ mode: 'kvl', loops: c[0], shared: 'signed' });
+        var st = cv.state();
+        assert(st.mesh.sharedRatio === c[1],
+          c[0] + ' wrote the shared branch with ratio ' + st.mesh.sharedRatio +
+          ', expected ' + c[1]);
+        assert(near(Math.abs(st.marked[2].i), want), c[0] + ' changed the branch current');
+      });
+    });
+
+    check('conventions — "always I₁ − I₂" is flagged only where it is actually wrong', function () {
+      ['cw', 'ccw'].forEach(function (loops) {
+        cv.set({ mode: 'kvl', loops: loops, shared: 'minus' });
+        assert(!cv.state().faults.length,
+          loops + ': flagged a habit that gives the right expression there');
+      });
+      cv.set({ mode: 'kvl', loops: 'mixed', shared: 'minus' });
+      var st = cv.state();
+      assert(st.faults.some(function (f) { return f.kind === 'shared'; }), 'mixed: not flagged');
+      // and the one wrong sign must not stay in one equation
+      assert(Math.abs(st.mesh.residual[0]) > 1e-9 && Math.abs(st.mesh.residual[1]) > 1e-9,
+        'both mesh equations should stop closing');
+      assert(Math.abs(st.residual) > 1e-9, 'KCL at B should stop balancing too');
     });
 
     check('conventions — the signs really do move, or the claim above is vacuous', function () {
-      cv.set({ arrows: 'guess', ref: 'C' });
+      cv.set({ mode: 'kcl', arrows: 'guess', ref: 'C' });
       var a = cv.state();
       cv.set({ arrows: 'actual', ref: 'A' });
       var b = cv.state();
@@ -541,7 +614,7 @@
 
     /* The three mistakes, each flagged from the figure rather than from the button. */
     check('conventions — a + mark that ignores the arrow makes a resistor produce power', function () {
-      cv.set({ zero: 'chosen', arrows: 'guess', polarity: 'fixed' });
+      cv.set({ mode: 'kcl', zero: 'chosen', arrows: 'guess', polarity: 'fixed' });
       var st = cv.state();
       var psc = st.faults.filter(function (f) { return f.kind === 'psc'; });
       assert(psc.length === 1, 'expected one PSC fault, got ' + st.faults.length);
@@ -549,12 +622,12 @@
     });
 
     check('conventions — the same bad habit is invisible when the guess happens to be right', function () {
-      cv.set({ zero: 'chosen', arrows: 'actual', polarity: 'fixed' });
+      cv.set({ mode: 'kcl', zero: 'chosen', arrows: 'actual', polarity: 'fixed' });
       assert(!cv.state().faults.length, 'flagged a marking that does not contradict its arrow');
     });
 
     check('conventions — one branch drawn twice breaks KCL', function () {
-      cv.set({ zero: 'chosen', arrows: 'both', polarity: 'psc' });
+      cv.set({ mode: 'kcl', zero: 'chosen', arrows: 'both', polarity: 'psc' });
       var st = cv.state();
       assert(st.faults.some(function (f) { return f.kind === 'dupe'; }), 'not flagged');
       assert(Math.abs(st.residual) > 1e-9, 'residual is still zero, so nothing was double-counted');
@@ -562,7 +635,7 @@
 
     check('conventions — calling the reference earthed is flagged from every node', function () {
       ['A', 'B', 'C'].forEach(function (ref) {
-        cv.set({ ref: ref, zero: 'earth', arrows: 'guess', polarity: 'psc' });
+        cv.set({ mode: 'kcl', ref: ref, zero: 'earth', arrows: 'guess', polarity: 'psc' });
         var st = cv.state();
         assert(st.faults.some(function (f) { return f.kind === 'earth'; }), ref + ' not flagged');
         // …and it is a claim about the label only: the physics must be untouched
@@ -571,7 +644,8 @@
     });
 
     check('conventions — reset restores exactly the conventions the rest of the site uses', function () {
-      cv.set({ flow: 'electron', ref: 'A', zero: 'earth', arrows: 'both', polarity: 'fixed', kcl: 'inout' });
+      cv.set({ mode: 'kvl', flow: 'electron', ref: 'A', zero: 'earth', arrows: 'both',
+        polarity: 'fixed', kcl: 'inout', loops: 'mixed', kvlsign: 'rises', shared: 'minus' });
       cv.reset();
       var p = cv.state().pick;
       Object.keys(ConventionsLab.defaults).forEach(function (k) {
@@ -584,6 +658,8 @@
         'js/solve.js no longer references the node this page calls C');
       assert(ConventionsLab.defaults.kcl === 'leaving',
         'js/techniques/node-voltage.js writes Σ leaving = 0; this page must agree');
+      assert(ConventionsLab.defaults.loops === 'cw' && ConventionsLab.defaults.kvlsign === 'drops',
+        'js/techniques/mesh-current.js walks clockwise adding drops; this page must agree');
     });
 
     check('conventions — every chapter renders, right and wrong', function () {
