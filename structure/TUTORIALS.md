@@ -1,7 +1,8 @@
-# Tutorial pages — the deep dives and the philosophy page
+# Tutorial pages — the deep dives, the philosophy page and the conventions page
 
 **Read this before touching `topics/delta-wye/`, `topics/wheatstone-bridge/`,
-`topics/philosophy/`, `css/tutorial.css` or anything in `js/tutorial/`.** The solver pages are [SOLVER.md](SOLVER.md); the shell they
+`topics/philosophy/`, `topics/conventions/`, `css/tutorial.css` or anything in
+`js/tutorial/`.** The solver pages are [SOLVER.md](SOLVER.md); the shell they
 share is [FRONTEND.md](FRONTEND.md). This is the third kind of page on the site, and the point
 of the doc is to stop it drifting back into the second.
 
@@ -27,6 +28,13 @@ which is how we found out:
 one. It answers the question every solver page leaves open — the Technique dropdown offers both
 KCL and KVL, so which do you pick? — and the answer is a count you do before any algebra starts.
 
+`topics/conventions/` is here for a fourth: **it is about the notation, not the circuit.** Its
+question is whether it matters how you write a solve down, and the answer is a thing you have
+to *watch not happen* — pick a different reference node, a different arrow direction, a
+different phrasing of KCL, and see every physical quantity sit still. A generated circuit would
+wreck that, because the student could never be sure the numbers held still for the reason
+claimed rather than because the problem changed underneath them.
+
 So these pages have **no generator, no technique, no stepper, and no File menu**. There is
 nothing to import or export because there is no problem instance.
 
@@ -34,7 +42,7 @@ nothing to import or export because there is no problem instance.
 solver page ([SOLVER.md](SOLVER.md)), and a topic that needs them belongs there. Fixed circuits
 are fine — the philosophy page steps through five of them — but they are hand-picked
 *specimens*, chosen to make one point each, never generated. **Do not add a Generate button, a
-topology dropdown or a Technique dropdown to any of these three pages.**
+topology dropdown or a Technique dropdown to any of these four pages.**
 
 ## The shell: two regions, not three
 
@@ -53,15 +61,19 @@ Under 1000px the two columns stack and `.lab` itself becomes the single scroller
 
 ## The figure: hand-drawn, except once
 
-Two of the three pages draw their own figure. `js/tutorial/draw.js` (`Draw`) is a handful of SVG primitives — `wire`, `resistor` along an
+Three of the four pages draw their own figure. `js/tutorial/draw.js` (`Draw`) is a handful of SVG primitives — `wire`, `resistor` along an
 arbitrary segment, `dot`, `text` with subscripts, `arrow`. Each page builds its own figure from
 them and **throws the whole thing away and rebuilds on every change**; twenty-odd elements is
 cheaper to redraw than to diff, and a rebuilt figure cannot go stale.
 
 This does **not** replace `js/circuit.js`'s renderer. That renderer draws the `{nodes, edges}`
 model on an orthogonal grid, which is exactly right for an ordinary circuit and exactly wrong
-for these two: a Δ is a triangle, a Y is a star and a bridge is a diamond, and **the shape is
-the lesson**. Drawing a Δ as a grid rectangle would teach the wrong picture.
+for the two deep dives: a Δ is a triangle, a Y is a star and a bridge is a diamond, and **the
+shape is the lesson**. Drawing a Δ as a grid rectangle would teach the wrong picture.
+`topics/conventions/` draws its own for a different reason — its circuit is an ordinary one, but
+the page is entirely made of markings the renderer does not draw (± pairs that move with the
+arrows, a reference marker, a probe tip), and every one of them has to be placed against the
+element it belongs to.
 
 **`topics/philosophy/` is the exception and uses the real renderer**, because its specimens are
 ordinary circuits — precisely what `js/circuit.js` draws well — and reusing it also gets the
@@ -194,6 +206,43 @@ The last two chapters are the *why the steps run in that order* half of the page
 both methods exists to stop one specific mistake, and every one is cheaper than the step after
 it. Keep that grounded in the slides rather than in invention.
 
+## `topics/conventions/` — signs, references and ground
+
+`js/tutorial/conventions.js` (`ConventionsLab`). One fixed circuit — 12 V, R₁ in series with
+R₂ ∥ R₃ — marked up whichever way the student asks for. The dials are not component values but
+**agreements**: charge-flow direction, which node is 0 V, which way each arrow points, where
+the + mark goes, how KCL is phrased.
+
+- **The circuit is solved once**, by `js/solve.js`, before any choice is applied. Every choice
+  is a presentation layer over that one answer. If a choice could change the solve, it would
+  not be a convention, and that is the test for whether a new option belongs here.
+- **The values are chosen to be checkable in your head** — 150 mA splitting into 100 and 50,
+  nodes at 12 / 6 / 0 V, powers 0.9 + 0.6 + 0.3 = 1.8 W. A student who cannot yet follow the
+  algebra can still see that the right-hand column does not move.
+- **Wrongness is computed, not listed.** `faults()` inspects the marked-up figure: a passive
+  element whose power comes out negative, a branch carrying two contradictory arrows, a claim
+  that the reference node is absolutely zero. So *"+ always at the top"* is flagged **only when
+  the arrow it contradicts actually points the other way** — which is the lesson. A bad habit is
+  invisible until the day one of your guesses is backwards, and the self-check asserts both
+  halves of that: flagged with the guessed arrows, silent with the true ones.
+- **The guessed arrows draw R₃ backwards on purpose**, so one current comes out negative and
+  nothing else changes. That is the most reassuring fact in the module and it has to be
+  performed rather than stated. Keep it backwards.
+- **Electron drift is an overlay, not a second set of numbers.** Prof Holm's slide settles it —
+  electrons go the other way, we use positive current, trust the maths — so the setting draws
+  the drift alongside and every number on the page stays conventional. Re-deriving the page in
+  electron currents would teach sign bookkeeping instead of the point.
+- **A source's ± is printed, not chosen.** Only its arrow is free, which is why P = −V·I there
+  and why the page can show a source delivering without calling the marking a mistake.
+- **Reset restores the conventions the rest of the site uses** — reference at the first source's
+  − terminal (`js/solve.js`), + where the arrow enters, KCL as Σ leaving = 0
+  (`js/techniques/node-voltage.js`). Those two are pinned in the self-check, so neither file can
+  drift away from what this page teaches without a failure.
+
+**The invariance is the page.** If a legal set of conventions ever moves a magnitude, a
+difference or a power, the page is asserting something false; that is what the 24-combination
+check exists for, and it is the Δ-Y round trip's counterpart here.
+
 ## Verifying
 
 `js/tutorial.test.html` — open in a browser, every line must read `PASS`. It mounts both pages'
@@ -215,6 +264,13 @@ which each real page leaves unset.) It covers:
   a real connected circuit whose power balances, no reduced node keeping fewer than three
   branches, the gallery still covering node-wins / mesh-wins / a tie, and exactly one total
   being flagged as the winner — none on a tie.
+- **Conventions** — the fixed circuit still producing the numbers the guide quotes, all 24
+  legal combinations of the conventions leaving every magnitude, difference and power
+  identical, a counter-check that the signs really do move (or the invariance claim would be
+  vacuous), each of the three mistakes being flagged where it is computed rather than where it
+  is chosen, the same bad habit staying silent when the guess happens to be right, reset
+  agreeing with `js/solve.js` and `js/techniques/node-voltage.js`, and every chapter rendering
+  both with the defaults and with every mistake switched on at once.
 
 Two things it cannot check, both of which need eyes:
 
