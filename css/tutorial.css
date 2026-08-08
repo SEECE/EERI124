@@ -265,8 +265,9 @@
 .figure--drawn .src { fill: var(--surface); stroke: var(--ink); stroke-width: 2.2; }
 .figure--drawn .mark { font-size: 15px; font-weight: 800; fill: var(--accent-deep); }
 .figure--drawn .ref { stroke: var(--ink); stroke-width: 2.4; fill: none; stroke-linecap: round; }
-.figure--drawn .probe-red { stroke: #b4293c; stroke-width: 2.6; fill: none; stroke-linecap: round; }
-.figure--drawn .probe-black { stroke: var(--ink); stroke-width: 2.6; fill: none; stroke-linecap: round; }
+.figure--drawn .probe-black { stroke: var(--ink); stroke-width: 3.2; fill: none; stroke-linecap: round; }
+/* where the electrons actually go — an overlay, never a set of numbers (js/tutorial/conventions.js) */
+.figure--drawn .flow.drift { opacity: 0.3; }
 /* a mark the maths cannot survive — a sign that contradicts another sign on the same figure */
 .figure--drawn .is-bad { stroke: #b4293c; }
 .figure--drawn text.is-bad, .figure--drawn .flow.is-bad { fill: #b4293c; stroke: none; }
