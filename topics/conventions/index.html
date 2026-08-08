@@ -34,6 +34,10 @@
     <section class="board panel" aria-label="One circuit, your conventions">
       <div class="board-head">
         <span class="eyebrow">Pick your conventions — the answer does not move</span>
+        <div class="seg" id="mode" role="group" aria-label="Which law to write the circuit with">
+          <button type="button" data-mode="kcl" aria-pressed="true">KCL — nodes</button>
+          <button type="button" data-mode="kvl" aria-pressed="false">KVL — loops</button>
+        </div>
         <span class="badge badge--ok" id="verdict" role="status"></span>
         <button type="button" class="btn btn--soft btn--sm" id="reset">Reset to the site default</button>
       </div>

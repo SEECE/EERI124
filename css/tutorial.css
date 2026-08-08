@@ -278,6 +278,9 @@
 .figure--drawn text.is-lit { stroke: var(--surface); fill: var(--accent-hover); }
 .figure--drawn .is-dim { opacity: 0.26; }
 .figure--drawn .flow { stroke: var(--accent); fill: var(--accent); }
+/* a mesh loop arrow (conventions page, KVL mode). Deeper than a branch arrow because a loop is
+   a bookkeeping device drawn over the circuit, not a marking on one element. */
+.figure--drawn .loop { stroke: var(--accent-deep); fill: var(--accent-deep); stroke-width: 2.2; stroke-linecap: round; }
 
 @media (prefers-reduced-motion: no-preference) {
   .figure--drawn .wire, .figure--drawn .res, .figure--drawn text { transition: opacity var(--dur) var(--ease); }
