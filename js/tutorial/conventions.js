@@ -451,10 +451,186 @@
       invWrap.appendChild(row('Σ P', si(0, 'W')));
     }
 
-    /* ---------- the guide ---------- */
-    /* Chapters are added in the next commit; each `html` must be a FUNCTION so refresh() can
-       re-run it against the live choices without moving the student off their chapter. */
-    function chapters() { return []; }
+    /* ---------- the guide ----------
+       Every `html` is a FUNCTION, so refresh() re-runs it against the live choices when a
+       button is pressed — the prose stays put and the numbers inside it move. Nothing derived
+       may be captured out here, or a chapter goes stale on the first click. */
+    function eq(main, note) {
+      return '<div class="lesson-eq">' + main +
+        (note ? '<span class="lesson-eq-note">' + note + '</span>' : '') + '</div>';
+    }
+    function flag(html) { return '<p class="lesson-flag">' + html + '</p>'; }
+    function m(k) { return marked(BY_KEY[k]); }
+
+    function chapters() {
+      return [
+        { title: 'A convention is something we agreed to', lit: [],
+          html: function () {
+            return '<p>Charge really does flow in this circuit, and what actually moves is ' +
+              '<b>electrons</b> — negative, and therefore travelling the opposite way to every ' +
+              'arrow you will ever draw in this module. That is the physics, and it is fixed.</p>' +
+              '<p>The arrows are not the physics. They are a <em>convention</em>: we agreed to ' +
+              'call the direction positive charge would move the positive direction, and we do ' +
+              'the algebra in that. Press <b>Show electron drift</b> and watch the faint arrows ' +
+              'appear pointing the other way. Not one number on this page moves.</p>' +
+              '<p>Which is the whole idea. A convention costs nothing and buys everything: ' +
+              'everyone writing the same circuit down the same way. EERI 124 uses <b>positive ' +
+              'current</b> throughout, and so does every other page on this site.</p>' +
+              flag('The physics stays fixed — electrons are the ones that actually flow. ' +
+                'We use a convention because we <em>agree</em> to it. That is it.');
+          } },
+
+        { title: 'A potential on its own means nothing', lit: ['r1'],
+          html: function () {
+            return '<p>Ask "what is the voltage at node B?" and the honest answer is: compared ' +
+              'to <em>what</em>? A single potential is not a measurable thing. Put one probe on ' +
+              'B and the meter reads nothing at all until you put the other probe somewhere.</p>' +
+              '<p>What has meaning is the <b>difference</b>, because a difference is what pushes ' +
+              'charge. Across R<sub>1</sub> here that difference is ' +
+              si(VOLT.A - VOLT.B, 'V') + ', and it is the reason ' + si(Math.abs(truth(BY_KEY.r1).iab), 'A') +
+              ' flows through it.</p>' + eq('v<sub>A</sub> − v<sub>B</sub> = ' +
+                si(VOLT.A - VOLT.B, 'V'), 'the same number no matter where you call 0 V') +
+              '<p>So every "node voltage" you will write down is secretly a difference — between ' +
+              'that node and one node you nominated. Which one is the next chapter.</p>';
+          } },
+
+        { title: 'The reference node is a choice', lit: ['ref'],
+          html: function () {
+            return '<p>Pick any node, call it 0 V, and measure everything from there. That node ' +
+              'is the <b>reference</b>. Right now it is node <b>' + pick.ref + '</b>, so the ' +
+              'three potentials read ' + ['A', 'B', 'C'].map(function (n) {
+                return 'v<sub>' + n + '</sub> = ' + si(pot(n), 'V');
+              }).join(', ') + '.</p>' +
+              '<p>Now press the other two <b>Reference 0 V</b> buttons. Every node number ' +
+              'changes. Every <em>difference</em> in the right-hand column sits perfectly ' +
+              'still — and so does every current, and every power.</p>' +
+              eq('v<sub>A</sub> − v<sub>C</sub> = ' + si(VOLT.A - VOLT.C, 'V') +
+                 '  ·  v<sub>B</sub> − v<sub>C</sub> = ' + si(VOLT.B - VOLT.C, 'V'),
+                 'unmoved by anything you can press') +
+              '<p>Choose <em>sensibly</em> and the algebra gets shorter: hang the reference on a ' +
+              'voltage source\'s − terminal and that source hands you its other node for free. ' +
+              'That is node ' + DEFAULTS.ref + ' here, and it is what js/solve.js does on every ' +
+              'solver page on this site.</p>';
+          } },
+
+        { title: 'Ground is not the same thing as 0 V', lit: ['ref'],
+          html: function () {
+            return '<p>This is the one that catches people. <b>Ground</b> — earth — is a ' +
+              'physically enormous volume of charge. It is so large that adding or removing a ' +
+              'realistic amount changes its potential by nothing measurable, which is what makes ' +
+              'it useful: an absolute reference that cannot be pushed around.</p>' +
+              '<p><b>0 V in a circuit is not that.</b> It is the node you chose to measure from ' +
+              '— where you put the multimeter\'s black lead. Nothing on this board is connected ' +
+              'to the earth, and node ' + pick.ref + ' does not have to sit at the earth\'s ' +
+              'potential to read 0 V on your meter. It reads zero because you measured from it.</p>' +
+              '<p>Press <b>Earthed, truly zero</b> and see the claim go red.</p>' +
+              flag('A corollary with real consequences: you cannot clip an oscilloscope\'s ' +
+                'ground lead to any node you like. That lead <em>is</em> earthed — clip it to a ' +
+                'node that is not, and you have wired a short circuit through the instrument.');
+          } },
+
+        { title: 'Draw the arrows before you know the answer', lit: ['r3'],
+          html: function () {
+            var r3 = m('r3');
+            return '<p>You have to mark a direction on every branch before you can write a ' +
+              'single equation — and at that point you do not know which way the current goes. ' +
+              'That is fine. <b>You cannot guess wrong.</b></p>' +
+              '<p>The arrow does not claim the current flows that way. It <em>defines</em> which ' +
+              'way you are calling positive. Guess backwards and the answer comes out negative, ' +
+              'which is the maths telling you politely that it flows the other way.</p>' +
+              '<p>R<sub>3</sub>\'s arrow is drawn backwards on purpose in the <b>Guessed</b> ' +
+              'setting, so ' + isym(BY_KEY.r3) + ' = ' + sig(r3.i, 'A') + '. Switch to <b>Follow ' +
+              'the flow</b>: it becomes ' + sig(Math.abs(truth(BY_KEY.r3).iab), 'A') + '. The ' +
+              'current through R<sub>3</sub> was ' + si(Math.abs(truth(BY_KEY.r3).iab), 'A') +
+              ' either way — the sign was only ever about the arrow.</p>';
+          } },
+
+        { title: 'One branch carries one current', lit: ['r2'],
+          html: function () {
+            return '<p>There is a habit that looks like a shortcut: at each node, draw one ' +
+              'current going <em>in</em> and let the rest go <em>out</em>. Applied node by node ' +
+              'it eventually asks the same branch to be an "in" at one end and an "out" at the ' +
+              'other — two arrowheads on one resistor, pointing at each other.</p>' +
+              '<p>Press <b>In and out at B</b>. KCL at B now leaves ' + sig(residual(), 'A') +
+              ' unaccounted for, because R<sub>2</sub>\'s current got counted twice.</p>' +
+              eq(kclHtml()) +
+              '<p>The fix is not a better habit, it is the definition: an arrow belongs to a ' +
+              '<b>branch</b>, not to a node. Draw it once, and then read it as leaving at one ' +
+              'end and entering at the other — automatically, without deciding anything.</p>';
+          } },
+
+        { title: 'The passive sign convention', lit: ['r1'],
+          html: function () {
+            return '<p>Now the ± marks. For a passive component — a resistor here — the rule is ' +
+              'one line: <b>current enters at the + terminal</b>. You drew the arrow, so the ' +
+              'arrow decides where the + goes. Not the top of the page, not the left.</p>' +
+              eq('current in at +  ⇒  P = V · I', 'and P comes out positive: absorbed') +
+              '<p>Press <b>Always top / left</b>. The board turns red — R<sub>3</sub>, whose ' +
+              'arrow is the backwards guess, is suddenly producing power. Now switch the arrows ' +
+              'to <b>Follow the flow</b> and the red goes away, with the habit unchanged: the ' +
+              'top is simply where the current happens to enter now.</p>' +
+              flag('That is the point of the mistake being computed rather than announced. A ' +
+                'bad habit is invisible until the day one of your guesses is backwards — and ' +
+                'on a real problem you will not be told which day that is.');
+          } },
+
+        { title: 'What the sign of the power means', lit: [],
+          html: function () {
+            return '<p>Multiply the marked voltage by the marked current and the sign tells you ' +
+              'what the element <em>is</em>. Nothing else is needed — not the shape of the ' +
+              'symbol, not where it sits on the page.</p>' +
+              '<table class="pair-table"><thead><tr><th></th>' +
+              '<th>V is + (as drawn)</th><th>V is − (swapped)</th></tr></thead><tbody>' +
+              '<tr><td>I is + (into +)</td><td>load</td><td>source</td></tr>' +
+              '<tr><td>I is − (out of +)</td><td>source</td><td>load</td></tr>' +
+              '</tbody></table>' +
+              '<p>Right now R<sub>2</sub> gives ' + sig(m('r2').v, 'V') + ' · ' +
+              sig(m('r2').i, 'A') + ' = ' + sig(m('r2').p, 'W') + ' — positive, so it is ' +
+              'absorbing, which is the only thing a resistor is allowed to do.</p>' +
+              '<p>Two facts worth memorising because they are what makes the table safe to ' +
+              'trust: an ideal <b>voltage</b> source has zero resistance, so its voltage is ' +
+              'fixed and its current can be anything in either direction. An ideal <b>current</b> ' +
+              'source has infinite resistance, so its current is fixed and the voltage across ' +
+              'it can be any size and either polarity.</p>';
+          } },
+
+        { title: 'A source is allowed to absorb', lit: ['v'],
+          html: function () {
+            var v = m('v');
+            return '<p>A source\'s ± is <em>printed on its symbol</em> — it is given, not chosen ' +
+              '— and the current is what is free. Here the arrow leaves the + terminal, so the ' +
+              'absorbed power is P = −V · I = ' + sig(v.p, 'W') + ': negative, meaning this ' +
+              'source is <b>delivering</b> ' + si(-v.p, 'W') + ' into the circuit.</p>' +
+              '<p>Negative is the expected answer for a battery. It is not the guaranteed one. ' +
+              'Put a bigger source across it and the current reverses while the printed polarity ' +
+              'does not — the sign flips, and the battery is being charged. A current source ' +
+              'does the mirror version: its current is fixed, so the circuit decides its ' +
+              'voltage, and a large enough opposing voltage makes a 10 A source absorb ' +
+              'hundreds of watts.</p>' +
+              flag('So do not assume a source delivers and a component absorbs. Mark it up, ' +
+                'multiply, and read the sign. Trust the maths.');
+          } },
+
+        { title: 'Stick to it, and the books balance', lit: [],
+          html: function () {
+            var pc = Solve.powerCheck(brs);
+            return '<p>The check that catches almost everything: add up every power in the ' +
+              'circuit, signs included. It must come to zero. Energy is not created here and ' +
+              'charge is not consumed — a resistor turns kinetic energy into heat, but every ' +
+              'electron that goes in comes out.</p>' +
+              eq(si(pc.dissipated, 'W') + ' absorbed  −  ' + si(pc.generated, 'W') +
+                 ' delivered  =  ' + si(0, 'W'), 'Σ P = 0, under every convention on this page') +
+              '<p>Go back and press everything. The conventions rearrange the signs, the ' +
+              'wording and the node numbers; the right-hand column never moves. That is what it ' +
+              'means for something to be a convention rather than a fact.</p>' +
+              '<p><b>Reset to the site default</b> puts back the ones the rest of this site ' +
+              'uses: positive current, the reference on the source\'s − terminal, + where the ' +
+              'arrow enters, and KCL written as Σ leaving = 0. Every solve on every other page ' +
+              'is written that way — including <a href="../philosophy/index.html">Which Method, ' +
+              'and Why</a>, which is where to go next.</p>';
+          } },
+      ];
+    }
 
     var lesson = Lesson({
       title: id('lesson-title'),
