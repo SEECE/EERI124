@@ -209,60 +209,97 @@ it. Keep that grounded in the slides rather than in invention.
 
 ## `topics/conventions/` — signs, references and ground
 
-`js/tutorial/conventions.js` (`ConventionsLab`). One fixed circuit — 12 V, R₁ in series with
-R₂ ∥ R₃ — marked up whichever way the student asks for. The dials are not component values but
-**agreements**: charge-flow direction, which node is 0 V, which way each arrow points, where
-the + mark goes, how KCL is phrased.
+`js/tutorial/conventions.js` (`ConventionsLab`). **Three** fixed circuits, marked up whichever
+way the student asks for. The dials are not component values but **agreements**: which way
+charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phrased.
 
-- **The circuit is solved once**, by `js/solve.js`, before any choice is applied. Every choice
-  is a presentation layer over that one answer. If a choice could change the solve, it would
-  not be a convention, and that is the test for whether a new option belongs here. The two mesh
-  currents come from the same solve too — mesh 1's only unshared resistor is R₁ and mesh 2's is
-  R₃ — so the KVL half needs no second engine.
-- **Both laws, one circuit.** A KCL / KVL switch in the board head decides which pickers are on
-  show (`when` on a choice) and which equations the middle column writes. The markings the two
-  laws share — the reference, the arrows, the ± marks — stay put across the switch, because
-  they are on the figure either way. A chapter declares the `mode` it teaches in and the board
-  follows on arrival; applying it on every refresh instead would undo the switch the instant a
-  student pressed it, which is a bug this page already had once.
-- **The values are chosen to be checkable in your head** — 150 mA splitting into 100 and 50,
-  nodes at 12 / 6 / 0 V, powers 0.9 + 0.6 + 0.3 = 1.8 W. A student who cannot yet follow the
-  algebra can still see that the right-hand column does not move.
+- **Three circuits, and that is the point.** A convention is only ever tested by a circuit big
+  enough to contradict it, so the board head carries a complexity switch:
+
+  | id | circuit | KCL nodes | meshes |
+  | --- | --- | --- | --- |
+  | `basic` | the slides' one loop — 12 V across 40 + 40 | 1 (nothing to choose at it) | 1 |
+  | `split` | 40 in series with 60 ∥ 120 | 1 (one choice at it) | 2, one shared branch |
+  | `grid` | a past exam paper — 375 V into a 3×3 grid with a bottom loop | 4 | 3, **not yet offered** |
+
+  A habit that survives the first two and dies on the third is the whole argument. Never
+  "simplify" the page back to one circuit — the smallest one cannot break anything, which is
+  exactly why it is the wrong place to test a convention and the right place to introduce one.
+- **Every level is data, and each is solved once** by `js/solve.js` before any choice is
+  applied. The model, the sheet layout, the electrical nodes, the meshes and the `roles` map
+  all live in the `LEVELS` table; `solved(L)` caches the one solve. Every choice is then a
+  presentation layer over that answer. If a choice could change a solve, it would not be a
+  convention, and that is the test for whether a new option belongs here.
+- **A chapter declares its circuit and its law**, and the board follows on arrival — only on
+  arrival, or the switch would be undone the instant a student pressed it. `js/tutorial/lesson.js`
+  runs `onView` **before** rendering the body for exactly this reason: a chapter's `html()`
+  reads live state, so painting first hands it the previous chapter's circuit. That bug is what
+  the ordering comment there is protecting.
+- **A chapter quotes elements by role, not by key** (`series`, `split`, `odd`), because the
+  same chapter renders on more than one circuit. `lit` entries are resolved through the same
+  map.
+- **The marking is one decision, the movement is another.** The arrow beside an element and its
+  ± pair are tied together by the passive sign convention, so the *+ mark* picker turns both:
+  *where the current enters*, *every one reversed* (legal — two sign flips cancel in V·I and
+  every power stays absorbed), and *one branch backwards* (the marks put on one element at a
+  time, which makes that resistor produce power). The faint arrows **on the wires** are where
+  charge actually goes and are not a choice at all — only whether they are drawn as positive
+  flow or as electron drift. Do not re-introduce a separate arrows picker: it made the marking
+  and the polarity look like two independent decisions, which is the misconception.
+- **KCL carries bookkeeping arrows** on the leads at every node in `kclAt`, the same marks
+  `js/circuit.js` puts on a solver page. Σ leaving points them all away from the node whatever
+  the branch arrows say; the other two phrasings read the branch arrows back.
+- **"One in, rest out" is legal until it is not, and the page proves it by counting.** With
+  *n* nodes to write KCL at and *e* branches running between them, each of those branches
+  delivers exactly one arrival to that set however it is drawn — so when *e > n*, some node
+  collects two and the habit is impossible, not merely unlucky. On the grid that is 5 > 4.
+  `interior()` computes *e* and `incoming()` counts arrivals off the figure, so the habit stays
+  silent on the first two circuits where it happens to work. This is the same shape as "+
+  always on top" and "always I₁ − I₂".
+- **The values are chosen to be checkable in your head** — 150 mA everywhere on `basic`;
+  150 splitting into 100 and 50 on `split`; 5 A splitting 1.25 / 3.75 then 0.875 / 0.375 on
+  `grid`, 1875 W each way. A student who cannot yet follow the algebra can still see that the
+  right-hand column does not move.
 - **Wrongness is computed, not listed.** `faults()` inspects the marked-up figure: a passive
-  element whose power comes out negative, a branch carrying two contradictory arrows, a shared
-  branch subtracted when the loops make it add, a claim that the reference node is absolutely
-  zero. So *"+ always at the top"* is flagged **only when the arrow it contradicts actually
-  points the other way** — which is the lesson. A bad habit is invisible until the day one of
-  your guesses is backwards, and the self-check asserts both halves of that: flagged with the
-  guessed arrows, silent with the true ones.
+  element whose power comes out negative, a node the chosen phrasing cannot be written at, a
+  shared branch subtracted when the loops make it add, a claim that the reference node is
+  absolutely zero. So a habit is flagged **only where it actually contradicts something**,
+  which is the lesson.
 - **Opposite loop directions are NOT the mistake**, and the page must not say they are. Mesh
   analysis is valid for any loop directions; reversing one loop simply makes the shared branch
   *add* instead of subtract. What breaks is the habit "mine minus theirs" carried into the case
   where the loops disagree, so `sharedCoef()` forces that ratio to −1 and the fault falls out of
   the non-zero mesh residual. Both agreeing cases — clockwise and anticlockwise — pass
-  untouched, which is the same shape as the + mark that always went on top.
+  untouched.
 - **The sign the student writes on the shared branch is a ratio, not a coefficient.** With both
   loops anticlockwise the coefficient on I₂ is +1 while the two terms still subtract, because
   I₁'s coefficient is −1. `sharedRatio()` reads the expression along mesh 1's own walk, which is
   the only reading that says "agree ⇒ subtract, oppose ⇒ add" for every setting. Do not go back
   to the raw coefficient; it prints the wrong sign for anticlockwise.
-- **The guessed arrows draw R₃ backwards on purpose**, so one current comes out negative and
-  nothing else changes. That is the most reassuring fact in the module and it has to be
-  performed rather than stated. Keep it backwards.
 - **Electron drift is an overlay, not a second set of numbers.** Prof Holm's slide settles it —
-  electrons go the other way, we use positive current, trust the maths — so the setting draws
-  the drift alongside and every number on the page stays conventional. Re-deriving the page in
+  electrons go the other way, we use positive current, trust the maths — so the setting
+  reverses the overlay and every number on the page stays conventional. Re-deriving the page in
   electron currents would teach sign bookkeeping instead of the point.
 - **A source's ± is printed, not chosen.** Only its arrow is free, which is why P = −V·I there
   and why the page can show a source delivering without calling the marking a mistake.
 - **Reset restores the conventions the rest of the site uses** — reference at the first source's
-  − terminal (`js/solve.js`), + where the arrow enters, KCL as Σ leaving = 0
+  − terminal (`js/solve.js`), + where the current enters, KCL as Σ leaving = 0
   (`js/techniques/node-voltage.js`) and every mesh walked clockwise adding drops
   (`js/techniques/mesh-current.js`). Those are pinned in the self-check, so none of those files
   can drift away from what this page teaches without a failure.
+- **Switching circuits has two fallbacks**, both pinned: a reference node the new circuit has
+  not got drops to that circuit's default, and KVL on a circuit with no meshes drops to KCL.
+  Neither may flag anything or move a residual.
+
+**Known gap — the KVL half on the grid.** `meshEq()` carries a single `shared` key, and the
+grid has three shared branches (R₃, R₄, R₆). So `grid.mesh` is `null`, the KVL button disables
+itself there and says why, and `meshHtml()` degrades to nothing rather than throwing when a
+student presses a mesh-less circuit while standing on a KVL chapter. Generalising `meshEq()` to
+an arbitrary set of shared branches is the next piece of work on this page; when it lands,
+delete the *"a circuit with no meshes falls back to KCL"* check.
 
 **The invariance is the page.** If a legal set of conventions ever moves a magnitude, a
-difference or a power, the page is asserting something false; that is what the 144-combination
+difference or a power, the page is asserting something false; that is what the 264-combination
 check exists for, and it is the Δ-Y round trip's counterpart here. It compares to nine
 significant figures rather than to the bit: the KVL half reaches the shared branch by adding two
 mesh currents and the KCL half reads it off the solve, so they agree to about 1e-16.
@@ -288,19 +325,22 @@ which each real page leaves unset.) It covers:
   a real connected circuit whose power balances, no reduced node keeping fewer than three
   branches, the gallery still covering node-wins / mesh-wins / a tie, and exactly one total
   being flagged as the winner — none on a tie.
-- **Conventions** — the fixed circuit still producing the numbers the guide quotes, all 144
-  legal combinations across both laws leaving every magnitude, difference, power and
-  mesh-current size identical, a counter-check that the signs really do move (or the invariance
-  claim would be vacuous), each of the four mistakes being flagged where it is computed rather
-  than where it is chosen, the same bad habits staying silent where they happen to be right
-  (a backwards + mark whose arrow agrees, "mine minus theirs" with the loops agreeing),
-  reversing a loop reversing only its own variable, the shared branch adding exactly when the
-  loops oppose and one bad sign there reaching both mesh equations *and* KCL at B, reset
-  agreeing with `js/solve.js` and both technique files, and every chapter rendering with the
-  defaults and with every mistake switched on at once.
+- **Conventions** — all three circuits still producing the numbers the guide quotes, all 264
+  legal combinations across them leaving every magnitude, difference, power and mesh-current
+  size identical, a counter-check that the signs really do move (or the invariance claim would
+  be vacuous), each of the four mistakes being flagged where it is computed rather than where
+  it is chosen, the same bad habits staying silent where they happen to be right ("one in, rest
+  out" on the two circuits it works on, "mine minus theirs" with the loops agreeing), reversing
+  every marking turning every current sign and no power and leaving no resistor producing, the
+  counting argument behind "one in, rest out" asserted rather than described, reversing a loop
+  reversing only its own variable, the shared branch adding exactly when the loops oppose and
+  one bad sign there reaching both mesh equations *and* KCL, both circuit-switch fallbacks, a
+  chapter switching the circuit without moving the student off it, reset agreeing with
+  `js/solve.js` and both technique files, and every chapter rendering with the defaults and
+  with every mistake switched on at once.
 
-  The KCL-specific checks pin `mode` explicitly. They predate the mode switch, and without it
-  they inherit whatever the KVL checks left behind and fail for the wrong reason.
+  Every check pins `level` and `mode` explicitly. Both are shared state that the previous check
+  left behind, and without pinning them a check inherits it and fails for the wrong reason.
 
 Two things it cannot check, both of which need eyes:
 
