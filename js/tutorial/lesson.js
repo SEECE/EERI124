@@ -20,11 +20,10 @@
     function paint(keepScroll) {
       var ch = chapters[i];
       if (!ch) return;
-      /* FIRST, because a page may carry the board with the chapter — the conventions page
-         switches both the circuit and the law on arrival — and a chapter's html() reads that
-         live state. Rendering the body first hands a KVL chapter the previous chapter's
-         circuit, which is how one of them ended up asking a mesh-less circuit for its mesh
-         equation. Nothing here re-enters paint(), so the order is safe. */
+      /* FIRST, because `html()` reads the page's live state and onView is where a page reacts
+         to the chapter it is about to show. Rendering the body first hands every chapter the
+         PREVIOUS chapter's state, which is a bug waiting for the first page whose chapters
+         differ in more than what they highlight. Nothing here re-enters paint(). */
       if (o.onView) o.onView(ch, i);
       if (o.title) o.title.innerHTML = ch.title;   // titles carry subscripts (R<sub>AB</sub>)
       if (o.count) o.count.textContent = (i + 1) + ' / ' + chapters.length;

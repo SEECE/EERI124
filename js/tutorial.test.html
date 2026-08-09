@@ -80,7 +80,7 @@
       <div class="seg" id="cv-level">
         <button type="button" data-level="basic" aria-pressed="false">One loop</button>
         <button type="button" data-level="split" aria-pressed="true">One split</button>
-        <button type="button" data-level="grid" aria-pressed="false">Exam grid</button>
+        <button type="button" data-level="grid" aria-pressed="false">Multiple loops</button>
       </div>
       <div class="seg" id="cv-mode">
         <button type="button" data-mode="kcl" aria-pressed="true">KCL</button>
@@ -122,9 +122,9 @@
 
     // Every chapter is re-rendered from the LIVE values on each refresh, so a chapter that
     // captured a stale number prints it here, and a missing one prints "undefined".
-    function walkChapters(lab, prefix, label) {
+    function walkChapters(lab, prefix, label, min) {
       var dots = $(prefix + 'lesson-dots').children.length;
-      assert(dots >= 8, label + ': only ' + dots + ' chapters');
+      assert(dots >= (min || 8), label + ': only ' + dots + ' chapters');
       for (var i = 0; i < dots; i++) {
         lab.lesson.go(i);
         var t = text(prefix + 'lesson-title') + ' ' + text(prefix + 'lesson-body');
@@ -788,27 +788,65 @@
         'js/techniques/mesh-current.js walks clockwise adding drops; this page must agree');
     });
 
-    check('conventions — every chapter renders, right and wrong', function () {
-      cv.reset();
-      walkChapters(cv, 'cv-', 'conventions (default)');
-      // a chapter carries its own circuit and law, so these have to survive being applied to
-      // whichever one the chapter arrives on
-      cv.set({ zero: 'earth', polarity: 'odd', kcl: 'onein' });
-      walkChapters(cv, 'cv-', 'conventions (every mistake on)');
-      var board = text('cv-wrote') + text('cv-invariant') + text('cv-verdict');
-      assert(!/undefined|NaN/.test(board), 'readout: ' + board.slice(0, 160));
+    /* There is one guide per (circuit, law), and the BOARD is in charge of which one you are
+       reading. Every guide must therefore render on the circuit it was written for, and no
+       chapter may move the board — that was the old design, and walking backwards through it
+       changed the circuit under the student. */
+    var CV_GUIDES = [['basic', 'kcl', 8], ['basic', 'kvl', 2], ['split', 'kcl', 3],
+      ['split', 'kvl', 3], ['grid', 'kcl', 3]];
+
+    check('conventions — every guide renders on its own circuit, right and wrong', function () {
+      CV_GUIDES.forEach(function (g) {
+        [{}, { zero: 'earth', polarity: 'odd', kcl: 'onein' }].forEach(function (extra, k) {
+          var p = { level: g[0], mode: g[1] };
+          Object.keys(extra).forEach(function (n) { p[n] = extra[n]; });
+          cv.set(p);
+          var label = 'conventions ' + g[0] + '/' + g[1] + (k ? ' (every mistake on)' : '');
+          assert(cv.state().guide === g[0] + '/' + g[1],
+            label + ': the board is showing ' + cv.state().guide);
+          walkChapters(cv, 'cv-', label, g[2]);
+          var board = text('cv-wrote') + text('cv-invariant') + text('cv-verdict');
+          assert(!/undefined|NaN/.test(board), label + ' readout: ' + board.slice(0, 160));
+        });
+      });
       cv.reset();
     });
 
-    /* A chapter may switch the circuit under the student. The one thing that must never happen
-       is the guide moving them off the chapter they are reading while it does. */
-    check('conventions — pressing a circuit keeps the student on their chapter', function () {
-      cv.lesson.go(9);
-      var at = cv.lesson.index();
-      cv.set({ level: 'grid' });
-      assert(cv.lesson.index() === at, 'switching circuits jumped to chapter ' + (cv.lesson.index() + 1));
-      assert(!/undefined|NaN/.test(text('cv-lesson-body')), 'the chapter broke on the new circuit');
+    check('conventions — no chapter moves the board, forwards or backwards', function () {
+      CV_GUIDES.forEach(function (g) {
+        cv.set({ level: g[0], mode: g[1] });
+        var n = $('cv-lesson-dots').children.length, i;
+        for (i = 0; i < n; i++) {
+          cv.lesson.go(i);
+          assert(cv.state().guide === g[0] + '/' + g[1],
+            g[0] + '/' + g[1] + ': chapter ' + (i + 1) + ' moved the board to ' + cv.state().guide);
+        }
+        for (i = n - 1; i >= 0; i--) {          // and the same walking back out again
+          cv.lesson.go(i);
+          assert(cv.state().guide === g[0] + '/' + g[1],
+            g[0] + '/' + g[1] + ': walking back, chapter ' + (i + 1) + ' moved the board');
+        }
+      });
       cv.reset();
+    });
+
+    check('conventions — pressing a circuit or a law restarts that guide at chapter 1', function () {
+      cv.set({ level: 'basic', mode: 'kcl' });
+      cv.lesson.go(6);
+      assert(cv.lesson.index() === 6, 'could not get to chapter 7');
+      cv.set({ mode: 'kvl' });
+      assert(cv.lesson.index() === 0, 'switching law left the student on chapter ' +
+        (cv.lesson.index() + 1));
+      assert(cv.state().guide === 'basic/kvl', 'switching law loaded ' + cv.state().guide);
+      cv.lesson.go(1);
+      cv.set({ level: 'grid' });                // …and KVL there falls back to KCL
+      assert(cv.lesson.index() === 0, 'switching circuit left the student on chapter ' +
+        (cv.lesson.index() + 1));
+      assert(cv.state().guide === 'grid/kcl', 'switching circuit loaded ' + cv.state().guide);
+      cv.lesson.go(2);
+      cv.reset();
+      assert(cv.lesson.index() === 0 && cv.state().guide === 'split/kcl',
+        'reset left the student on ' + cv.state().guide + ' chapter ' + (cv.lesson.index() + 1));
     });
 
     $('out').textContent = out.join('\n') + '\n\n' +

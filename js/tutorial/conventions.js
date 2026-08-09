@@ -173,7 +173,7 @@
        Electrical nodes: A (n0,n4 — the left rail), B (n1), C (n2,n5 — the right rail), D (n3),
        E (n6), F (n7,n9 — the bottom right, and the source's − terminal). */
     {
-      id: 'grid', name: 'Exam grid', view: '0 0 880 430',
+      id: 'grid', name: 'Multiple loops', view: '0 0 880 430',
       //        n0        n1       n2       n3       n4        n5       n6       n7      n9
       coords: [[-1, -2], [0, -2], [1, -2], [0, -1], [-1, -1], [1, -1], [-1, 0], [1, 0], [0, 0]],
       edges: [
@@ -339,7 +339,7 @@
 
     var pick = {};
     Object.keys(DEFAULTS).forEach(function (k) { pick[k] = DEFAULTS[k]; });
-    var parts = {}, lit = [], atChapter = -1;
+    var parts = {}, lit = [];
 
     function cur() { return BY_ID[pick.level]; }
     function key(k) { return cur().byKey[k]; }
@@ -910,10 +910,20 @@
     }
 
     /* ---------- the guide ----------
-       Every `html` is a FUNCTION, so refresh() re-runs it against the live choices when a
+       ONE GUIDE PER (CIRCUIT, LAW), and the board is in charge. Press a circuit or a law and
+       you get that pairing's chapters from chapter 1. No chapter carries a `level` or a `mode`
+       any more, and nothing in here ever moves the board.
+
+       It used to be the other way round — chapters declared the circuit and the law they
+       taught in, and arriving at one switched the board. Walking backwards through the guide
+       then changed the circuit and the law under the student for reasons they had not asked
+       for, and pressing a circuit left them on a chapter written for a different one. A guide
+       that follows the board has neither problem, and every chapter is guaranteed a circuit it
+       was written for.
+
+       Every `html` is still a FUNCTION, so refresh() re-runs it against the live choices when a
        button is pressed — the prose stays put and the numbers inside it move. Nothing derived
-       may be captured out here, or a chapter goes stale on the first click. A chapter also
-       declares the circuit and the law it teaches on, and the board follows on arrival. */
+       may be captured out here, or a chapter goes stale on the first click. */
     function eq(main, note) {
       return '<div class="lesson-eq">' + main +
         (note ? '<span class="lesson-eq-note">' + note + '</span>' : '') + '</div>';
@@ -921,10 +931,14 @@
     function flag(html) { return '<p class="lesson-flag">' + html + '</p>'; }
     function m(k) { return marked(key(k)); }
     function mr(r) { return marked(role(r)); }
+    /* Every guide ends by naming the button that carries on, because the guides are short and
+       a dead Next button is not an instruction. */
+    function next(html) { return '<p class="lesson-flag">' + html + '</p>'; }
 
-    function chapters() {
+    /* ---- one loop, KCL: everything a marking is, on the circuit that cannot break one ---- */
+    function basicKcl() {
       return [
-        { title: 'A convention is something we agreed to', lit: [], level: 'basic', mode: 'kcl',
+        { title: 'A convention is something we agreed to', lit: [],
           html: function () {
             return '<p>Charge really does flow in this circuit, and what actually moves is ' +
               '<b>electrons</b> — negative, and therefore travelling the opposite way to every ' +
@@ -940,7 +954,7 @@
                 'We use a convention because we <em>agree</em> to it. That is it.');
           } },
 
-        { title: 'A potential on its own means nothing', lit: ['series'], level: 'basic', mode: 'kcl',
+        { title: 'A potential on its own means nothing', lit: ['series'],
           html: function () {
             return '<p>Ask "what is the voltage at node B?" and the honest answer is: compared ' +
               'to <em>what</em>? A single potential is not a measurable thing. Put one probe on ' +
@@ -955,7 +969,7 @@
               'that node and one node you nominated. Which one is the next chapter.</p>';
           } },
 
-        { title: 'The reference node is a choice', lit: ['ref'], level: 'basic', mode: 'kcl',
+        { title: 'The reference node is a choice', lit: ['ref'],
           html: function () {
             return '<p>Pick any node, call it 0 V, and measure everything from there. That node ' +
               'is the <b>reference</b>. Right now it is node <b>' + pick.ref + '</b>, so the ' +
@@ -974,7 +988,7 @@
               'this site.</p>';
           } },
 
-        { title: 'Ground is not the same thing as 0 V', lit: ['ref'], level: 'basic', mode: 'kcl',
+        { title: 'Ground is not the same thing as 0 V', lit: ['ref'],
           html: function () {
             return '<p>This is the one that catches people. <b>Ground</b> — earth — is a ' +
               'physically enormous volume of charge. It is so large that adding or removing a ' +
@@ -990,7 +1004,7 @@
                 'node that is not, and you have wired a short circuit through the instrument.');
           } },
 
-        { title: 'The passive sign convention', lit: ['series'], level: 'basic', mode: 'kcl',
+        { title: 'The passive sign convention', lit: ['series'],
           html: function () {
             return '<p>Now the marks beside each element: an arrow, and a ± pair. They are ' +
               '<b>one decision, not two</b>. For a passive component — a resistor here — the ' +
@@ -1005,7 +1019,7 @@
               'reassuring fact in the module.</p>';
           } },
 
-        { title: 'Mark it the other way and nothing breaks', lit: [], level: 'basic', mode: 'kcl',
+        { title: 'Mark it the other way and nothing breaks', lit: [],
           html: function () {
             return '<p>Press <b>Every one reversed</b>. Every arrow spins round and every ± pair ' +
               'goes with it, because they are one decision. Every current on the figure is now ' +
@@ -1022,7 +1036,7 @@
                 'physics and the marking is bookkeeping.');
           } },
 
-        { title: 'What the sign of the power means', lit: [], level: 'basic', mode: 'kcl',
+        { title: 'What the sign of the power means', lit: [],
           html: function () {
             return '<p>Multiply the marked voltage by the marked current and the sign tells you ' +
               'what the element <em>is</em>. Nothing else is needed — not the shape of the ' +
@@ -1039,7 +1053,7 @@
               'it can be any size and either polarity.</p>';
           } },
 
-        { title: 'A source is allowed to absorb', lit: ['v'], level: 'basic', mode: 'kcl',
+        { title: 'A source is allowed to absorb', lit: ['v'],
           html: function () {
             var v = m('v');
             return '<p>A source\'s ± is <em>printed on its symbol</em> — it is given, not chosen ' +
@@ -1053,11 +1067,57 @@
               'voltage, and a large enough opposing voltage makes a 10 A source absorb ' +
               'hundreds of watts.</p>' +
               flag('So do not assume a source delivers and a component absorbs. Mark it up, ' +
-                'multiply, and read the sign. Trust the maths.');
+                'multiply, and read the sign. Trust the maths.') +
+              next('That is every marking there is, on the smallest circuit that has any. Press ' +
+                '<b>KVL — loops</b> for the other law on this circuit, or <b>One split</b> for ' +
+                'the first circuit that can catch a bad habit.');
+          } },
+      ];
+    }
+
+    /* ---- one loop, KVL: the loop rule with nothing shared, so nothing can go wrong ---- */
+    function basicKvl() {
+      return [
+        { title: 'One loop, one equation', lit: ['m1'],
+          html: function () {
+            return '<p>KCL was about a node. <b>KVL</b> is about a loop: go all the way round ' +
+              'any closed path and the potential differences must sum to zero, because you ' +
+              'finished where you started and a node cannot be at two potentials at once.</p>' +
+              '<p>This circuit is one loop, so it is one equation. Walking it needs two more ' +
+              'agreements: <b>which way round</b> — the loop arrow now on the figure — and ' +
+              '<b>what counts as positive</b>, a drop or a rise. We walk <em>clockwise</em> and ' +
+              'add up <em>drops</em>, and so does every mesh solve on this site.</p>' +
+              meshHtml(0) +
+              '<p>One rule covers every element: walking from a to b, you drop by v<sub>ab</sub>. ' +
+              'For a resistor that is Ohm\'s law; for the source it is minus its value, because ' +
+              'walking − to + is a rise. Press <b>Σ rises = 0</b> and watch every sign flip at ' +
+              'once — that is the same equation multiplied by −1, and it has the same roots.</p>';
           } },
 
+        { title: 'Which way round is free', lit: ['m1'],
+          html: function () {
+            var I = meshI();
+            return '<p>Press <b>All anticlockwise</b>. The loop arrow spins round, ' +
+              'I<sub>1</sub> becomes ' + sig(I[0], 'A') + ' — and the equation still closes on ' +
+              'zero.</p>' +
+              '<p>It has to, because a <b>mesh current is not a thing you could measure</b>. ' +
+              'There is no wire carrying I<sub>1</sub>. It is a bookkeeping variable invented so ' +
+              'that KCL is satisfied automatically at every node, and the only quantities with ' +
+              'physical meaning are the branch currents you build out of it — which the ' +
+              'right-hand column shows have not moved at all.</p>' +
+              '<p>So the direction is free, exactly like the arrow on a branch. Clockwise is a ' +
+              'convention because a room full of people all drawing clockwise can read each ' +
+              'other\'s work, not because a loop knows which way round it is.</p>' +
+              next('With one loop there is nothing for two loops to disagree about. Press ' +
+                '<b>One split</b> for the circuit where that starts to matter.');
+          } },
+      ];
+    }
+
+    /* ---- one split, KCL: the first circuit with a choice at a node ---- */
+    function splitKcl() {
+      return [
         { title: 'Two branches, and one habit that breaks', lit: ['split', 'odd'],
-          level: 'split', mode: 'kcl',
           html: function () {
             return '<p>Now a node with a choice at it. The circuit has grown one branch: ' +
               si(Math.abs(truth(role('series')).iab), 'A') + ' arrives at B and splits into ' +
@@ -1076,7 +1136,7 @@
                 'watts and said so — the same check you can run on your own paper.');
           } },
 
-        { title: 'How you phrase KCL', lit: [], level: 'split', mode: 'kcl',
+        { title: 'How you phrase KCL', lit: [],
           html: function () {
             return '<p>KCL says charge does not pile up: what arrives at a node leaves it. There ' +
               'are two ordinary ways to write that, and they are the same equation.</p>' +
@@ -1085,56 +1145,44 @@
               '<p>Press between them. The small arrows on the leads at node B move — under ' +
               '<b>Σ leaving = 0</b> they all point away from B, whatever the branch arrows say, ' +
               'because that phrasing does not care. The terms are identical either way.</p>' +
-              '<p>Both are correct. Pick one and stay with it, because the moment you write one ' +
-              'node each way you will lose a sign. That is all a convention ever asks of you — ' +
-              'and the next chapter is what happens when the thing you picked cannot be kept.</p>';
+              '<p>There is a third button, <b>One in, rest out</b>, and on this circuit it does ' +
+              'nothing at all: B has one arrival and two departures already. Remember that it ' +
+              'looked harmless here.</p>';
           } },
 
-        { title: 'One in, the rest out — and where it runs out', lit: [], level: 'grid', mode: 'kcl',
+        { title: 'Every power still adds to zero', lit: [],
           html: function () {
-            var L = cur();
-            return '<p>Here is a past exam paper: ' + L.kclAt.length + ' nodes to write KCL at, ' +
-              'and a habit that has survived everything so far. Some people like every node to ' +
-              'have exactly <b>one current in and the rest out</b> — it reads naturally and it ' +
-              'has never failed them, because on the last two circuits it cannot.</p>' +
-              '<p>Press <b>One in, rest out</b>.</p>' +
-              '<p>It is not a marking you can fix by redrawing. Count: ' + L.kclAt.length +
-              ' nodes each want one incoming arrow, so ' + L.kclAt.length + ' arrivals in total. ' +
-              'But ' + interior() + ' branches run between those nodes, and every one of them ' +
-              'points into one of them whichever way you turn it. ' + interior() + ' arrivals ' +
-              'cannot be shared out one apiece among ' + L.kclAt.length + '.</p>' +
-              eq(interior() + ' branches between ' + L.kclAt.length + ' nodes  ⇒  ' + interior() +
-                 ' arrivals, ' + L.kclAt.length + ' places to put them',
-                 'so at least one node collects two, on any drawing') +
-              '<p>An arrow belongs to a <b>branch</b>, not to a node. Draw it once, read it as ' +
-              'leaving at one end and entering at the other, and the pattern at any one node is ' +
-              'not yours to choose. <b>Σ leaving = 0</b> never has this problem, which is why ' +
-              'it is what the rest of this site writes.</p>' +
-              flag('This is the shape of every mistake on this page. A habit you never chose is ' +
-                'safe right up until the circuit that was never true in — and nothing warns you ' +
-                'that you have reached it.');
+            var pc = Solve.powerCheck(solved(cur()).brs);
+            return '<p>The check that catches almost everything: add up every power in the ' +
+              'circuit, signs included. It must come to zero. Energy is not created here and ' +
+              'charge is not consumed — a resistor turns kinetic energy into heat, but every ' +
+              'electron that goes in comes out.</p>' +
+              eq(si(pc.dissipated, 'W') + ' absorbed  −  ' + si(pc.generated, 'W') +
+                 ' delivered  =  ' + si(0, 'W'), 'Σ P = 0, under every convention on this page') +
+              '<p>Press everything on this circuit and watch the right-hand column refuse to ' +
+              'move. The conventions rearrange the signs, the wording and the node numbers; ' +
+              'nothing physical follows them anywhere.</p>' +
+              next('Press <b>KVL — loops</b> for the two-mesh version of this circuit, or ' +
+                '<b>Multiple loops</b> for the circuit that finally breaks a habit.');
           } },
+      ];
+    }
 
-        { title: 'The other law, and the choices it needs', lit: ['m1', 'm2'],
-          level: 'split', mode: 'kvl',
+    /* ---- one split, KVL: two meshes, and the branch they share ---- */
+    function splitKvl() {
+      return [
+        { title: 'Two meshes, and the choices they need', lit: ['m1', 'm2'],
           html: function () {
-            return '<p>Everything so far was <b>KCL</b> at a node. The other half of the module ' +
-              'is <b>KVL</b> around a loop: go all the way round any closed path and the ' +
-              'potential differences must sum to zero, because you finished where you started ' +
-              'and a node cannot be at two potentials at once.</p>' +
-              '<p>Walking a loop needs two more agreements. <b>Which way round</b> — the two ' +
-              'loop arrows now on the figure — and <b>what counts as positive</b>, a drop or a ' +
-              'rise. We walk <em>clockwise</em> and add up <em>drops</em>, and so does every ' +
-              'mesh solve on this site.</p>' +
-              meshHtml(0) +
-              '<p>One rule covers every element: walking from a to b, you drop by v<sub>ab</sub>. ' +
-              'For a resistor that is Ohm\'s law; for the source it is minus its value, because ' +
-              'walking − to + is a rise. Press <b>Σ rises = 0</b> and watch every sign flip at ' +
-              'once — that is the same equation multiplied by −1, and it has the same roots.</p>';
+            return '<p>Two loops now, so two equations. Each needs the same two agreements as ' +
+              'before — <b>which way round</b> and <b>drop or rise</b> — and this time the two ' +
+              'loops have a branch in common, which is where the choices start to interact.</p>' +
+              meshHtml(0) + meshHtml(1) +
+              '<p>Press <b>Σ rises = 0</b>: every sign in both equations flips at once, which is ' +
+              'the same pair of equations multiplied by −1 and has the same roots. Nothing in ' +
+              'the right-hand column notices.</p>';
           } },
 
         { title: 'Reverse a loop and nothing breaks', lit: ['m1', 'm2'],
-          level: 'split', mode: 'kvl',
           html: function () {
             var I = meshI();
             return '<p>Press <b>All anticlockwise</b>. Both loop arrows spin round, ' +
@@ -1151,7 +1199,6 @@
           } },
 
         { title: 'Where the loop directions finally matter', lit: ['split', 'm1', 'm2'],
-          level: 'split', mode: 'kvl',
           html: function () {
             if (!cur().shared) {
               return '<p>This chapter needs a branch that two meshes have in common, and the ' +
@@ -1172,23 +1219,74 @@
               'their loops still agree. With both loops the same way nothing happens — it is the ' +
               'right answer there. With mesh 2 reversed the board goes red, both mesh equations ' +
               'are left holding a leftover voltage, and node B stops balancing.</p>' +
-              flag('Same shape as the ± pair put on one element at a time, and as "one in, the ' +
-                'rest out". A convention you chose is safe. A habit you never chose is safe ' +
-                'until the circumstance it was never true in.');
+              flag('Same shape as the ± pair put on one element at a time. A convention you ' +
+                'chose is safe. A habit you never chose is safe until the circumstance it was ' +
+                'never true in.') +
+              next('Press <b>KCL — nodes</b> and then <b>Multiple loops</b> for the last one.');
+          } },
+      ];
+    }
+
+    /* ---- multiple loops, KCL: the circuit big enough to break a habit ---- */
+    function gridKcl() {
+      return [
+        { title: 'A real circuit, and what still does not move', lit: [],
+          html: function () {
+            var L = cur();
+            return '<p>A past exam paper: six nodes, eight branches and a loop along the ' +
+              'bottom. ' + si(Math.abs(truth(role('series')).iab), 'A') + ' leaves the source, ' +
+              'splits into ' + si(Math.abs(truth(role('split')).iab), 'A') + ' and ' +
+              si(Math.abs(truth(role('odd')).iab), 'A') + ' at A, and splits again further ' +
+              'in.</p>' +
+              '<p>Nothing you learned on the smaller circuits has changed. Press the ' +
+              '<b>Reference 0 V</b> buttons — all ' + Object.keys(L.nodes).length + ' of them ' +
+              'now — and every node number moves while every difference stands still. Press ' +
+              '<b>Every one reversed</b> and all eight markings turn together, with every power ' +
+              'unmoved.</p>' +
+              '<p>What <em>is</em> new is that KCL now needs writing at <b>' + L.kclAt.length +
+              '</b> nodes rather than one. The small arrows on the leads show all ' +
+              L.kclAt.length + ' equations at once.</p>' +
+              flag('This is the first circuit on the page that can contradict a convention. ' +
+                'That is the only reason it is here.');
           } },
 
-        { title: 'Stick to it, and the books balance', lit: [], level: 'split', mode: 'kcl',
+        { title: 'One in, the rest out — and where it runs out', lit: [],
+          html: function () {
+            var L = cur();
+            return '<p>Some people like every node to have exactly <b>one current in and the ' +
+              'rest out</b>. It reads naturally, and it has never failed them — because on the ' +
+              'last two circuits it cannot.</p>' +
+              '<p>Press <b>One in, rest out</b>.</p>' +
+              '<p>It is not a marking you can fix by redrawing. Count: ' + L.kclAt.length +
+              ' nodes each want one incoming arrow, so ' + L.kclAt.length + ' arrivals in total. ' +
+              'But ' + interior() + ' branches run between those nodes, and every one of them ' +
+              'points into one of them whichever way you turn it. ' + interior() + ' arrivals ' +
+              'cannot be shared out one apiece among ' + L.kclAt.length + '.</p>' +
+              eq(interior() + ' branches between ' + L.kclAt.length + ' nodes  ⇒  ' + interior() +
+                 ' arrivals, ' + L.kclAt.length + ' places to put them',
+                 'so at least one node collects two, on any drawing') +
+              '<p>An arrow belongs to a <b>branch</b>, not to a node. Draw it once, read it as ' +
+              'leaving at one end and entering at the other, and the pattern at any one node is ' +
+              'not yours to choose. <b>Σ leaving = 0</b> never has this problem, which is why ' +
+              'it is what the rest of this site writes.</p>' +
+              flag('This is the shape of every mistake on this page. A habit you never chose is ' +
+                'safe right up until the circuit it was never true in — and nothing warns you ' +
+                'that you have reached it.');
+          } },
+
+        { title: 'Stick to it, and the books balance', lit: [],
           html: function () {
             var pc = Solve.powerCheck(solved(cur()).brs);
-            return '<p>The check that catches almost everything: add up every power in the ' +
-              'circuit, signs included. It must come to zero. Energy is not created here and ' +
-              'charge is not consumed — a resistor turns kinetic energy into heat, but every ' +
-              'electron that goes in comes out.</p>' +
+            return '<p>Even here, with eight elements and four node equations, the check that ' +
+              'catches almost everything is one line: add up every power, signs included, and ' +
+              'it must come to zero.</p>' +
               eq(si(pc.dissipated, 'W') + ' absorbed  −  ' + si(pc.generated, 'W') +
                  ' delivered  =  ' + si(0, 'W'), 'Σ P = 0, under every convention on this page') +
-              '<p>Go back and press everything, on all three circuits. The conventions rearrange ' +
-              'the signs, the wording and the node numbers; the right-hand column never moves. ' +
-              'That is what it means for something to be a convention rather than a fact.</p>' +
+              '<p>Go back through all three circuits and press everything. The conventions ' +
+              'rearrange the signs, the wording and the node numbers; the right-hand column ' +
+              'never moves. That is what it means for something to be a convention rather than ' +
+              'a fact — and the mistakes were never the choices, they were the habits nobody ' +
+              'chose.</p>' +
               '<p><b>Reset to the site default</b> puts back the ones the rest of this site ' +
               'uses: positive current, the reference on the source\'s − terminal, + where the ' +
               'current enters, KCL written as Σ leaving = 0, and every mesh walked clockwise ' +
@@ -1199,6 +1297,13 @@
       ];
     }
 
+    var GUIDES = { 'basic/kcl': basicKcl, 'basic/kvl': basicKvl, 'split/kcl': splitKcl,
+      'split/kvl': splitKvl, 'grid/kcl': gridKcl };
+    function guideFor() {
+      var f = GUIDES[pick.level + '/' + pick.mode];
+      return f ? f() : [];
+    }
+
     var lesson = Lesson({
       title: id('lesson-title'),
       count: id('lesson-count'),
@@ -1206,26 +1311,13 @@
       prev: id('lesson-prev'),
       next: id('lesson-next'),
       dots: id('lesson-dots'),
-      onView: function (ch, i) {
-        /* A chapter carries the board with it: the circuit it is small enough to teach on and
-           the law it is written in. Only on ARRIVAL though — onView also fires on every
-           refresh, and re-applying either there would undo the button the moment it was
-           pressed. */
-        if (i !== atChapter) {
-          var moved = false;
-          if (ch.level && ch.level !== pick.level) { setLevel(ch.level, true); moved = true; }
-          if (ch.mode && ch.mode !== pick.mode) { setMode(ch.mode, true); moved = true; }
-          if (!moved) syncMode();
-        }
-        atChapter = i;
+      /* Highlighting only. A chapter no longer touches the board — see the note above. */
+      onView: function (ch) {
         lit = (ch.lit || []).map(function (k) { return cur().roles[k] || k; });
         applyLit();
       },
     });
 
-    /* Redrawing the board without touching the guide. Needed because a chapter may itself ask
-       for a circuit or a law as you arrive at it, and calling lesson.refresh() from inside
-       onView would re-enter it. */
     function redrawBoard() {
       syncChoices();
       syncMode();
@@ -1235,6 +1327,9 @@
       buildInvariant();
     }
     function redraw() { redrawBoard(); lesson.refresh(); }
+    /* Changing the circuit or the law changes which guide you are reading, and a guide always
+       opens at its first chapter — Lesson.load() resets the index for us. */
+    function reguide() { redrawBoard(); lesson.load(guideFor()); }
 
     var modeSeg = id('mode'), levelSeg = id('level');
     function syncSeg(seg, attr, val) {
@@ -1256,21 +1351,21 @@
     }
     function syncLevel() { syncSeg(levelSeg, 'data-level', pick.level); }
 
-    function setMode(next, quiet) {
-      if (next === pick.mode || (next === 'kvl' && !cur().mesh)) return;
-      pick.mode = next;
+    function setMode(next2) {
+      if (next2 === pick.mode || (next2 === 'kvl' && !cur().mesh)) return;
+      pick.mode = next2;
       buildChoices();                 // the mode owns which pickers are on show
-      if (quiet) redrawBoard(); else redraw();
+      reguide();
     }
     /* Changing the circuit can invalidate two choices: a reference node the new circuit does
        not have, and KVL on a circuit with no meshes. Both fall back rather than throwing. */
-    function setLevel(next, quiet) {
-      if (next === pick.level || !BY_ID[next]) return;
-      pick.level = next;
+    function setLevel(next2) {
+      if (next2 === pick.level || !BY_ID[next2]) return;
+      pick.level = next2;
       if (!cur().nodes[pick.ref]) pick.ref = cur().ref;
       if (pick.mode === 'kvl' && !cur().mesh) pick.mode = 'kcl';
       buildChoices();
-      if (quiet) redrawBoard(); else redraw();
+      reguide();
     }
 
     function wire(seg, attr, fn) {
@@ -1285,28 +1380,30 @@
     resetBtn.addEventListener('click', function () {
       Object.keys(DEFAULTS).forEach(function (k) { pick[k] = DEFAULTS[k]; });
       buildChoices();
-      redraw();
+      reguide();
     });
 
     buildChoices();
-    redraw();
-    lesson.load(chapters());
+    reguide();
 
     /* the handle js/tutorial.test.html drives: set any convention, read back what it cost */
     return {
       lesson: lesson,
       set: function (next) {
+        var was = pick.level + '/' + pick.mode;
         Object.keys(next || {}).forEach(function (k) { pick[k] = next[k]; });
         if (!cur().nodes[pick.ref]) pick.ref = cur().ref;
         if (pick.mode === 'kvl' && !cur().mesh) pick.mode = 'kcl';
         buildChoices();
-        redraw();
+        // same fork the buttons take: a different circuit or law is a different guide
+        if (pick.level + '/' + pick.mode !== was) reguide(); else redraw();
       },
       reset: function () { resetBtn.click(); },
       state: function () {
         var L = cur(), p = {};
         Object.keys(L.nodes).forEach(function (n) { p[n] = pot(n); });
-        return { pick: pick, faults: faults(), residual: residual(), interior: interior(),
+        return { pick: pick, guide: pick.level + '/' + pick.mode,
+          faults: faults(), residual: residual(), interior: interior(),
           incoming: L.kclAt.map(incoming),
           marked: L.el.map(function (e2) { return marked(e2); }),
           mesh: { i: meshI(), residual: meshes().map(function (M, i) { return meshEq(i).residual; }),
