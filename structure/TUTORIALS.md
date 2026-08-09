@@ -220,7 +220,7 @@ charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phr
   | --- | --- | --- | --- |
   | `basic` | the slides' one loop — 12 V across 40 + 40 | 1 (nothing to choose at it) | 1 |
   | `split` | 40 in series with 60 ∥ 120 | 1 (one choice at it) | 2, one shared branch |
-  | `grid` | a past exam paper — 375 V into a 3×3 grid with a bottom loop | 4 | 3, **not yet offered** |
+  | `grid` ("Multiple loops") | a past exam paper — 375 V into a 3×3 grid with a bottom loop | 4 | 3, **not yet offered** |
 
   A habit that survives the first two and dies on the third is the whole argument. Never
   "simplify" the page back to one circuit — the smallest one cannot break anything, which is
@@ -230,14 +230,31 @@ charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phr
   all live in the `LEVELS` table; `solved(L)` caches the one solve. Every choice is then a
   presentation layer over that answer. If a choice could change a solve, it would not be a
   convention, and that is the test for whether a new option belongs here.
-- **A chapter declares its circuit and its law**, and the board follows on arrival — only on
-  arrival, or the switch would be undone the instant a student pressed it. `js/tutorial/lesson.js`
-  runs `onView` **before** rendering the body for exactly this reason: a chapter's `html()`
-  reads live state, so painting first hands it the previous chapter's circuit. That bug is what
-  the ordering comment there is protecting.
-- **A chapter quotes elements by role, not by key** (`series`, `split`, `odd`), because the
-  same chapter renders on more than one circuit. `lit` entries are resolved through the same
-  map.
+- **One guide per (circuit, law), and the board is in charge.** `GUIDES` maps
+  `'<level>/<mode>'` to a chapter list; pressing a circuit or a law loads that list from
+  chapter 1. **No chapter carries a `level` or a `mode`, and nothing in the guide moves the
+  board.**
+
+  | guide | chapters | what it is for |
+  | --- | --- | --- |
+  | `basic/kcl` | 8 | every marking there is, on the circuit that cannot break one |
+  | `basic/kvl` | 2 | the loop rule with nothing shared |
+  | `split/kcl` | 3 | the first node with a choice at it, and how KCL is phrased |
+  | `split/kvl` | 3 | two meshes and the branch they share |
+  | `grid/kcl` | 3 | the circuit big enough to break a habit |
+
+  It was the other way round once — chapters declared what they taught in and switched the
+  board on arrival. Do not go back to it: walking *backwards* through the guide then changed
+  the circuit and the law under the student, and pressing a circuit left them on a chapter
+  written for a different one. A guide that follows the board has neither problem, and every
+  chapter is guaranteed a circuit it was written for. Each guide is short, so each ends by
+  naming the button that carries on — a dead Next button is not an instruction.
+- **A chapter quotes elements by role, not by key** (`series`, `split`, `odd`), so the same
+  prose reads correctly whichever circuit its guide sits on. `lit` entries resolve through the
+  same map.
+- **`js/tutorial/lesson.js` runs `onView` before rendering the body**, because `html()` reads
+  live state and a page reacts to the arriving chapter in `onView`. Painting first hands every
+  chapter the previous one's state.
 - **The marking is one decision, the movement is another.** The arrow beside an element and its
   ± pair are tied together by the passive sign convention, so the *+ mark* picker turns both:
   *where the current enters*, *every one reversed* (legal — two sign flips cancel in V·I and
@@ -290,6 +307,10 @@ charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phr
 - **Switching circuits has two fallbacks**, both pinned: a reference node the new circuit has
   not got drops to that circuit's default, and KVL on a circuit with no meshes drops to KCL.
   Neither may flag anything or move a residual.
+- **The board foot owns the board's scrolling** (`.board-foot.scroller`, capped in `vh` per
+  [FRONTEND.md](FRONTEND.md) rule 4). The grid writes four node equations and eight element
+  powers into it; as a plain `auto` grid row that ate the whole `1fr` figure track and left the
+  circuit a sliver at the top. The cap is opt-in so the other three tutorial feet are untouched.
 
 **Known gap — the KVL half on the grid.** `meshEq()` carries a single `shared` key, and the
 grid has three shared branches (R₃, R₄, R₆). So `grid.mesh` is `null`, the KVL button disables
@@ -335,12 +356,15 @@ which each real page leaves unset.) It covers:
   counting argument behind "one in, rest out" asserted rather than described, reversing a loop
   reversing only its own variable, the shared branch adding exactly when the loops oppose and
   one bad sign there reaching both mesh equations *and* KCL, both circuit-switch fallbacks, a
-  chapter switching the circuit without moving the student off it, reset agreeing with
-  `js/solve.js` and both technique files, and every chapter rendering with the defaults and
-  with every mistake switched on at once.
+  reset agreeing with `js/solve.js` and both technique files, all five guides rendering on
+  their own circuit with the defaults and with every mistake switched on at once, no chapter
+  moving the board walking either direction, and pressing a circuit or a law restarting that
+  guide at chapter 1.
 
   Every check pins `level` and `mode` explicitly. Both are shared state that the previous check
   left behind, and without pinning them a check inherits it and fails for the wrong reason.
+  `walkChapters` takes a minimum chapter count, because the guides are 2–8 chapters rather than
+  one long one.
 
 Two things it cannot check, both of which need eyes:
 
