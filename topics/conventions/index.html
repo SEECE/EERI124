@@ -34,6 +34,13 @@
     <section class="board panel" aria-label="One circuit, your conventions">
       <div class="board-head">
         <span class="eyebrow">Pick your conventions — the answer does not move</span>
+        <!-- Three circuits, simplest first. A convention is only ever tested by a circuit big
+             enough to contradict it, which is why the exam grid is here at all. -->
+        <div class="seg" id="level" role="group" aria-label="How complicated a circuit">
+          <button type="button" data-level="basic" aria-pressed="false">One loop</button>
+          <button type="button" data-level="split" aria-pressed="true">One split</button>
+          <button type="button" data-level="grid" aria-pressed="false">Exam grid</button>
+        </div>
         <div class="seg" id="mode" role="group" aria-label="Which law to write the circuit with">
           <button type="button" data-mode="kcl" aria-pressed="true">KCL — nodes</button>
           <button type="button" data-mode="kvl" aria-pressed="false">KVL — loops</button>
@@ -44,7 +51,7 @@
 
       <div class="figure figure--drawn">
         <svg id="figure" viewBox="0 0 720 360" role="img"
-          aria-label="A 12 volt source feeding one resistor in series with two in parallel, marked up with the conventions you have chosen"></svg>
+          aria-label="The circuit you picked, marked up with the conventions you have chosen"></svg>
       </div>
 
       <div class="board-foot">

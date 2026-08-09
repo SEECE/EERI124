@@ -61,6 +61,9 @@
 }
 .seg > button:hover { color: var(--text); }
 .seg > button[aria-pressed='true'] { color: #fff; background: var(--violet-600); }
+/* a law the circuit on show cannot be written in (KVL on a circuit with no meshes yet) */
+.seg > button:disabled { opacity: 0.35; cursor: not-allowed; }
+.seg > button:disabled:hover { color: var(--text-dim); }
 
 /* ── a dial: label · slider · number · unit, one per editable resistor ── */
 .dial { display: grid; grid-template-columns: 3.6em minmax(60px, 1fr) 5.2em; align-items: center; gap: var(--sp-2); }
@@ -266,8 +269,12 @@
 .figure--drawn .mark { font-size: 15px; font-weight: 800; fill: var(--accent-deep); }
 .figure--drawn .ref { stroke: var(--ink); stroke-width: 2.4; fill: none; stroke-linecap: round; }
 .figure--drawn .probe-black { stroke: var(--ink); stroke-width: 3.2; fill: none; stroke-linecap: round; }
-/* where the electrons actually go — an overlay, never a set of numbers (js/tutorial/conventions.js) */
-.figure--drawn .flow.drift { opacity: 0.3; }
+/* where the charge actually goes — an overlay, never a set of numbers (js/tutorial/conventions.js) */
+.figure--drawn .flow.drift { opacity: 0.28; stroke: var(--ink-soft); fill: var(--ink-soft); }
+/* KCL's bookkeeping arrows: one per lead at every node an equation is written at, drawn ON the
+   wire so they never read as a second marking. Same marks js/circuit.js puts on a solver page. */
+.figure--drawn .kcl { stroke: var(--accent-deep); fill: var(--accent-deep); }
+.figure--drawn .kcl line { stroke-width: 2.4; }
 /* a mark the maths cannot survive — a sign that contradicts another sign on the same figure */
 .figure--drawn .is-bad { stroke: #b4293c; }
 .figure--drawn text.is-bad, .figure--drawn .flow.is-bad { fill: #b4293c; stroke: none; }
