@@ -20,6 +20,11 @@
     function paint(keepScroll) {
       var ch = chapters[i];
       if (!ch) return;
+      /* FIRST, because `html()` reads the page's live state and onView is where a page reacts
+         to the chapter it is about to show. Rendering the body first hands every chapter the
+         PREVIOUS chapter's state, which is a bug waiting for the first page whose chapters
+         differ in more than what they highlight. Nothing here re-enters paint(). */
+      if (o.onView) o.onView(ch, i);
       if (o.title) o.title.innerHTML = ch.title;   // titles carry subscripts (R<sub>AB</sub>)
       if (o.count) o.count.textContent = (i + 1) + ' / ' + chapters.length;
       if (o.body) {
@@ -33,7 +38,6 @@
         var kids = o.dots.children;
         for (var k = 0; k < kids.length; k++) kids[k].setAttribute('aria-current', k === i ? 'true' : 'false');
       }
-      if (o.onView) o.onView(ch, i);
     }
 
     function buildDots() {
