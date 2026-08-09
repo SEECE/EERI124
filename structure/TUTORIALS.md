@@ -220,7 +220,7 @@ charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phr
   | --- | --- | --- | --- |
   | `basic` | the slides' one loop — 12 V across 40 + 40 | 1 (nothing to choose at it) | 1 |
   | `split` | 40 in series with 60 ∥ 120 | 1 (one choice at it) | 2, one shared branch |
-  | `grid` ("Multiple loops") | a past exam paper — 375 V into a 3×3 grid with a bottom loop | 4 | 3, **not yet offered** |
+  | `grid` ("Multiple loops") | a past exam paper — 375 V into a 3×3 grid with a bottom loop | 4 | 3, sharing 3 branches |
 
   A habit that survives the first two and dies on the third is the whole argument. Never
   "simplify" the page back to one circuit — the smallest one cannot break anything, which is
@@ -242,6 +242,7 @@ charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phr
   | `split/kcl` | 3 | the first node with a choice at it, and how KCL is phrased |
   | `split/kvl` | 3 | two meshes and the branch they share |
   | `grid/kcl` | 3 | the circuit big enough to break a habit |
+  | `grid/kvl` | 3 | three windows, three shared branches, two broken at once |
 
   It was the other way round once — chapters declared what they taught in and switched the
   board on arrival. Do not go back to it: walking *backwards* through the guide then changed
@@ -282,17 +283,43 @@ charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phr
   shared branch subtracted when the loops make it add, a claim that the reference node is
   absolutely zero. So a habit is flagged **only where it actually contradicts something**,
   which is the lesson.
+- **One rule for the mesh algebra, no special cases.** A branch in meshes m, j, … carries, in
+  its own a→b sense, `Σ c_k · s_k · I_k` — `c_k` how mesh *k* walks it clockwise, `s_k` the
+  direction the student chose to walk that mesh. `meshCoefs()` is that sum and everything else
+  reads off it. Two facts the page teaches fall straight out of it, so neither is coded
+  separately: an element in **one** mesh contributes ±R·I with the sign fixed whichever way the
+  loop runs (reversing the loop reverses the walk *and* the variable), and two windows sharing
+  a branch always walk it in **opposite** senses — that is what sharing an edge means — so with
+  every loop the same way their terms subtract, and reversing one makes them add. Do not
+  re-introduce a single `shared` key; the grid has three shared branches and that is the point
+  of it.
+- **Membership is derived, never declared.** `L.inMesh` and `L.sharedKeys` are built from the
+  mesh walks at load, so a mesh cannot be edited without them following.
+- **Each mesh names an element it does not share** (`own`), so its solved current *is* the
+  clockwise mesh current — R₂, R₅ and R₁ on the grid give 1.25 A, 875 mA and 5 A straight off
+  the one solve. That is why the KVL half needs no second engine, and it is pinned.
 - **Opposite loop directions are NOT the mistake**, and the page must not say they are. Mesh
-  analysis is valid for any loop directions; reversing one loop simply makes the shared branch
-  *add* instead of subtract. What breaks is the habit "mine minus theirs" carried into the case
-  where the loops disagree, so `sharedCoef()` forces that ratio to −1 and the fault falls out of
-  the non-zero mesh residual. Both agreeing cases — clockwise and anticlockwise — pass
-  untouched.
-- **The sign the student writes on the shared branch is a ratio, not a coefficient.** With both
-  loops anticlockwise the coefficient on I₂ is +1 while the two terms still subtract, because
-  I₁'s coefficient is −1. `sharedRatio()` reads the expression along mesh 1's own walk, which is
-  the only reading that says "agree ⇒ subtract, oppose ⇒ add" for every setting. Do not go back
-  to the raw coefficient; it prints the wrong sign for anticlockwise.
+  analysis is valid for any loop directions; reversing one loop simply makes the branches it
+  shares *add* instead of subtract. What breaks is the habit "mine minus theirs" carried into
+  the case where the loops disagree — `meshCoefs(el, true)` forces every other mesh's
+  coefficient to be minus the first's, and `brokenShared()` finds which branches that actually
+  got wrong by comparing against what the loops say. Both agreeing cases pass untouched on all
+  three circuits, which is the same shape as the ± pair put on one element at a time.
+  **"Mesh 2 reversed" reverses mesh 2 and only mesh 2**, on every circuit, so the button label
+  stays literally true and mesh 2 is left disagreeing with each neighbour it shares with. On
+  the split circuit that breaks one branch; on the grid it breaks two at once, and the wrong
+  currents reach every mesh equation those branches appear in *and* KCL at every node they
+  feed. That escalation is what the third circuit buys the KVL half.
+- **The expression is normalised so its first term is positive** (`carries()`). That is the only
+  reading that says "loops agree ⇒ subtract, loops oppose ⇒ add" for every setting: both loops
+  anticlockwise puts −1 on I₁ and +1 on I₂, raw signs that look like an addition but are
+  −(I₁ − I₂). Do not print the raw coefficients.
+- **b − n + 1** is how many loop equations a circuit needs, and it gives 1, 2 and 3 on the three
+  circuits. The KVL guides quote the arithmetic, so it is pinned — it is the KVL counterpart of
+  the KCL half's counting argument.
+- **The loop arcs carry the symbol only** (`I₁`), with the values in the readout beside the
+  branch expressions that use them. Three windows on the grid leave no room next to an arc for
+  `I₁ = 1.25 A`, and the readout is where you compare them anyway.
 - **Electron drift is an overlay, not a second set of numbers.** Prof Holm's slide settles it —
   electrons go the other way, we use positive current, trust the maths — so the setting
   reverses the overlay and every number on the page stays conventional. Re-deriving the page in
@@ -312,15 +339,18 @@ charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phr
   powers into it; as a plain `auto` grid row that ate the whole `1fr` figure track and left the
   circuit a sliver at the top. The cap is opt-in so the other three tutorial feet are untouched.
 
-**Known gap — the KVL half on the grid.** `meshEq()` carries a single `shared` key, and the
-grid has three shared branches (R₃, R₄, R₆). So `grid.mesh` is `null`, the KVL button disables
-itself there and says why, and `meshHtml()` degrades to nothing rather than throwing when a
-student presses a mesh-less circuit while standing on a KVL chapter. Generalising `meshEq()` to
-an arbitrary set of shared branches is the next piece of work on this page; when it lands,
-delete the *"a circuit with no meshes falls back to KCL"* check.
+**Not built, and deliberately.** Three meshes is the first place where *distinct* loops need
+not be *independent*: with a loop space of dimension 3 you can draw three different closed paths
+(two windows and the loop around both) and have only two independent equations, which cannot
+happen with one or two windows. It is the exact KVL twin of "one in, rest out" and it would be a
+good chapter. It is not here because it needs the student to choose loops, and there is nowhere
+on this figure to trace a loop enclosing two windows without landing on four labels — the top
+rectangle is the densest part of the sheet. If it is ever added, the variables must stay the
+face currents and the fault must be the **rank** of the chosen loop set, not a residual: every
+one of those equations is true, and the mistake is that the third tells you nothing new.
 
 **The invariance is the page.** If a legal set of conventions ever moves a magnitude, a
-difference or a power, the page is asserting something false; that is what the 264-combination
+difference or a power, the page is asserting something false; that is what the 504-combination
 check exists for, and it is the Δ-Y round trip's counterpart here. It compares to nine
 significant figures rather than to the bit: the KVL half reaches the shared branch by adding two
 mesh currents and the KCL half reads it off the solve, so they agree to about 1e-16.
@@ -346,20 +376,23 @@ which each real page leaves unset.) It covers:
   a real connected circuit whose power balances, no reduced node keeping fewer than three
   branches, the gallery still covering node-wins / mesh-wins / a tie, and exactly one total
   being flagged as the winner — none on a tie.
-- **Conventions** — all three circuits still producing the numbers the guide quotes, all 264
-  legal combinations across them leaving every magnitude, difference, power and mesh-current
-  size identical, a counter-check that the signs really do move (or the invariance claim would
-  be vacuous), each of the four mistakes being flagged where it is computed rather than where
-  it is chosen, the same bad habits staying silent where they happen to be right ("one in, rest
-  out" on the two circuits it works on, "mine minus theirs" with the loops agreeing), reversing
-  every marking turning every current sign and no power and leaving no resistor producing, the
-  counting argument behind "one in, rest out" asserted rather than described, reversing a loop
-  reversing only its own variable, the shared branch adding exactly when the loops oppose and
-  one bad sign there reaching both mesh equations *and* KCL, both circuit-switch fallbacks, a
-  reset agreeing with `js/solve.js` and both technique files, all five guides rendering on
-  their own circuit with the defaults and with every mistake switched on at once, no chapter
-  moving the board walking either direction, and pressing a circuit or a law restarting that
-  guide at chapter 1.
+- **Conventions** — all three circuits still producing the numbers the guide quotes, all 504
+  legal combinations across them and both laws leaving every magnitude, difference, power and
+  mesh-current size identical, a counter-check that the signs really do move (or the invariance
+  claim would be vacuous), each of the four mistakes being flagged where it is computed rather
+  than where it is chosen, the same bad habits staying silent where they happen to be right
+  ("one in, rest out" on the two circuits it works on, "mine minus theirs" with the loops
+  agreeing on both circuits that share a branch), reversing every marking turning every current
+  sign and no power and leaving no resistor producing, the counting argument behind "one in,
+  rest out" asserted rather than described, **b − n + 1** giving 1 / 2 / 3, the mesh currents
+  coming straight off the one solve (0.15 / 0.15 · 0.05 / 1.25 · 0.875 · 5), every shared
+  branch subtracting when the loops agree and exactly the two that mesh 2 touches adding when
+  it is reversed, "mine minus theirs" then breaking one branch on the split circuit and two on
+  the grid with one bad sign reaching several mesh equations *and* KCL, the reference fallback,
+  reset agreeing with `js/solve.js` and both technique files, all six guides rendering on their
+  own circuit with the defaults and with every mistake switched on at once, no chapter moving
+  the board walking either direction, and pressing a circuit or a law restarting that guide at
+  chapter 1.
 
   Every check pins `level` and `mode` explicitly. Both are shared state that the previous check
   left behind, and without pinning them a check inherits it and fails for the wrong reason.
