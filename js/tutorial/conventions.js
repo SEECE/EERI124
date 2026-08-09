@@ -53,8 +53,11 @@
        series  the one carrying everything
        split   one branch of a pair that share a node
        odd     the branch the "marked backwards" mistake is applied to
-     `shared` is the branch two meshes have in common — null when there is no such branch, and
-     the KVL half is only offered on levels that have at most one. */
+     `mesh` is the level's faces, each with the elements it walks and the sense `c` in which a
+     CLOCKWISE walk takes them (+1 when that agrees with the element's own a→b). `own` names an
+     element in that mesh and no other, so its solved current IS the clockwise mesh current and
+     the KVL half needs no second engine. Which elements are shared, and with which meshes, is
+     derived from the walks below — there is no second table to keep in step. */
   var LEVELS = [
 
     /* ---- 1. the slides' circuit: one source, two resistors, one loop ----
@@ -96,7 +99,6 @@
       kclAt: ['B'],
       mesh: [{ n: 1, at: [345, 190], r: 30, lab: [296, 252, 'start'], own: 'r1',
         walk: [{ k: 'v', c: 1 }, { k: 'r1', c: 1 }, { k: 'r2', c: 1 }] }],
-      shared: null,
       roles: { series: 'r1', split: 'r2', odd: 'r2' },
       ref: 'C',
     },
@@ -146,18 +148,15 @@
       ends: { v: { a: 'C', b: 'A' }, r1: { a: 'A', b: 'B' }, r2: { a: 'B', b: 'C' },
               r3: { a: 'B', b: 'C' } },
       kclAt: ['B'],
-      /* `c` is +1 when the element's own a→b direction agrees with a CLOCKWISE walk of that
-         mesh, so R₂ — shared, walked downwards by mesh 1 and upwards by mesh 2 — is the one
-         element with opposite senses. That single sign is where the shared-branch lesson lives.
-         `own` is an element in this mesh and no other, so its solved current IS the clockwise
-         mesh current and the KVL half needs no second engine. */
+      /* R₂ is the one shared element — walked downwards by mesh 1 and upwards by mesh 2, so
+         it is the one element whose two senses disagree. That single sign is where the whole
+         shared-branch lesson lives on this circuit. */
       mesh: [
         { n: 1, at: [240, 228], r: 28, lab: [300, 276, 'start'], own: 'r1',
           walk: [{ k: 'v', c: 1 }, { k: 'r1', c: 1 }, { k: 'r2', c: 1 }] },
-        { n: 2, at: [485, 228], r: 28, lab: [420, 276, 'start'], own: 'r3',
+        { n: 2, at: [491, 232], r: 27, lab: [420, 276, 'start'], own: 'r3',
           walk: [{ k: 'r2', c: -1 }, { k: 'r3', c: 1 }] },
       ],
-      shared: 'r2',
       roles: { series: 'r1', split: 'r2', odd: 'r3' },
       ref: 'C',
     },
@@ -240,12 +239,19 @@
          reference, so neither needs an equation — which leaves exactly the four that make the
          counting argument work. */
       kclAt: ['A', 'B', 'C', 'D'],
-      /* ponytail: no meshes here yet. This one has THREE shared branches (R₃, R₄, R₆) and
-         meshEq() below carries a single `shared` key, so the KVL half is not offered on this
-         level. Generalising it is the next piece of work on this page — see
-         structure/TUTORIALS.md. */
-      mesh: null,
-      shared: null,
+      /* Three windows, and — unlike the split circuit — THREE shared branches: R₄ between
+         meshes 1 and 2, R₃ between 1 and 3, R₆ between 2 and 3. Every mesh still names an
+         element it does not share (R₂, R₅, R₁), so all three clockwise mesh currents are read
+         straight off the one solve: 1.25 A, 875 mA and 5 A. */
+      mesh: [
+        { n: 1, at: [205, 140], r: 16, lab: [205, 175, 'middle'], own: 'r2',
+          walk: [{ k: 'r2', c: 1 }, { k: 'r4', c: 1 }, { k: 'r3', c: -1 }] },
+        { n: 2, at: [672, 140], r: 16, lab: [672, 175, 'middle'], own: 'r5',
+          walk: [{ k: 'r5', c: 1 }, { k: 'r6', c: -1 }, { k: 'r4', c: -1 }] },
+        { n: 3, at: [530, 300], r: 22, lab: [530, 262, 'middle'], own: 'r1',
+          walk: [{ k: 'r3', c: 1 }, { k: 'r6', c: 1 }, { k: 'r7', c: 1 }, { k: 'v', c: 1 },
+                 { k: 'r1', c: 1 }] },
+      ],
       roles: { series: 'r1', split: 'r2', odd: 'r3' },
       ref: 'F',
     },
@@ -256,6 +262,17 @@
     BY_ID[L.id] = L;
     L.byKey = {};
     L.el.forEach(function (e) { L.byKey[e.k] = e; });
+    /* Which meshes each element sits in, and with what clockwise sense — read off the walks so
+       a mesh cannot be edited without this following it. An element in two or more is a SHARED
+       branch, and those are the only ones the loop directions ever show up in. */
+    L.inMesh = {};
+    (L.mesh || []).forEach(function (M, mi) {
+      M.walk.forEach(function (step) {
+        (L.inMesh[step.k] = L.inMesh[step.k] || []).push({ mi: mi, c: step.c });
+      });
+    });
+    L.sharedKeys = Object.keys(L.inMesh).filter(function (k) { return L.inMesh[k].length > 1; });
+    L.hasShared = L.sharedKeys.length > 0;
   });
 
   /* ---------- the choices ----------
@@ -280,10 +297,10 @@
       { id: 'onein', label: 'One in, rest out', wrong: true }] },
     { key: 'loops', name: 'Loop directions', when: 'kvl', opts: [
       { id: 'cw', label: 'All clockwise' }, { id: 'ccw', label: 'All anticlockwise' },
-      { id: 'mixed', label: 'Mesh 2 reversed', needs: 'shared' }] },
+      { id: 'mixed', label: 'Mesh 2 reversed', needs: 'hasShared' }] },
     { key: 'kvlsign', name: 'KVL written', when: 'kvl', opts: [
       { id: 'drops', label: 'Σ drops = 0' }, { id: 'rises', label: 'Σ rises = 0' }] },
-    { key: 'shared', name: 'Shared branch', when: 'kvl', needs: 'shared', opts: [
+    { key: 'shared', name: 'Shared branches', when: 'kvl', needs: 'hasShared', opts: [
       { id: 'signed', label: 'As the loops run' },
       { id: 'minus', label: 'Always I₁ − I₂', wrong: true }] },
   ];
@@ -384,7 +401,9 @@
     function loopSigns() {
       var base = pick.loops === 'ccw' ? -1 : 1;
       return meshes().map(function (M, i) {
-        return pick.loops === 'mixed' && i > 0 ? -base : base;
+        // 'mixed' reverses mesh 2 and only mesh 2, on every circuit, so the button label stays
+        // literally true and mesh 2 is left disagreeing with each neighbour it shares with
+        return pick.loops === 'mixed' && i === 1 ? -base : base;
       });
     }
     function meshCw() {
@@ -399,33 +418,58 @@
       return cw.map(function (x, i) { return s[i] * x; });
     }
 
-    /* The coefficient the student writes on I₂ when they express the shared branch; the
-       coefficient on I₁ is s₁ either way. Reading the loops gives −s₂, so the two terms
-       SUBTRACT whenever the loops agree (s₁ = s₂ — both clockwise or both anticlockwise) and
-       ADD when they oppose, because reversing a loop already flipped what its variable means.
+    /* ---------- expressing a branch current in mesh variables ----------
+       A branch belonging to meshes m, j, … carries, in its own a→b sense,
 
-       The habit "the shared branch is mine minus theirs" forces the ratio to −1, i.e. −s₁. It
-       survives both agreeing cases untouched and breaks only on the mixed one — which is why
-       the fault has to be computed rather than pinned to the button. */
-    function sharedCoef() {
-      var s = loopSigns();
-      return pick.shared === 'minus' ? -s[0] : -s[1];
+           i_ab  =  Σ  c_k · s_k · I_k
+
+       where c_k is how that mesh walks it clockwise and s_k the direction the student chose to
+       walk that mesh in. Two facts fall out of it and they are the whole KVL half:
+
+       - An element in ONE mesh contributes ±R·I with the sign fixed, whichever way the loop
+         runs, because reversing the loop reverses the walk AND the variable.
+       - Two meshes sharing a branch always walk it in OPPOSITE clockwise senses (that is what
+         a shared edge between two faces is), so with every loop running the same way their
+         terms subtract. Reverse one loop and they add.
+
+       `habit` is the mistake: "the shared branch is mine minus theirs" forces the coefficient
+       on every other mesh to be minus the coefficient on the first, whatever the loops
+       actually say. That is right in both agreeing cases and wrong the moment two loops
+       disagree — which is why the fault is computed from the residual rather than pinned to
+       the button. On the split circuit exactly one branch can break; on the grid, where three
+       branches are shared, reversing one mesh breaks two of them at once. */
+    function meshCoefs(el, habit) {
+      var mem = cur().inMesh[el.k] || [], s = loopSigns();
+      var honest = mem.map(function (m) { return { mi: m.mi, k: m.c * s[m.mi] }; });
+      if (!habit || honest.length < 2) return honest;
+      var lead = honest[0].k;
+      return honest.map(function (c, i) { return { mi: c.mi, k: i === 0 ? lead : -lead }; });
     }
-    /* …and the sign the student actually WRITES, which is the ratio of the two coefficients,
-       not the coefficient on I₂ alone. Both loops anticlockwise puts −1 on I₁ and +1 on I₂ —
-       raw signs that look like an addition but are −(I₁ − I₂), a subtraction. Reading the
-       expression along mesh 1's own walk cancels that and leaves the honest answer: agree and
-       they subtract, oppose and they add. */
-    function sharedRatio() { return sharedCoef() * loopSigns()[0]; }
+    function isShared(el) { return (cur().inMesh[el.k] || []).length > 1; }
 
-    /* What the student's markings SAY the branch carries. Identical to the truth everywhere
-       except one place: a shared branch subtracted when it should have been added. That one
-       wrong number is then left to propagate — into the powers, into KCL, into both mesh
-       equations — because watching a single sign wreck four other things is the lesson. */
+    /* The expression as it goes on paper: terms in mesh order, flipped so the first one is
+       positive. That normalisation is the only reading that says "loops agree ⇒ subtract,
+       loops oppose ⇒ add" for every setting — both loops anticlockwise puts −1 on I₁ and +1 on
+       I₂, raw signs that look like an addition but are −(I₁ − I₂). */
+    function carries(el, habit) {
+      var cf = meshCoefs(el, habit), flip = cf.length && cf[0].k < 0 ? -1 : 1;
+      return cf.map(function (c) { return { mi: c.mi, k: c.k * flip }; });
+    }
+    function carriesHtml(el, habit) {
+      return carries(el, habit).map(function (c, i) {
+        return (c.k > 0 ? (i ? ' + ' : '') : (i ? ' − ' : '−')) + 'I<sub>' + (c.mi + 1) + '</sub>';
+      }).join('');
+    }
+
+    /* What the student's markings SAY a branch carries. Identical to the truth everywhere
+       except where the habit above is wrong. Those wrong numbers are then left to propagate —
+       into the powers, into KCL at every node they touch, into every mesh equation they appear
+       in — because watching one sign wreck four other things is the lesson. */
     function written(el) {
       var t = truth(el), L = cur();
-      if (pick.mode !== 'kvl' || !L.shared || el.k !== L.shared) return t;
-      var I = meshI(), iab = loopSigns()[0] * I[0] + sharedCoef() * I[1];
+      if (pick.mode !== 'kvl' || pick.shared !== 'minus' || !isShared(el)) return t;
+      var I = meshI(), iab = 0;
+      meshCoefs(el, true).forEach(function (c) { iab += c.k * I[c.mi]; });
       return { iab: iab, vab: iab * solved(L).circuit.edges[el.edge].value, power: t.power };
     }
 
@@ -494,24 +538,31 @@
        in both, so its term carries the shared-branch expression — the one place the loop
        directions show up in the algebra at all. */
     function meshEq(mi) {
-      var M = meshes()[mi], sm = loopSigns()[mi], s1 = loopSigns()[0], coef = sharedCoef();
-      var I = meshI(), flip = pick.kvlsign === 'rises' ? -1 : 1, shared = cur().shared;
+      var M = meshes()[mi], sm = loopSigns()[mi];
+      var I = meshI(), flip = pick.kvlsign === 'rises' ? -1 : 1, habit = pick.shared === 'minus';
       var terms = M.walk.map(function (step) {
         var el = key(step.k), w = sm * step.c * flip;
         if (el.kind === 'V') {
           var val = w * truth(el).vab;
           return { sym: (val < 0 ? '− ' : '+ ') + 'V<sub>s</sub>', val: val };
         }
-        var R = solved(cur()).circuit.edges[el.edge].value;
-        if (step.k !== shared) {                     // in one mesh only: always +R·I, both ways
-          var own = w * sm, v1 = own * R * I[mi];
-          return { sym: (own > 0 ? '+ ' : '− ') + nm(el) + 'I<sub>' + M.n + '</sub>', val: v1 };
-        }
-        var A = w * s1, B = w * coef;                // the shared branch: ±R(I₁ ∓ I₂)
+        var R = solved(cur()).circuit.edges[el.edge].value, cf = meshCoefs(el, habit);
+        /* This mesh's own variable leads the bracket, because the equation is being written
+           from this mesh's point of view. Its coefficient is w · c · s = ±1 and, for the mesh
+           we are standing in, always +flip — which is why an unshared element reads +R·I
+           whichever way the loop runs. */
+        var lead = cf[0], rest = [], val = 0;
+        cf.forEach(function (c) {
+          val += c.k * I[c.mi];
+          if (c.mi === mi) lead = c; else rest.push(c);
+        });
+        var sgn = w * lead.k;
+        var body = 'I<sub>' + (lead.mi + 1) + '</sub>' + rest.map(function (c) {
+          return (c.k * lead.k > 0 ? ' + ' : ' − ') + 'I<sub>' + (c.mi + 1) + '</sub>';
+        }).join('');
         return {
-          sym: (A > 0 ? '+ ' : '− ') + nm(el) + '(I<sub>1</sub> ' +
-               (A * B > 0 ? '+' : '−') + ' I<sub>2</sub>)',
-          val: R * (A * I[0] + B * I[1]),
+          sym: (sgn > 0 ? '+ ' : '− ') + nm(el) + (rest.length ? '(' + body + ')' : body),
+          val: w * R * val,
         };
       });
       var res = terms.reduce(function (a, t) { return a + t.val; }, 0);
@@ -541,12 +592,16 @@
           why: nm(el) + ' comes out producing ' + si(-m.p, 'W') + '. A resistor cannot. The + mark ' +
                'is at the end the arrow leaves, so V and I were measured the opposite way round.' });
       });
-      if (pick.mode === 'kvl' && meshResidual() > 1e-9) f.push({ kind: 'shared',
-        why: 'The two loops run opposite ways, so on the shared branch they <em>add</em>: ' +
-             nm(key(L.shared)) + ' carries I<sub>1</sub> + I<sub>2</sub>, not I<sub>1</sub> − ' +
-             'I<sub>2</sub>. Subtracting makes it ' + si(Math.abs(written(key(L.shared)).iab), 'A') +
-             ' instead of ' + si(Math.abs(truth(key(L.shared)).iab), 'A') + ', and both mesh ' +
-             'equations stop closing. Opposite loops are perfectly legal — the habit is not.' });
+      var broke = brokenShared();
+      if (broke.length) f.push({ kind: 'shared', els: broke,
+        why: 'Two of your loops run opposite ways, so where they meet they <em>add</em>. ' +
+             broke.map(function (el) {
+               return nm(el) + ' carries ' + carriesHtml(el, false) + ', not ' +
+                 carriesHtml(el, true) + ' — ' + si(Math.abs(written(el).iab), 'A') +
+                 ' written where the circuit carries ' + si(Math.abs(truth(el).iab), 'A');
+             }).join('; ') + '. Every mesh equation those branches appear in stops closing, ' +
+             'and so does every node they feed. Opposite loops are perfectly legal — the habit ' +
+             'is not.' });
       var bad = badNodes();
       if (bad.length) f.push({ kind: 'onein', nodes: bad,
         why: 'Node' + (bad.length > 1 ? 's ' : ' ') + bad.join(' and ') + ' ' +
@@ -566,6 +621,16 @@
              'instead. Every difference stays exactly where it was.' });
       return f;
     }
+    /* The shared branches the "mine minus theirs" habit actually got wrong — computed by
+       comparing what it writes against what the loops say, so a habit that happens to be right
+       on the circuit in front of you is left alone. */
+    function brokenShared() {
+      if (pick.mode !== 'kvl' || pick.shared !== 'minus') return [];
+      return cur().sharedKeys.map(key).filter(function (el) {
+        return Math.abs(written(el).iab - truth(el).iab) > 1e-9;
+      });
+    }
+
     /* Branches with BOTH ends among the nodes we write KCL at. Each one delivers exactly one
        arrival to that set however it is drawn, which is the whole counting argument. */
     function interior() {
@@ -715,8 +780,11 @@
         meshes().forEach(function (M, mi) {
           var k = 'm' + M.n;
           reg(k, loopArrow(g, M, sgn[mi]));
+          /* The arc is labelled with the SYMBOL only. The value lives in the readout beside
+             the branch expressions that use it — three windows on the grid leave no room
+             beside the arcs for "I₁ = 1.25 A", and the readout is where you compare them. */
           reg(k, Draw.text(g, M.lab[0], M.lab[1],
-            [{ t: 'I' }, { t: String(M.n), sub: true }, { t: ' = ' + sig(Im[mi], 'A') }],
+            [{ t: 'I' }, { t: String(M.n), sub: true }],
             { cls: 't-tag', anchor: M.lab[2] }));
         });
       }
@@ -831,10 +899,7 @@
     /* One mesh, written out. The symbolic line is what goes on paper; the numeric line under it
        substitutes the mesh currents and must land on zero — that is the only check there is
        that the loop was walked consistently. */
-    /* Degrades to nothing rather than throwing: a student on a KVL chapter can press a circuit
-       that has no meshes, and refresh() will re-run that chapter's body against it. */
     function meshHtml(mi) {
-      if (!meshes()[mi]) return '';
       var e2 = meshEq(mi);
       var sym = e2.terms.map(function (t, k) {
         return (k === 0 ? t.sym.replace(/^\+ /, '') : t.sym) + ' ';
@@ -859,12 +924,16 @@
       });
 
       if (pick.mode === 'kvl') {
-        if (L.shared) {
-          wroteWrap.appendChild(el('div', { class: 'result' },
-            '<span class="result-name">' + nm(key(L.shared)) + ' carries</span>' +
-            '<span class="result-val">I<sub>1</sub> ' + (sharedRatio() < 0 ? '−' : '+') +
-            ' I<sub>2</sub></span>'));
-        }
+        var Im = meshI();
+        meshes().forEach(function (M, i) {
+          wroteWrap.appendChild(row('I<sub>' + M.n + '</sub>', sig(Im[i], 'A')));
+        });
+        L.sharedKeys.forEach(function (k) {
+          var e2 = key(k), wrong = brokenShared().indexOf(e2) >= 0;
+          wroteWrap.appendChild(el('div', { class: 'result' + (wrong ? ' is-bad' : '') },
+            '<span class="result-name">' + nm(e2) + ' carries</span>' +
+            '<span class="result-val">' + carriesHtml(e2, pick.shared === 'minus') + '</span>'));
+        });
         wroteWrap.appendChild(el('div', {}, meshes().map(function (M, i) {
           return meshHtml(i);
         }).join('')));
@@ -1168,14 +1237,28 @@
       ];
     }
 
+    /* How many loop equations a circuit needs: branches − nodes + 1, which is also how many
+       windows a planar drawing has. Quoted in the guides rather than asserted, because the
+       three circuits give 1, 2 and 3 and a student can check all three by eye. */
+    function loopCount() {
+      var L = cur();
+      return { b: L.el.length, n: Object.keys(L.nodes).length, m: meshes().length };
+    }
+
     /* ---- one split, KVL: two meshes, and the branch they share ---- */
     function splitKvl() {
       return [
         { title: 'Two meshes, and the choices they need', lit: ['m1', 'm2'],
           html: function () {
-            return '<p>Two loops now, so two equations. Each needs the same two agreements as ' +
-              'before — <b>which way round</b> and <b>drop or rise</b> — and this time the two ' +
-              'loops have a branch in common, which is where the choices start to interact.</p>' +
+            var c = loopCount();
+            return '<p>Two windows now, so two equations. How many you need is not a guess: a ' +
+              'circuit with <b>b</b> branches and <b>n</b> nodes needs <b>b − n + 1</b> loop ' +
+              'equations, which is exactly the number of windows a flat drawing has.</p>' +
+              eq(c.b + ' branches − ' + c.n + ' nodes + 1 = ' + c.m + ' equations',
+                 'and there are ' + c.m + ' windows on the board — the same number, always') +
+              '<p>Each needs the same two agreements as before — <b>which way round</b> and ' +
+              '<b>drop or rise</b> — and this time the two loops have a branch in common, which ' +
+              'is where the choices start to interact.</p>' +
               meshHtml(0) + meshHtml(1) +
               '<p>Press <b>Σ rises = 0</b>: every sign in both equations flips at once, which is ' +
               'the same pair of equations multiplied by −1 and has the same roots. Nothing in ' +
@@ -1200,29 +1283,91 @@
 
         { title: 'Where the loop directions finally matter', lit: ['split', 'm1', 'm2'],
           html: function () {
-            if (!cur().shared) {
-              return '<p>This chapter needs a branch that two meshes have in common, and the ' +
-                'circuit on the board has none. Press <b>One split</b> to come back to it.</p>';
-            }
-            var agree = loopSigns()[0] === loopSigns()[1], sh = key(cur().shared);
+            var sh = key(cur().sharedKeys[0]);
+            var agree = loopSigns()[0] === loopSigns()[1];
             return '<p>' + nm(sh) + ' is in <em>both</em> meshes, so its current is a combination ' +
-              'of the two. With both loops running the same way, mesh 1 walks it downwards and ' +
-              'mesh 2 walks it upwards, so they oppose and the branch carries ' +
-              'I<sub>1</sub> − I<sub>2</sub>.</p>' +
+              'of the two. Two windows that share a branch always walk it in opposite senses — ' +
+              'that is what sharing an edge means — so with both loops running the same way ' +
+              'their terms <em>subtract</em>.</p>' +
               '<p>Press <b>Mesh 2 reversed</b>. Now both loops walk it the same way, so they ' +
-              '<em>add</em>: the branch carries I<sub>1</sub> + I<sub>2</sub>. Right now it ' +
-              'reads <b>I<sub>1</sub> ' + (sharedRatio() < 0 ? '−' : '+') + ' I<sub>2</sub></b>' +
-              (agree ? ', because your two loops agree' : ', because your two loops oppose') +
-              '. Both are legal, both close, both give ' +
+              '<em>add</em>. Right now the branch reads <b>' + carriesHtml(sh, false) +
+              '</b>' + (agree ? ', because your two loops agree' : ', because your two loops ' +
+              'oppose') + '. Both are legal, both close, both give ' +
               si(Math.abs(truth(sh).iab), 'A') + '.</p>' +
               '<p>Now press <b>Always I₁ − I₂</b>, the habit almost everyone forms while all ' +
               'their loops still agree. With both loops the same way nothing happens — it is the ' +
               'right answer there. With mesh 2 reversed the board goes red, both mesh equations ' +
               'are left holding a leftover voltage, and node B stops balancing.</p>' +
-              flag('Same shape as the ± pair put on one element at a time. A convention you ' +
-                'chose is safe. A habit you never chose is safe until the circumstance it was ' +
-                'never true in.') +
-              next('Press <b>KCL — nodes</b> and then <b>Multiple loops</b> for the last one.');
+              flag('Same shape as the ± pair put on one element at a time, and as "one in, the ' +
+                'rest out". A convention you chose is safe. A habit you never chose is safe ' +
+                'until the circumstance it was never true in.') +
+              next('One shared branch can only break one way. Press <b>Multiple loops</b> for ' +
+                'three of them.');
+          } },
+      ];
+    }
+
+    /* ---- multiple loops, KVL: three windows, three shared branches ---- */
+    function gridKvl() {
+      return [
+        { title: 'Three windows, and how you knew that', lit: ['m1', 'm2', 'm3'],
+          html: function () {
+            var c = loopCount();
+            return '<p>Count the windows in the drawing and you get three. You did not have to ' +
+              'count them: <b>b − n + 1</b> says so, and it says so for any circuit, flat ' +
+              'drawing or not.</p>' +
+              eq(c.b + ' branches − ' + c.n + ' nodes + 1 = ' + c.m + ' equations',
+                 'the same rule that gave 1 on the one-loop circuit and 2 on the split') +
+              '<p>Three equations, three unknowns — and this time <b>three</b> branches are ' +
+              'shared rather than one: ' + cur().sharedKeys.map(function (k) {
+                return nm(key(k));
+              }).join(', ') + '. Each one belongs to two windows, so each one carries a ' +
+              'combination of two mesh currents.</p>' +
+              meshHtml(0) + meshHtml(1) + meshHtml(2) +
+              '<p>Nothing about the rule changed. Walking a → b drops by v<sub>ab</sub>; an ' +
+              'element in one window contributes +R·I; an element in two carries the ' +
+              'combination. The circuit got bigger and the convention did not.</p>';
+          } },
+
+        { title: 'One reversed loop, two broken branches', lit: ['m1', 'm2', 'm3'],
+          html: function () {
+            var L = cur(), sk = L.sharedKeys.map(key);
+            return '<p>Press <b>All anticlockwise</b> first: all three arrows spin, all three ' +
+              'variables change sign, all three equations still close. The direction is free ' +
+              'here exactly as it was on one loop.</p>' +
+              '<p>Now press <b>Mesh 2 reversed</b>. Mesh 2 no longer agrees with either ' +
+              'neighbour, so the branches it shares stop subtracting and start adding:</p>' +
+              '<ul>' + sk.map(function (e2) {
+                return '<li>' + nm(e2) + ' carries <b>' + carriesHtml(e2, false) + '</b></li>';
+              }).join('') + '</ul>' +
+              '<p>All three are still right, and all three equations still close. Now press ' +
+              '<b>Always I₁ − I₂</b> — the habit that was harmless on the split circuit and ' +
+              'harmless here too while the loops agreed.</p>' +
+              '<p><b>Two</b> of the three shared branches go wrong at once, not one. The wrong ' +
+              'currents land in every equation those branches appear in, and then in KCL at ' +
+              'every node they feed. One habit, one press, and most of the page is wrong.</p>' +
+              flag('This is why the mistake is computed from the figure rather than announced ' +
+                'by the button. The button did nothing wrong on two of these three circuits.');
+          } },
+
+        { title: 'Whatever you walked, the books balance', lit: [],
+          html: function () {
+            var pc = Solve.powerCheck(solved(cur()).brs);
+            return '<p>Put the habit back to <b>As the loops run</b> and press everything else: ' +
+              'all clockwise, all anticlockwise, mesh 2 reversed, drops, rises, any reference ' +
+              'node, either marking. Three loop equations, ' + loopCount().b + ' branches, and ' +
+              'the right-hand column does not move.</p>' +
+              eq(si(pc.dissipated, 'W') + ' absorbed  −  ' + si(pc.generated, 'W') +
+                 ' delivered  =  ' + si(0, 'W'), 'Σ P = 0, under every convention on this page') +
+              '<p>Both laws, three circuits, and the same answer every time. KCL and KVL are not ' +
+              'two opinions about a circuit — they are two ways of writing down the same facts, ' +
+              'and the conventions are two ways of writing down each of those.</p>' +
+              '<p><b>Reset to the site default</b> puts back the ones the rest of this site ' +
+              'uses: positive current, the reference on the source\'s − terminal, + where the ' +
+              'current enters, KCL written as Σ leaving = 0, and every mesh walked clockwise ' +
+              'adding drops. Every solve on every other page is written that way — including ' +
+              '<a href="../philosophy/index.html">Which Method, and Why</a>, which takes the ' +
+              'next question: both laws work, so which one do you actually pick?</p>';
           } },
       ];
     }
@@ -1287,18 +1432,15 @@
               'never moves. That is what it means for something to be a convention rather than ' +
               'a fact — and the mistakes were never the choices, they were the habits nobody ' +
               'chose.</p>' +
-              '<p><b>Reset to the site default</b> puts back the ones the rest of this site ' +
-              'uses: positive current, the reference on the source\'s − terminal, + where the ' +
-              'current enters, KCL written as Σ leaving = 0, and every mesh walked clockwise ' +
-              'adding drops. Every solve on every other page is written that way — including ' +
-              '<a href="../philosophy/index.html">Which Method, and Why</a>, which takes the ' +
-              'next question: both laws work, so which one do you actually pick?</p>';
+              next('That is KCL on all three circuits. Press <b>KVL — loops</b> to do the same ' +
+                'to the other law on this one: three windows, three shared branches, and a ' +
+                'habit that breaks two of them at once.');
           } },
       ];
     }
 
     var GUIDES = { 'basic/kcl': basicKcl, 'basic/kvl': basicKvl, 'split/kcl': splitKcl,
-      'split/kvl': splitKvl, 'grid/kcl': gridKcl };
+      'split/kvl': splitKvl, 'grid/kcl': gridKcl, 'grid/kvl': gridKvl };
     function guideFor() {
       var f = GUIDES[pick.level + '/' + pick.mode];
       return f ? f() : [];
@@ -1338,32 +1480,21 @@
         b.setAttribute('aria-pressed', String(b.getAttribute(attr) === val));
       });
     }
-    function syncMode() {
-      syncSeg(modeSeg, 'data-mode', pick.mode);
-      // KVL needs meshes, and the grid has none yet — say so rather than failing quietly
-      if (modeSeg) {
-        Array.prototype.forEach.call(modeSeg.children, function (b) {
-          var off = b.getAttribute('data-mode') === 'kvl' && !cur().mesh;
-          b.disabled = off;
-          b.title = off ? 'The KVL half runs on the one-loop and split circuits' : '';
-        });
-      }
-    }
+    function syncMode() { syncSeg(modeSeg, 'data-mode', pick.mode); }
     function syncLevel() { syncSeg(levelSeg, 'data-level', pick.level); }
 
     function setMode(next2) {
-      if (next2 === pick.mode || (next2 === 'kvl' && !cur().mesh)) return;
+      if (next2 === pick.mode) return;
       pick.mode = next2;
       buildChoices();                 // the mode owns which pickers are on show
       reguide();
     }
-    /* Changing the circuit can invalidate two choices: a reference node the new circuit does
-       not have, and KVL on a circuit with no meshes. Both fall back rather than throwing. */
+    /* Changing the circuit can invalidate the reference: the grid's six nodes are not the
+       other two circuits' three, so a reference they have not got falls back to their own. */
     function setLevel(next2) {
       if (next2 === pick.level || !BY_ID[next2]) return;
       pick.level = next2;
       if (!cur().nodes[pick.ref]) pick.ref = cur().ref;
-      if (pick.mode === 'kvl' && !cur().mesh) pick.mode = 'kcl';
       buildChoices();
       reguide();
     }
@@ -1393,7 +1524,6 @@
         var was = pick.level + '/' + pick.mode;
         Object.keys(next || {}).forEach(function (k) { pick[k] = next[k]; });
         if (!cur().nodes[pick.ref]) pick.ref = cur().ref;
-        if (pick.mode === 'kvl' && !cur().mesh) pick.mode = 'kcl';
         buildChoices();
         // same fork the buttons take: a different circuit or law is a different guide
         if (pick.level + '/' + pick.mode !== was) reguide(); else redraw();
@@ -1407,7 +1537,12 @@
           incoming: L.kclAt.map(incoming),
           marked: L.el.map(function (e2) { return marked(e2); }),
           mesh: { i: meshI(), residual: meshes().map(function (M, i) { return meshEq(i).residual; }),
-            sharedRatio: L.shared ? sharedRatio() : 0 },
+            shared: L.sharedKeys.map(function (k) {
+              var c = carries(key(k), pick.mode === 'kvl' && pick.shared === 'minus');
+              return { k: k, signs: c.map(function (x) { return x.k; }),
+                       meshes: c.map(function (x) { return x.mi; }) };
+            }),
+            broken: brokenShared().map(function (e2) { return e2.k; }) },
           pot: p };
       },
     };

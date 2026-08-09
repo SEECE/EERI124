@@ -491,8 +491,8 @@
     var CV_LEVELS = {
       basic: { nodes: ['A', 'B', 'C'], mesh: true, shared: false, kclNodes: 1, interior: 0 },
       split: { nodes: ['A', 'B', 'C'], mesh: true, shared: true, kclNodes: 1, interior: 0 },
-      grid: { nodes: ['A', 'B', 'C', 'D', 'E', 'F'], mesh: false, shared: false,
-              kclNodes: 4, interior: 5 },
+      grid: { nodes: ['A', 'B', 'C', 'D', 'E', 'F'], mesh: true, shared: true,
+              kclNodes: 4, interior: 5, meshes: 3, sharedBranches: 3 },
     };
 
     /* The whole page rests on one claim, so it is the one asserted hardest: every LEGAL set of
@@ -608,7 +608,7 @@
         });
         total += combos.length;
       });
-      assert(total === 264, 'expected 264 legal combinations, drove ' + total);
+      assert(total === 504, 'expected 504 legal combinations, drove ' + total);
     });
 
     /* The marking half. The arrow and the ± pair are one decision, so turning BOTH is legal on
@@ -695,43 +695,88 @@
       assert(near(mix[0], cw[0]) && near(mix[1], -cw[1]), 'reversing mesh 2 moved mesh 1');
     });
 
-    check('conventions — the shared branch adds when the loops oppose', function () {
-      var want = Math.abs(cv.state().marked[2].i);
-      [['cw', -1], ['ccw', -1], ['mixed', 1]].forEach(function (c) {
-        cv.set({ level: 'split', mode: 'kvl', loops: c[0], shared: 'signed' });
+    /* How many loop equations a circuit needs is not a matter of taste: b − n + 1, which is
+       also the number of windows in a flat drawing. All three circuits are pinned, because the
+       guides quote the arithmetic. */
+    check('conventions — b − n + 1 gives the number of meshes on all three circuits', function () {
+      [['basic', 3, 3, 1], ['split', 4, 3, 2], ['grid', 8, 6, 3]].forEach(function (c) {
+        cv.set({ level: c[0], mode: 'kvl', loops: 'cw', shared: 'signed' });
         var st = cv.state();
-        assert(st.mesh.sharedRatio === c[1],
-          c[0] + ' wrote the shared branch with ratio ' + st.mesh.sharedRatio +
-          ', expected ' + c[1]);
-        assert(near(Math.abs(st.marked[2].i), want), c[0] + ' changed the branch current');
+        assert(c[1] - c[2] + 1 === c[3], c[0] + ': the counting rule itself is wrong');
+        assert(st.mesh.i.length === c[3],
+          c[0] + ' has ' + st.mesh.i.length + ' meshes, expected ' + c[3]);
+        assert(st.marked.length === c[1],
+          c[0] + ' has ' + st.marked.length + ' branches, expected ' + c[1]);
       });
+    });
+
+    /* Each mesh names an element it does not share, so its solved current IS the clockwise mesh
+       current. If that ever stops being true the equations on screen are decoration. */
+    check('conventions — the mesh currents come straight off the one solve', function () {
+      [['basic', [0.15]], ['split', [0.15, 0.05]], ['grid', [1.25, 0.875, 5]]].forEach(function (c) {
+        cv.set({ level: c[0], mode: 'kvl', loops: 'cw', shared: 'signed', kvlsign: 'drops' });
+        var st = cv.state();
+        c[1].forEach(function (want, k) {
+          assert(near(st.mesh.i[k], want),
+            c[0] + ' I' + (k + 1) + ' = ' + st.mesh.i[k] + ', expected ' + want);
+        });
+        st.mesh.residual.forEach(function (r, k) {
+          assert(Math.abs(r) < 1e-9, c[0] + ' mesh ' + (k + 1) + ' leaves ' + r);
+        });
+      });
+    });
+
+    check('conventions — shared branches subtract when the loops agree and add when they do not', function () {
+      assert(CV_LEVELS.grid.sharedBranches === 3, 'the grid should share three branches');
+      ['basic', 'split', 'grid'].forEach(function (id) {
+        cv.set({ level: id, mode: 'kvl', loops: 'cw', shared: 'signed' });
+        var want = cv.state().marked.map(function (m) { return Math.abs(m.i); });
+        ['cw', 'ccw'].forEach(function (loops) {
+          cv.set({ loops: loops });
+          var st = cv.state();
+          // two windows sharing a branch always walk it in opposite senses, so with every loop
+          // running the same way EVERY shared branch subtracts — on any circuit
+          st.mesh.shared.forEach(function (sh) {
+            assert(sh.signs[1] < 0, id + '/' + loops + ': ' + sh.k + ' is not subtracting');
+          });
+          st.marked.forEach(function (m, k) {
+            assert(near(Math.abs(m.i), want[k]), id + '/' + loops + ' moved a branch current');
+          });
+        });
+      });
+      // reverse one mesh and the branches it shares flip to adding — and only those
+      cv.set({ level: 'grid', mode: 'kvl', loops: 'mixed', shared: 'signed' });
+      var st = cv.state();
+      var adding = st.mesh.shared.filter(function (sh) { return sh.signs[1] > 0; });
+      assert(adding.length === 2, 'mesh 2 reversed: ' + adding.length +
+        ' shared branches add, expected the 2 it shares');
+      assert(!st.faults.length, 'reversing one mesh is legal and must not be flagged');
+      assert(near(st.mesh.i[0], 1.25) && near(st.mesh.i[1], -0.875) && near(st.mesh.i[2], 5),
+        'mixed moved a mesh other than 2: ' + JSON.stringify(st.mesh.i));
     });
 
     check('conventions — "always I₁ − I₂" is flagged only where it is actually wrong', function () {
-      ['cw', 'ccw'].forEach(function (loops) {
-        cv.set({ level: 'split', mode: 'kvl', loops: loops, shared: 'minus' });
-        assert(!cv.state().faults.length,
-          loops + ': flagged a habit that gives the right expression there');
+      ['split', 'grid'].forEach(function (id) {
+        ['cw', 'ccw'].forEach(function (loops) {
+          cv.set({ level: id, mode: 'kvl', loops: loops, shared: 'minus' });
+          var st = cv.state();
+          assert(!st.faults.length,
+            id + '/' + loops + ': flagged a habit that gives the right expression there');
+          assert(!st.mesh.broken.length, id + '/' + loops + ': ' + st.mesh.broken.join());
+        });
       });
-      cv.set({ level: 'split', mode: 'kvl', loops: 'mixed', shared: 'minus' });
-      var st = cv.state();
-      assert(st.faults.some(function (f) { return f.kind === 'shared'; }), 'mixed: not flagged');
-      // and the one wrong sign must not stay in one equation
-      assert(Math.abs(st.mesh.residual[0]) > 1e-9 && Math.abs(st.mesh.residual[1]) > 1e-9,
-        'both mesh equations should stop closing');
-      assert(Math.abs(st.residual) > 1e-9, 'KCL at B should stop balancing too');
-    });
-
-    /* The grid has three shared branches and meshEq() carries one, so KVL is not offered
-       there. This pins the fallback rather than the limitation: when the KVL half is
-       generalised, this check is what tells you to come back and delete it. */
-    check('conventions — a circuit with no meshes falls back to KCL instead of breaking', function () {
-      cv.set({ level: 'split', mode: 'kvl' });
-      cv.set({ level: 'grid' });
-      var st = cv.state();
-      assert(st.pick.mode === 'kcl', 'the grid stayed in KVL with no meshes');
-      assert(!st.mesh.i.length, 'the grid reported ' + st.mesh.i.length + ' mesh currents');
-      assert(!st.faults.length, 'the fallback flagged something');
+      // one shared branch can only break one way; three can break two at once
+      [['split', 1], ['grid', 2]].forEach(function (c) {
+        cv.set({ level: c[0], mode: 'kvl', loops: 'mixed', shared: 'minus' });
+        var st = cv.state();
+        assert(st.faults.some(function (f) { return f.kind === 'shared'; }), c[0] + ': not flagged');
+        assert(st.mesh.broken.length === c[1], c[0] + ': ' + st.mesh.broken.length +
+          ' branches broke (' + st.mesh.broken.join() + '), expected ' + c[1]);
+        // and one bad sign must not stay in one equation, or in one law
+        var open = st.mesh.residual.filter(function (r) { return Math.abs(r) > 1e-9; });
+        assert(open.length >= 2, c[0] + ': only ' + open.length + ' mesh equations stopped closing');
+        assert(Math.abs(st.residual) > 1e-9, c[0] + ': KCL should stop balancing too');
+      });
     });
 
     check('conventions — the signs really do move, or the claim above is vacuous', function () {
@@ -793,7 +838,7 @@
        chapter may move the board — that was the old design, and walking backwards through it
        changed the circuit under the student. */
     var CV_GUIDES = [['basic', 'kcl', 8], ['basic', 'kvl', 2], ['split', 'kcl', 3],
-      ['split', 'kvl', 3], ['grid', 'kcl', 3]];
+      ['split', 'kvl', 3], ['grid', 'kcl', 3], ['grid', 'kvl', 3]];
 
     check('conventions — every guide renders on its own circuit, right and wrong', function () {
       CV_GUIDES.forEach(function (g) {
@@ -839,10 +884,10 @@
         (cv.lesson.index() + 1));
       assert(cv.state().guide === 'basic/kvl', 'switching law loaded ' + cv.state().guide);
       cv.lesson.go(1);
-      cv.set({ level: 'grid' });                // …and KVL there falls back to KCL
+      cv.set({ level: 'grid' });                // the law carries across; the guide restarts
       assert(cv.lesson.index() === 0, 'switching circuit left the student on chapter ' +
         (cv.lesson.index() + 1));
-      assert(cv.state().guide === 'grid/kcl', 'switching circuit loaded ' + cv.state().guide);
+      assert(cv.state().guide === 'grid/kvl', 'switching circuit loaded ' + cv.state().guide);
       cv.lesson.go(2);
       cv.reset();
       assert(cv.lesson.index() === 0 && cv.state().guide === 'split/kcl',
