@@ -20,6 +20,12 @@
     function paint(keepScroll) {
       var ch = chapters[i];
       if (!ch) return;
+      /* FIRST, because a page may carry the board with the chapter — the conventions page
+         switches both the circuit and the law on arrival — and a chapter's html() reads that
+         live state. Rendering the body first hands a KVL chapter the previous chapter's
+         circuit, which is how one of them ended up asking a mesh-less circuit for its mesh
+         equation. Nothing here re-enters paint(), so the order is safe. */
+      if (o.onView) o.onView(ch, i);
       if (o.title) o.title.innerHTML = ch.title;   // titles carry subscripts (R<sub>AB</sub>)
       if (o.count) o.count.textContent = (i + 1) + ' / ' + chapters.length;
       if (o.body) {
@@ -33,7 +39,6 @@
         var kids = o.dots.children;
         for (var k = 0; k < kids.length; k++) kids[k].setAttribute('aria-current', k === i ? 'true' : 'false');
       }
-      if (o.onView) o.onView(ch, i);
     }
 
     function buildDots() {
