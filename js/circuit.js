@@ -139,6 +139,23 @@
     return validate({ nodes: nodes, edges: edges });
   }
 
+  /* Two current sources bounding the SAME mesh. KVL round that loop is one equation in two
+     unknown source voltages, so the mesh method's step 9 cannot pin either from the loop walk,
+     and a power tally that skips them under-reports Σ generated. The circuit is a perfectly
+     good circuit — node voltages solve it — it just is not the method these pages teach, so no
+     generator may hand one out. Every current-source placement runs through here.
+     Model-only contexts (circuit.test.html) have no solver, so nothing to check. */
+  function meshClash(c) {
+    var S = window.Solve;
+    if (!S) return false;
+    try {
+      var mc = S.meshCurrents(c), per = {};
+      return mc.iSources.some(function (s) {
+        return [s.fa, s.fb].some(function (f) { return f !== mc.F.outer && (per[f] = (per[f] || 0) + 1) > 1; });
+      });
+    } catch (err) { return true; }    // will not mesh-solve at all — just as unusable
+  }
+
   /* Turn a resistor (or, occasionally, one of several voltage sources) already on the circuit
      into a current source — lets the current-sources page's "all topologies" set reuse §3's
      fixed templates for supermesh / known-mesh-current practice, instead of only ever seeing
@@ -156,23 +173,30 @@
       var root = find(circuit.nodes[0].id);
       return !circuit.nodes.every(function (n) { return find(n.id) === root; });
     }
-    function convert(j) { edges[j] = { id: edges[j].id, type: 'I', a: edges[j].a, b: edges[j].b, value: pickI() }; }
+    // Convert, look, and put it back if the result lands two current sources on one mesh —
+    // cheaper than predicting the faces before the edge changes type.
+    function convert(j) {
+      var was = edges[j];
+      edges[j] = { id: was.id, type: 'I', a: was.a, b: was.b, value: pickI() };
+      if (meshClash(circuit)) { edges[j] = was; return false; }
+      chosen[j] = true;
+      return true;
+    }
 
     var want = opts.count || (Math.random() < 0.35 ? 2 : 1);
     for (var k = 0; k < want; k++) {
       var cands = [];
       edges.forEach(function (e, j) { if (!chosen[j] && e.type === 'R' && !wouldCut(j)) cands.push(j); });
-      if (!cands.length) break;
-      var j = pick(cands);
-      chosen[j] = true;
-      convert(j);
+      var placed = false;
+      while (cands.length && !placed) placed = convert(cands.splice(Math.floor(Math.random() * cands.length), 1)[0]);
+      if (!placed) break;
     }
     if (opts.voltage && Math.random() < 0.3) {
       var vs = [];
       edges.forEach(function (e, j) { if (!chosen[j] && e.type === 'V') vs.push(j); });
       if (vs.length > 1) {
         var v = pick(vs);
-        if (!wouldCut(v)) { chosen[v] = true; convert(v); }
+        if (!wouldCut(v)) convert(v);
       }
     }
     return validate(circuit);
@@ -197,7 +221,7 @@
       // problem would look like it has a dependent source and behave as if it had none
       if (!(sol.deps || []).every(function (e) { return Math.abs(sol.ctrl[e.id]) > 1e-9; })) return false;
       S.meshCurrents(c);                 // both techniques are offered, so both must solve
-      return true;
+      return !meshClash(c);
     } catch (err) { return false; }
   }
 
@@ -851,6 +875,7 @@
     isConnected: isConnected,
     build: build,
     currentify: currentify,
+    meshClash: meshClash,
     dependify: dependify,
     degenerate: degenerate,
     controls: controls,

@@ -264,7 +264,18 @@
     // a controlled voltage source generates the same way; its volts are gain·control, which the
     // solved mesh currents now give as a number
     CV.volt.forEach(function (e) { gen += depValue(e) * mc.edgeCurrent[e.id]; });
-    mc.iSources.forEach(function (s) { var r = iSrcVoltage(s); if (r) gen += -r.power; });
+    // A source the loop walk cannot decide (two current sources on one mesh) still carries
+    // power. Take its share from the node voltages rather than dropping the term: skipping it
+    // makes the balance read ✗ on a circuit where energy is in fact conserved.
+    var nodeP = null;
+    function nodePower(e) {
+      if (!nodeP) {
+        nodeP = {};
+        S.branches(circuit, S.nodeVoltages(circuit)).forEach(function (r) { nodeP[r.edge.id] = r.power; });
+      }
+      return nodeP[e.id];
+    }
+    mc.iSources.forEach(function (s) { var r = iSrcVoltage(s); gen += -(r ? r.power : nodePower(s.e)); });
     var pcOk = Math.abs(gen - diss) <= 1e-6 * (Math.abs(gen) + diss + 1);
 
     var steps = [];

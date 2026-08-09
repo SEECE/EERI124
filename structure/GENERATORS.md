@@ -151,6 +151,13 @@ Rules:
    does `Circuit.currentify()`, the same idea applied to an already-built circuit rather than
    at generation time — used by the current-sources page's "All topologies" set to turn some
    of §3's resistors into current sources (see SOLVER.md's `SolverPage({ sets })`).
+   **And no two current sources may bound the same mesh.** That one is not a cut and solves
+   fine by node voltages, but KVL round that shared loop is one equation in two unknown source
+   voltages, so the mesh method's step 9 can pin neither — and the step-10 power tally, having
+   no voltage for either, used to drop both terms and report Σ generated short of Σ dissipated.
+   `Circuit.meshClash()` is the single test; `solvable()` calls it (so every `attempt()`
+   generator is covered, including the dependent-source ones) and `currentify()` calls it per
+   conversion, putting the edge back and trying another candidate when it clashes.
    `Circuit.dependify()` is the same function for controlled sources, used by the
    dependent-sources page's "All topologies" set: it converts resistors only, applies the same
    cut rule to the current-type ones (`F`/`G`), never reads a **dead-end** resistor (its current

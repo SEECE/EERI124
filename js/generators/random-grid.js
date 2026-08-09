@@ -130,8 +130,12 @@
   // The §4 version: same grid, but one or two resistors become current sources and a third
   // mesh is allowed — a supermesh and a known mesh current cut the real unknown count back
   // down, so the network can be bigger without the hand solve exploding.
+  // Placement is random, so it goes through C.attempt(): that re-rolls a grid whose sources
+  // land badly — two current sources on one mesh above all, which no loop walk can resolve.
   C.register('Random (current sources)', function () {
-    return randomGrid({ currentSources: Math.random() < 0.4 ? 2 : 1, maxMeshes: 4 });
+    return C.attempt(function () {
+      return randomGrid({ currentSources: Math.random() < 0.4 ? 2 : 1, maxMeshes: 4 });
+    });
   }, { elements: ['R', 'V', 'I', 'W'], tags: ['random', 'current-source', 'grid', 'mesh'] });
 
   // The dependent-sources version: the same grid, sometimes with an independent current source

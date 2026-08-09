@@ -132,6 +132,33 @@
       assert(Solve.powerCheck(Solve.branches(c, Solve.nodeVoltages(c))).ok, 'power imbalance');
     });
 
+    // ---- two current sources on ONE mesh ----
+    // KVL round that loop is one equation in two unknown source voltages, so the mesh method's
+    // step 9 cannot pin either. The circuit is still a circuit and energy is still conserved,
+    // so step 10 must read ✓ (it used to drop both terms and report Σgen short) — and the
+    // random generator must not hand one out, since step 9 has nothing to teach on it.
+    var meshClash = Circuit.meshClash;
+    check('two current sources on one mesh', function () {
+      var c = Circuit.build(
+        [[0, 0], [1.5, 0], [3, 0], [0, 1.5], [1.5, 1.5], [3, 1.5], [0, -1.5], [3, -1.5]],
+        [['R', 0, 1, 470], ['R', 0, 3, 3300], ['I', 1, 2, 0.05], ['R', 1, 4, 4700], ['I', 2, 5, 0.01],
+          ['R', 3, 4, 2200], ['W', 4, 5], ['W', 0, 6], ['V', 7, 6, 15], ['W', 7, 2]]);
+      assert(meshClash(c), 'specimen no longer puts two current sources on one mesh');
+      assert(Solve.powerCheck(Solve.branches(c, Solve.nodeVoltages(c))).ok, 'node-voltage power imbalance');
+      var eq = window.MeshCurrent(c).filter(function (s) { return s.n === 10; })[0].eq.join(' ');
+      assert(/✓/.test(eq), 'mesh power check reads ✗: ' + eq);
+      for (var k = 0; k < 40; k++) assert(!meshClash(Circuit.get('Random (current sources)').generate()),
+        'generator produced two current sources on one mesh');
+      // the same must hold for the "All topologies" set, which currentifies §3's shapes
+      Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
+        for (var i = 0; i < 10; i++) {
+          var t = g.generate();
+          if (t.nodes.some(function (n) { return n.label; })) continue;   // bridge opts out
+          assert(!meshClash(Circuit.currentify(t, { voltage: true })), 'currentify(' + g.name + ') clashed');
+        }
+      });
+    });
+
     // ---- the four controlled sources, each against a hand-worked answer ----
     // A CCVS of 500·iφ in series with 1 kΩ + 2 kΩ off a 12 V source: KVL round the loop gives
     // 12 = 1000i + 2000i + 500i (the source opposes), so i = 12/2500 = 4.8 mA.
