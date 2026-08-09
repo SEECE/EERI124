@@ -77,6 +77,11 @@
     <!-- Conventions -->
     <div class="board">
       <span id="cv-verdict"></span>
+      <div class="seg" id="cv-level">
+        <button type="button" data-level="basic" aria-pressed="false">One loop</button>
+        <button type="button" data-level="split" aria-pressed="true">One split</button>
+        <button type="button" data-level="grid" aria-pressed="false">Exam grid</button>
+      </div>
       <div class="seg" id="cv-mode">
         <button type="button" data-mode="kcl" aria-pressed="true">KCL</button>
         <button type="button" data-mode="kvl" aria-pressed="false">KVL</button>
@@ -480,6 +485,16 @@
 
     var cv = ConventionsLab({ prefix: 'cv-' });
 
+    /* Which nodes and which laws each circuit offers. Kept here rather than read back off the
+       lab, so the checks below assert against what the page is SUPPOSED to carry — a level
+       that quietly loses a node or a mesh fails instead of being politely accommodated. */
+    var CV_LEVELS = {
+      basic: { nodes: ['A', 'B', 'C'], mesh: true, shared: false, kclNodes: 1, interior: 0 },
+      split: { nodes: ['A', 'B', 'C'], mesh: true, shared: true, kclNodes: 1, interior: 0 },
+      grid: { nodes: ['A', 'B', 'C', 'D', 'E', 'F'], mesh: false, shared: false,
+              kclNodes: 4, interior: 5 },
+    };
+
     /* The whole page rests on one claim, so it is the one asserted hardest: every LEGAL set of
        conventions leaves every physical quantity identical. Signs move, wording moves, node
        numbers move; magnitudes, differences and powers do not. */
@@ -488,39 +503,45 @@
       // currents and the KCL half reads it straight off the solve, so the two agree to about
       // 1e-16 and not to the bit. Anything a student could see is far coarser than this.
       function r9(x) { return Number(x.toPrecision(9)); }
-      var mags = st.marked.map(function (m) {
-        return [r9(Math.abs(m.i)), r9(Math.abs(m.v)), r9(Math.abs(m.p))];
-      });
+      var ns = Object.keys(st.pot).sort();
       return JSON.stringify({
-        mags: mags,
+        mags: st.marked.map(function (m) {
+          return [r9(Math.abs(m.i)), r9(Math.abs(m.v)), r9(Math.abs(m.p))];
+        }),
         // a mesh current is a bookkeeping variable and flips with its loop, but its SIZE is
         // fixed by the circuit, so it belongs here alongside the branch magnitudes
         mesh: st.mesh.i.map(function (x) { return r9(Math.abs(x)); }),
-        // potentials are measured from the chosen reference, so only DIFFERENCES may be compared
-        AC: r9(st.pot.A - st.pot.C), AB: r9(st.pot.A - st.pot.B), BC: r9(st.pot.B - st.pot.C),
+        // potentials are measured from the chosen reference, so only DIFFERENCES may be
+        // compared — every one of them against the same node, whichever node that is
+        diffs: ns.map(function (n) { return r9(st.pot[n] - st.pot[ns[0]]); }),
       });
     }
 
-    /* Every set of conventions a student is ALLOWED to hold, both laws. The KVL half includes
-       "always I₁ − I₂" with the loops agreeing, because there it is not a mistake — it is the
-       right expression, arrived at by a habit that has not been tested yet. */
-    function legalCombos() {
+    /* Every set of conventions a student is ALLOWED to hold, on every circuit and under both
+       laws. The KVL half includes "always I₁ − I₂" with the loops agreeing, because there it
+       is not a mistake — it is the right expression, arrived at by a habit that has not been
+       tested yet. Likewise "one in, rest out" is legal on the first two circuits and is only
+       excluded here because the grid is where it stops being. */
+    function legalCombos(id) {
+      var info = CV_LEVELS[id], combos = [];
       function with_(base, extra) {
         var o = {}, k;
         for (k in base) o[k] = base[k];
         for (k in extra) o[k] = extra[k];
         return o;
       }
-      var combos = [];
-      var loopShared = [['cw', 'signed'], ['cw', 'minus'], ['ccw', 'signed'], ['ccw', 'minus'],
-        ['mixed', 'signed']];
+      var loopShared = info.shared
+        ? [['cw', 'signed'], ['cw', 'minus'], ['ccw', 'signed'], ['ccw', 'minus'],
+           ['mixed', 'signed']]
+        : [['cw', 'signed'], ['ccw', 'signed']];
       ['positive', 'electron'].forEach(function (flow) {
-        ['A', 'B', 'C'].forEach(function (ref) {
-          ['guess', 'actual'].forEach(function (arrows) {
-            var base = { flow: flow, ref: ref, zero: 'chosen', arrows: arrows, polarity: 'psc' };
+        info.nodes.forEach(function (ref) {
+          ['flow', 'reversed'].forEach(function (polarity) {
+            var base = { level: id, flow: flow, ref: ref, zero: 'chosen', polarity: polarity };
             ['leaving', 'inout'].forEach(function (kcl) {
               combos.push(with_(base, { mode: 'kcl', kcl: kcl }));
             });
+            if (!info.mesh) return;
             loopShared.forEach(function (ls) {
               ['drops', 'rises'].forEach(function (kvlsign) {
                 combos.push(with_(base, { mode: 'kvl', loops: ls[0],
@@ -533,40 +554,138 @@
       return combos;
     }
 
-    check('conventions — the fixed circuit still gives the numbers the guide quotes', function () {
-      var c = ConventionsLab.circuit(), s = Solve.nodeVoltages(c), b = Solve.branches(c, s);
-      assert(near(s.v[s.of.n0] - s.v[s.of.n3], 12), 'A−C is not 12 V');
-      assert(near(s.v[s.of.n1] - s.v[s.of.n3], 6), 'B−C is not 6 V');
+    check('conventions — the three circuits still give the numbers the guide quotes', function () {
+      // basic: 12 V across 40 + 40 — 150 mA, 12 / 6 / 0 V, 0.9 + 0.9 W
+      var c = ConventionsLab.circuit('basic'), s = Solve.nodeVoltages(c), b = Solve.branches(c, s);
+      assert(near(s.v[s.of.n0] - s.v[s.of.n2], 12) && near(s.v[s.of.n1] - s.v[s.of.n2], 6),
+        'basic: the 12 / 6 / 0 V divider moved');
+      assert(near(b[1].current, 0.15) && near(b[2].current, 0.15), 'basic: not 150 mA throughout');
+
+      // split: 40 in series with 60 ∥ 120 — 150 mA splitting 100 / 50, powers 0.9 / 0.6 / 0.3
+      c = ConventionsLab.circuit('split'); s = Solve.nodeVoltages(c); b = Solve.branches(c, s);
+      assert(near(s.v[s.of.n0] - s.v[s.of.n3], 12), 'split: A−C is not 12 V');
+      assert(near(s.v[s.of.n1] - s.v[s.of.n3], 6), 'split: B−C is not 6 V');
       assert(near(b[1].current, 0.15) && near(b[2].current, 0.1) && near(b[3].current, 0.05),
-        'the 150 / 100 / 50 mA split moved');
+        'split: the 150 / 100 / 50 mA split moved');
       assert(near(b[1].power, 0.9) && near(b[2].power, 0.6) && near(b[3].power, 0.3),
-        'the 0.9 / 0.6 / 0.3 W powers moved');
-      assert(Solve.powerCheck(b).ok, 'powers do not balance');
+        'split: the 0.9 / 0.6 / 0.3 W powers moved');
+
+      // grid: the exam paper — 5 A in, splitting 1.25 / 3.75 at A and 0.875 / 0.375 at B
+      c = ConventionsLab.circuit('grid'); s = Solve.nodeVoltages(c); b = Solve.branches(c, s);
+      assert(near(b[5].current, 5), 'grid: the supply is not carrying 5 A');
+      assert(near(b[0].current, 1.25) && near(b[3].current, 3.75), 'grid: the split at A moved');
+      assert(near(b[1].current, 0.875) && near(b[2].current, 0.375), 'grid: the split at B moved');
+      assert(near(b[4].current, 4.125), 'grid: the 20 Ω is not carrying 4.125 A');
+      assert(near(Solve.powerCheck(b).generated, 1875), 'grid: not 1875 W');
+
+      ['basic', 'split', 'grid'].forEach(function (id) {
+        var cc = ConventionsLab.circuit(id);
+        assert(Solve.powerCheck(Solve.branches(cc, Solve.nodeVoltages(cc))).ok,
+          id + ': powers do not balance');
+      });
+      assert(ConventionsLab.levels.join(',') === 'basic,split,grid',
+        'the three circuits are ' + ConventionsLab.levels.join(','));
     });
 
     check('conventions — every legal set of conventions gives the same answer', function () {
-      var combos = legalCombos(), first = null;
-      combos.forEach(function (p) {
-        cv.set(p);
-        var st = cv.state();
-        assert(!st.faults.length, JSON.stringify(p) + ' was flagged: ' +
-          (st.faults[0] || {}).kind);
-        assert(Math.abs(st.residual) < 1e-9, JSON.stringify(p) + ' leaves KCL residual ' + st.residual);
-        st.mesh.residual.forEach(function (r, mi) {
-          assert(Math.abs(r) < 1e-9, JSON.stringify(p) + ' leaves mesh ' + (mi + 1) + ' at ' + r);
+      var total = 0;
+      Object.keys(CV_LEVELS).forEach(function (id) {
+        var combos = legalCombos(id), first = null;
+        combos.forEach(function (p) {
+          cv.set(p);
+          var st = cv.state();
+          assert(st.pick.level === id, id + ': the board did not switch circuits');
+          assert(!st.faults.length, JSON.stringify(p) + ' was flagged: ' +
+            (st.faults[0] || {}).kind);
+          assert(Math.abs(st.residual) < 1e-9,
+            JSON.stringify(p) + ' leaves KCL residual ' + st.residual);
+          st.mesh.residual.forEach(function (r, mi) {
+            assert(Math.abs(r) < 1e-9, JSON.stringify(p) + ' leaves mesh ' + (mi + 1) + ' at ' + r);
+          });
+          var inv = invariants(st);
+          if (first === null) first = inv;
+          assert(inv === first, JSON.stringify(p) + ' moved something:\n  ' + inv + '\n  ' + first);
         });
-        var inv = invariants(st);
-        if (first === null) first = inv;
-        assert(inv === first, JSON.stringify(p) + ' moved something:\n  ' + inv + '\n  ' + first);
+        total += combos.length;
       });
-      assert(combos.length === 144, 'expected 144 legal combinations, drove ' + combos.length);
+      assert(total === 264, 'expected 264 legal combinations, drove ' + total);
+    });
+
+    /* The marking half. The arrow and the ± pair are one decision, so turning BOTH is legal on
+       every circuit and turning one branch's marks alone never is. */
+    check('conventions — reversing every marking is legal, and turns every sign', function () {
+      Object.keys(CV_LEVELS).forEach(function (id) {
+        cv.set({ level: id, mode: 'kcl', zero: 'chosen', kcl: 'leaving', polarity: 'flow' });
+        var fwd = cv.state();
+        cv.set({ polarity: 'reversed' });
+        var rev = cv.state();
+        assert(!rev.faults.length, id + ': all-reversed was flagged');
+        rev.marked.forEach(function (m, k) {
+          assert(m.i * fwd.marked[k].i < 0, id + ': element ' + k + ' kept its current sign');
+          assert(near(m.p, fwd.marked[k].p), id + ': element ' + k + ' changed power');
+        });
+        // …and no resistor may come out producing, which is what makes it legal rather than
+        // merely different. Element 0 is the source, which is allowed to deliver.
+        rev.marked.slice(1).forEach(function (m, k) {
+          assert(m.p > -1e-9, id + ': resistor ' + (k + 1) + ' produces ' + m.p + ' W reversed');
+        });
+      });
+    });
+
+    check('conventions — one branch marked backwards makes that resistor produce power', function () {
+      Object.keys(CV_LEVELS).forEach(function (id) {
+        cv.set({ level: id, mode: 'kcl', zero: 'chosen', kcl: 'leaving', polarity: 'odd' });
+        var st = cv.state();
+        var psc = st.faults.filter(function (f) { return f.kind === 'psc'; });
+        assert(psc.length === 1, id + ': expected exactly one PSC fault, got ' + psc.length);
+        assert(st.marked.filter(function (m) { return m.p < -1e-9; }).length === 2,
+          id + ': the source and exactly one resistor should read negative');
+        // a marking mistake is a mistake about WRITING, so the currents must still balance
+        assert(Math.abs(st.residual) < 1e-9, id + ': a bad ± pair broke KCL, which it cannot');
+      });
+    });
+
+    /* "One current in, the rest out" — legal wherever it can be held, and impossible on the
+       grid for a reason that is counting rather than opinion. */
+    check('conventions — "one in, rest out" is silent where it can be held', function () {
+      ['basic', 'split'].forEach(function (id) {
+        cv.set({ level: id, mode: 'kcl', zero: 'chosen', polarity: 'flow', kcl: 'onein' });
+        var st = cv.state();
+        assert(!st.faults.length, id + ': flagged a phrasing that works there');
+        st.incoming.forEach(function (c, k) {
+          assert(c === 1, id + ': node ' + k + ' has ' + c + ' arrows in, so it was never a test');
+        });
+      });
+    });
+
+    check('conventions — "one in, rest out" cannot be held on the grid, by counting', function () {
+      ['flow', 'reversed'].forEach(function (polarity) {
+        cv.set({ level: 'grid', mode: 'kcl', zero: 'chosen', polarity: polarity, kcl: 'onein' });
+        var st = cv.state();
+        assert(st.faults.some(function (f) { return f.kind === 'onein'; }),
+          polarity + ': not flagged');
+        assert(st.incoming.some(function (c) { return c !== 1; }),
+          polarity + ': every node got exactly one in, which the counting says is impossible');
+        // the argument itself: more branches between the KCL nodes than there are nodes, so
+        // the arrivals cannot be shared out one apiece however the arrows are drawn
+        assert(st.interior === CV_LEVELS.grid.interior,
+          'grid has ' + st.interior + ' interior branches, expected ' + CV_LEVELS.grid.interior);
+        assert(st.interior > st.incoming.length, 'the counting argument no longer holds');
+        assert(st.incoming.reduce(function (a, b) { return a + b; }, 0) >= st.interior,
+          'fewer arrivals than interior branches, which cannot happen');
+        // and it is a claim about PHRASING, so the physics must be untouched
+        assert(Math.abs(st.residual) < 1e-9, polarity + ': a phrasing broke KCL');
+      });
+      // the phrasing the rest of the site uses never has this problem
+      cv.set({ kcl: 'leaving' });
+      assert(!cv.state().faults.length, 'Σ leaving = 0 was flagged on the grid');
     });
 
     /* The mesh half. A mesh current is a bookkeeping variable: reversing its loop must reverse
        it and change nothing else, and the branch it shares must come out of the two variables
        equal to what the engine solved — otherwise the equations on screen are decoration. */
     check('conventions — reversing a loop reverses only its own variable', function () {
-      cv.set({ mode: 'kvl', loops: 'cw', shared: 'signed', arrows: 'guess', polarity: 'psc' });
+      cv.set({ level: 'split', mode: 'kvl', loops: 'cw', shared: 'signed', polarity: 'flow' });
       var cw = cv.state().mesh.i;
       cv.set({ loops: 'ccw' });
       var ccw = cv.state().mesh.i;
@@ -579,7 +698,7 @@
     check('conventions — the shared branch adds when the loops oppose', function () {
       var want = Math.abs(cv.state().marked[2].i);
       [['cw', -1], ['ccw', -1], ['mixed', 1]].forEach(function (c) {
-        cv.set({ mode: 'kvl', loops: c[0], shared: 'signed' });
+        cv.set({ level: 'split', mode: 'kvl', loops: c[0], shared: 'signed' });
         var st = cv.state();
         assert(st.mesh.sharedRatio === c[1],
           c[0] + ' wrote the shared branch with ratio ' + st.mesh.sharedRatio +
@@ -590,11 +709,11 @@
 
     check('conventions — "always I₁ − I₂" is flagged only where it is actually wrong', function () {
       ['cw', 'ccw'].forEach(function (loops) {
-        cv.set({ mode: 'kvl', loops: loops, shared: 'minus' });
+        cv.set({ level: 'split', mode: 'kvl', loops: loops, shared: 'minus' });
         assert(!cv.state().faults.length,
           loops + ': flagged a habit that gives the right expression there');
       });
-      cv.set({ mode: 'kvl', loops: 'mixed', shared: 'minus' });
+      cv.set({ level: 'split', mode: 'kvl', loops: 'mixed', shared: 'minus' });
       var st = cv.state();
       assert(st.faults.some(function (f) { return f.kind === 'shared'; }), 'mixed: not flagged');
       // and the one wrong sign must not stay in one equation
@@ -603,57 +722,64 @@
       assert(Math.abs(st.residual) > 1e-9, 'KCL at B should stop balancing too');
     });
 
+    /* The grid has three shared branches and meshEq() carries one, so KVL is not offered
+       there. This pins the fallback rather than the limitation: when the KVL half is
+       generalised, this check is what tells you to come back and delete it. */
+    check('conventions — a circuit with no meshes falls back to KCL instead of breaking', function () {
+      cv.set({ level: 'split', mode: 'kvl' });
+      cv.set({ level: 'grid' });
+      var st = cv.state();
+      assert(st.pick.mode === 'kcl', 'the grid stayed in KVL with no meshes');
+      assert(!st.mesh.i.length, 'the grid reported ' + st.mesh.i.length + ' mesh currents');
+      assert(!st.faults.length, 'the fallback flagged something');
+    });
+
     check('conventions — the signs really do move, or the claim above is vacuous', function () {
-      cv.set({ mode: 'kcl', arrows: 'guess', ref: 'C' });
+      cv.set({ level: 'split', mode: 'kcl', polarity: 'flow', ref: 'C', kcl: 'leaving' });
       var a = cv.state();
-      cv.set({ arrows: 'actual', ref: 'A' });
+      cv.set({ polarity: 'reversed', ref: 'A' });
       var b = cv.state();
-      assert(a.marked[3].i * b.marked[3].i < 0, 'R₃ current did not change sign with the arrow');
+      assert(a.marked[3].i * b.marked[3].i < 0, 'R₃ current did not change sign with the marking');
       assert(a.pot.A !== b.pot.A, 'node A read the same from two different references');
     });
 
-    /* The three mistakes, each flagged from the figure rather than from the button. */
-    check('conventions — a + mark that ignores the arrow makes a resistor produce power', function () {
-      cv.set({ mode: 'kcl', zero: 'chosen', arrows: 'guess', polarity: 'fixed' });
-      var st = cv.state();
-      var psc = st.faults.filter(function (f) { return f.kind === 'psc'; });
-      assert(psc.length === 1, 'expected one PSC fault, got ' + st.faults.length);
-      assert(st.marked[3].p < 0, 'R₃ power is ' + st.marked[3].p + ', so nothing was contradicted');
-    });
-
-    check('conventions — the same bad habit is invisible when the guess happens to be right', function () {
-      cv.set({ mode: 'kcl', zero: 'chosen', arrows: 'actual', polarity: 'fixed' });
-      assert(!cv.state().faults.length, 'flagged a marking that does not contradict its arrow');
-    });
-
-    check('conventions — one branch drawn twice breaks KCL', function () {
-      cv.set({ mode: 'kcl', zero: 'chosen', arrows: 'both', polarity: 'psc' });
-      var st = cv.state();
-      assert(st.faults.some(function (f) { return f.kind === 'dupe'; }), 'not flagged');
-      assert(Math.abs(st.residual) > 1e-9, 'residual is still zero, so nothing was double-counted');
-    });
-
     check('conventions — calling the reference earthed is flagged from every node', function () {
-      ['A', 'B', 'C'].forEach(function (ref) {
-        cv.set({ mode: 'kcl', ref: ref, zero: 'earth', arrows: 'guess', polarity: 'psc' });
-        var st = cv.state();
-        assert(st.faults.some(function (f) { return f.kind === 'earth'; }), ref + ' not flagged');
-        // …and it is a claim about the label only: the physics must be untouched
-        assert(Math.abs(st.residual) < 1e-9, ref + ' broke KCL, which earthing cannot do');
+      Object.keys(CV_LEVELS).forEach(function (id) {
+        CV_LEVELS[id].nodes.forEach(function (ref) {
+          cv.set({ level: id, mode: 'kcl', ref: ref, zero: 'earth', polarity: 'flow',
+            kcl: 'leaving' });
+          var st = cv.state();
+          assert(st.faults.some(function (f) { return f.kind === 'earth'; }),
+            id + '/' + ref + ' not flagged');
+          // …and it is a claim about the label only: the physics must be untouched
+          assert(Math.abs(st.residual) < 1e-9, id + '/' + ref + ' broke KCL, which earthing cannot do');
+        });
       });
     });
 
+    /* Switching circuits must not leave a choice pointing at something the new one has not
+       got — the grid's reference nodes do not exist on the other two. */
+    check('conventions — a reference the new circuit has not got falls back', function () {
+      cv.set({ level: 'grid', mode: 'kcl', ref: 'E', zero: 'chosen', polarity: 'flow' });
+      assert(cv.state().pick.ref === 'E', 'the grid does not offer node E');
+      cv.set({ level: 'split' });
+      var st = cv.state();
+      assert(st.pick.ref === 'C', 'the split circuit kept a reference it has not got: ' + st.pick.ref);
+      assert(!st.faults.length, 'the fallback flagged something');
+      assert(Math.abs(st.residual) < 1e-9, 'the fallback broke KCL');
+    });
+
     check('conventions — reset restores exactly the conventions the rest of the site uses', function () {
-      cv.set({ mode: 'kvl', flow: 'electron', ref: 'A', zero: 'earth', arrows: 'both',
-        polarity: 'fixed', kcl: 'inout', loops: 'mixed', kvlsign: 'rises', shared: 'minus' });
+      cv.set({ level: 'grid', mode: 'kcl', flow: 'electron', ref: 'D', zero: 'earth',
+        polarity: 'odd', kcl: 'onein' });
       cv.reset();
       var p = cv.state().pick;
       Object.keys(ConventionsLab.defaults).forEach(function (k) {
         assert(p[k] === ConventionsLab.defaults[k], k + ' reset to ' + p[k]);
       });
       assert(!cv.state().faults.length, 'the default conventions are flagged');
-      // the two defaults that are a promise about other files, not a preference
-      var c = ConventionsLab.circuit(), s = Solve.nodeVoltages(c);
+      // the three defaults that are a promise about other files, not a preference
+      var c = ConventionsLab.circuit('split'), s = Solve.nodeVoltages(c);
       assert(ConventionsLab.defaults.ref === 'C' && s.v[s.of.n3] === 0,
         'js/solve.js no longer references the node this page calls C');
       assert(ConventionsLab.defaults.kcl === 'leaving',
@@ -665,10 +791,23 @@
     check('conventions — every chapter renders, right and wrong', function () {
       cv.reset();
       walkChapters(cv, 'cv-', 'conventions (default)');
-      cv.set({ ref: 'B', zero: 'earth', arrows: 'both', polarity: 'fixed', kcl: 'inout' });
+      // a chapter carries its own circuit and law, so these have to survive being applied to
+      // whichever one the chapter arrives on
+      cv.set({ zero: 'earth', polarity: 'odd', kcl: 'onein' });
       walkChapters(cv, 'cv-', 'conventions (every mistake on)');
       var board = text('cv-wrote') + text('cv-invariant') + text('cv-verdict');
       assert(!/undefined|NaN/.test(board), 'readout: ' + board.slice(0, 160));
+      cv.reset();
+    });
+
+    /* A chapter may switch the circuit under the student. The one thing that must never happen
+       is the guide moving them off the chapter they are reading while it does. */
+    check('conventions — pressing a circuit keeps the student on their chapter', function () {
+      cv.lesson.go(9);
+      var at = cv.lesson.index();
+      cv.set({ level: 'grid' });
+      assert(cv.lesson.index() === at, 'switching circuits jumped to chapter ' + (cv.lesson.index() + 1));
+      assert(!/undefined|NaN/.test(text('cv-lesson-body')), 'the chapter broke on the new circuit');
       cv.reset();
     });
 
