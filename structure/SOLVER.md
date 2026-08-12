@@ -208,22 +208,22 @@ at this stage know only V = IR). Everything is worked by *clearing fractions*, n
 - **Step 4 states the convention** — the one step that is *not* in the PPT, and the reason KCL
   runs to **ten** steps, one more than the PPT's nine. The slides pick a phrasing and never say they
   picked one; that is the habit this step exists to break, because a marker cannot tell a sign
-  slip from an unstated convention. Two buttons in the step body (`data-kcl-conv`), **Σ currents
-  leaving = 0** (the default and what the module teaches) and **Σ in = Σ out**, and the technique
-  takes the choice as `NodeVoltage(circuit, { kcl })` — anything but `'inout'` is the default, so
-  a caller that knows nothing about conventions still gets the taught one. `js/solver-page.js`
-  owns the click: it is delegated on `#step-body` (the stepper re-renders that element on every
-  view, so nothing may bind to the buttons themselves), rebuilds the step list and lands back on
-  the same step. The choice survives Generate — a stated convention should not reset under the
-  student.
-  **What the choice may touch is the writing and nothing else.** Every KCL line is assembled as
-  one list of signed pieces (`kclParts` → `kclLine`); `Σ leaving = 0` prints them all on the left,
-  `Σ in = Σ out` prints the entering ones on the left where they turn positive, an empty side
-  reads `0`. The *statement* lines follow the choice (step 7's equations, step 9's "write the
-  equation" and "put the control variable in"); from "clear the fractions" on the equation is
-  brought to one side and the algebra is the same either way, which the step body says out loud.
-  The self-check asserts the last board is identical under both — a convention that moves an
-  answer is not a convention.
+  slip from an unstated convention. **This module fixes the convention to Σ currents leaving = 0**
+  — the step body shows Σ in = Σ out next to it, written for the same node, so a student who has
+  met that phrasing elsewhere recognises it as the same equation with the equals sign moved, not
+  a competing method; its button (`data-kcl-conv="inout"`) is rendered `disabled`, on purpose —
+  there is nothing to click. The technique still takes the choice as `NodeVoltage(circuit, { kcl })`
+  (anything but `'inout'` is the default) so the underlying capability isn't lost — the self-check
+  calls it directly with `{ kcl: 'inout' }` to assert the last board is identical either way, proving
+  the "same equation" claim the step body makes — but `js/solver-page.js` never passes anything but
+  the default, so the live steps are always Σ leaving = 0.
+  **What the choice may touch, when exercised through the API, is the writing and nothing else.**
+  Every KCL line is assembled as one list of signed pieces (`kclParts` → `kclLine`); `Σ leaving = 0`
+  prints them all on the left, `Σ in = Σ out` prints the entering ones on the left where they turn
+  positive, an empty side reads `0`. The *statement* lines follow the choice (step 7's equations,
+  step 9's "write the equation" and "put the control variable in"); from "clear the fractions" on
+  the equation is brought to one side and the algebra is the same either way, which the step body
+  says out loud.
 - **Step 7 builds the equations** — **one substep per unknown node**: names the node's resistor
   neighbours and writes its KCL equation in the chosen phrasing (source-fixed neighbour as its
   number, still-unknown neighbour as a letter). A floating source between two unknown nodes adds

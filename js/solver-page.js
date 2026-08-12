@@ -96,15 +96,13 @@
       if (termA.value === termB.value && letters.length > 1) termB.value = letters[letters.length - 1];
     }
 
-    /* KCL step 4's convention, chosen from inside the step itself (the buttons are drawn by
-       js/techniques/node-voltage.js). It lives here because the step list is rebuilt to apply
-       it — and it survives Generate on purpose: a student who states their convention once
-       should not have it silently reset under them. */
-    var kclConv = 'leaving';
-
     function buildSteps() {
       switch (techSel.value) {
-        case 'kcl': return NodeVoltage(circuit, { kcl: kclConv });
+        // Σ currents leaving = 0 is fixed — js/techniques/node-voltage.js still accepts a
+        // { kcl: 'inout' } override (the self-check uses it to prove both phrasings land on
+        // the same board), but this page never offers the choice: step 4's Σ in = Σ out button
+        // is disabled, shown only so a student recognises it as the same equation.
+        case 'kcl': return NodeVoltage(circuit);
         case 'kvl': return MeshCurrent(circuit);
         case 'req-source': return EquivResistance(circuit, { over: 'source' });
         case 'req-points': return EquivResistance(circuit, { over: 'points', a: termA.value, b: termB.value });
@@ -156,18 +154,6 @@
         },
       });
     }
-
-    /* The convention buttons live inside a step's body, which the stepper re-renders on every
-       view — so the click is caught on the panel, not bound to the buttons. Rebuild the steps
-       with the new phrasing and land back on the step that was just pressed. */
-    document.getElementById('step-body').addEventListener('click', function (e) {
-      var btn = e.target.closest ? e.target.closest('[data-kcl-conv]') : null;
-      if (!btn) return;
-      kclConv = btn.getAttribute('data-kcl-conv');
-      var at = stepper.current();
-      stepper.load(buildSteps());
-      if (at) stepper.go(at.index);
-    });
 
     document.getElementById('generate').addEventListener('click', generate);
     topoSel.addEventListener('change', generate);

@@ -404,10 +404,12 @@
 
     /* Step 4 — state the convention. Not in the PPT, and deliberately so: the slides pick one
        phrasing and never say they picked it, which is exactly the habit that costs marks in a
-       test. Both readings are offered, the default is the one the module teaches, and the two
-       buttons rewrite every equation from step 5 on — because the point is that they are the
-       same equation. The page owns the click (js/solver-page.js); this step only draws it and
-       says what the current choice is. */
+       test. This module teaches (and fixes) Σ currents leaving = 0; Σ in = Σ out is shown next
+       to it only so a student who has seen that phrasing elsewhere recognises it as the same
+       equation, not a competing method — the button is disabled, there is nothing to click.
+       The technique still accepts `opts.kcl === 'inout'` as a programmatic override (used by
+       the self-check to prove both phrasings land on the same board); the page just never
+       offers it, so the live steps are always Σ leaving = 0. */
     (function () {
       var demo = P.kclNodes[0];
       var parts = demo ? kclParts(demo, false) : null;
@@ -416,26 +418,25 @@
         ? ['Σ leaving = 0:  ' + kclLine(parts, 'leaving'), 'Σ in = Σ out:  ' + kclLine(parts, 'inout')]
         : ['Σ leaving = 0:  i<sub>1</sub> + i<sub>2</sub> + i<sub>3</sub> = 0',
           'Σ in = Σ out:  i<sub>1</sub> = i<sub>2</sub> + i<sub>3</sub>'];
-      function opt(key, label, note) {
+      function opt(key, label, note, disabled) {
         return '<button type="button" class="btn btn--soft btn--sm" data-kcl-conv="' + key +
-          '" aria-pressed="' + (conv === key ? 'true' : 'false') + '">' + label +
+          '" aria-pressed="' + (conv === key ? 'true' : 'false') + '"' + (disabled ? ' disabled' : '') + '>' + label +
           '<small>' + note + '</small></button>';
       }
       steps.push({
-        n: 4, title: 'Choose your KCL convention',
+        n: 4, title: 'KCL convention',
         body: 'KCL says charge does not pile up at a node. There are two ordinary ways to write ' +
           'that down, and they are the <b>same equation</b> — only the side of the equals sign ' +
-          'moves. Neither is more correct, and nothing physical depends on which you take. What ' +
-          '<i>is</i> required is that you <b>say which one you are using</b> before you write a ' +
-          'single line, and then keep to it: a marker reading your paper cannot tell a sign slip ' +
-          'from an unstated convention, and marks go the same way either way.' +
+          'moves. Neither is more correct, but a marker reading your paper cannot tell a sign ' +
+          'slip from an unstated convention, so a solve has to <b>say which one it uses</b> and ' +
+          'keep to it. <b>This module uses Σ currents leaving = 0</b> throughout — that is fixed, ' +
+          'not a choice you make here.' +
           '<div class="choice-row" role="group" aria-label="KCL convention">' +
           opt('leaving', 'Σ currents leaving = 0', 'every branch written as an out; signs do the work') +
-          opt('inout', 'Σ in = Σ out', 'arrivals on the left, departures on the right') +
+          opt('inout', 'Σ in = Σ out', 'arrivals on the left, departures on the right — shown for reference only', true) +
           '</div>' +
-          '<p>This module teaches <b>Σ currents leaving = 0</b>, and that is what the steps use ' +
-          'unless you change it here. ' + lead + ' Whichever you pick, every equation from step 5 ' +
-          'on is written that way — and every answer comes out identical.</p>',
+          '<p>' + lead + ' Both lines are the same equation with the equals sign moved — recognising ' +
+          'that is the point of seeing the second one, not switching to it.</p>',
         eq: lines,
         hl: { nodes: P.unknown.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
       });
