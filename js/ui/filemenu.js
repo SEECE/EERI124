@@ -72,12 +72,20 @@
         var circuit = o.getCircuit && o.getCircuit();
         if (!circuit) { say('draw or generate a circuit first', true); return; }
         var base = slug(o.name && o.name());
+        var kind = item.getAttribute('data-save');
         try {
           // saving a file the site itself cannot read back is worse than not saving it
           window.CircuitFile.read(window.CircuitFile.write(circuit, base));
-          var out = WRITERS[item.getAttribute('data-save')](circuit, base);
-          download(out.text, base + out.ext, out.mime);
-          say('saved ' + base + out.ext, false);
+          var out = WRITERS[kind](circuit, base);
+          if (kind === 'tex') {
+            // a report writer wants to paste this straight in, not hunt down a downloaded file
+            navigator.clipboard.writeText(out.text).then(function () {
+              say('copied LaTeX for ' + base, false);
+            }, function () { say('could not copy to clipboard', true); });
+          } else {
+            download(out.text, base + out.ext, out.mime);
+            say('saved ' + base + out.ext, false);
+          }
           open(false);
         } catch (err) {
           say(err.message, true);

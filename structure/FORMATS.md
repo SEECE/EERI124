@@ -14,7 +14,7 @@ lines.
 | `.eeri` | read + write | `js/formats/native.js` | the site's own circuit file |
 | `.asc` | write | `js/formats/ltspice.js` | an LTspice **schematic** you can look at and edit |
 | `.cir` | write | `js/formats/ltspice.js` | a SPICE **netlist** — simulates anything |
-| `.tex` | write | `js/formats/tikz.js` | a **circuitikz** picture — the circuit in a LaTeX write-up |
+| LaTeX | write, clipboard | `js/formats/tikz.js` | a **circuitikz** picture — the circuit in a LaTeX write-up |
 
 ## .eeri — the site's own file
 
@@ -88,29 +88,45 @@ terminal, or, in a current-source-only circuit, the node the first one draws fro
 way: it is what makes LTspice's node voltages read the same as the ones the workbench derived,
 which is the entire point of exporting.
 
-## LaTeX — `.tex`
+## LaTeX — circuitikz
 
 A **circuitikz** picture, not raw TikZ: circuitikz already draws a resistor, and hand-drawing
 the zigzags here would be a second renderer to keep in step with `js/circuit.js`.
 
-What the file is: a whole `article` document that compiles with `pdflatex` untouched, with the
-`circuitikz` environment fenced by two comment lines so it also lifts straight into a write-up
-the student already has. No `standalone` — it is not in every TeX install; `article` is.
+The File menu's "Copy LaTeX Diagram" writes no file — `js/ui/filemenu.js` puts
+`Tikz.document()`'s text straight on the clipboard (`navigator.clipboard.writeText`), because
+the only place this ever goes is pasted into a report the student already has open. `Tikz` still
+builds a whole `article` document that compiles with `pdflatex` untouched, with the
+`circuitikz` environment fenced by two comment lines so the pasted block also lifts straight out
+again. No `standalone` — it is not in every TeX install; `article` is.
 
-Three things are settled and should not be re-derived by guessing:
+Four things are settled and should not be re-derived by guessing:
 
 - **The style options are PACKAGE options**, `\usepackage[europeanresistors, americancurrents,
   americanvoltages]{circuitikz}`. Passed as `\begin{circuitikz}[…]` keys instead they raise
   *"I do not know the key '/tikz/europeanresistors'"* and are ignored. They are chosen to match
   what the site itself draws: a boxed resistor, a circle-with-arrow current source, and + / − on
   the voltage source.
-- **Every label is braced** — `to[R={$R_1 = 1\,\mathrm{k}\Omega$}]`. pgfkeys splits an option
+- **Every bipole carries circuitikz's own `_` suffix** (`R_`, `V_`, `cV_`, `cI_`…) — its
+  "mirror the label" flag. Every path in `picture()` is drawn so its label lands on the right
+  (vertical run) or below (horizontal run); dropping the `_` puts it on the left/above instead.
+- **Every label is braced** — `to[R_={$R_1 = 1\,\mathrm{k}\Omega$}]`. pgfkeys splits an option
   list on commas, and every unit here carries a `\,`, so an unbraced label ends the key halfway
   through and the picture fails to compile.
 - **circuitikz's terminal order is the opposite of LTspice's for voltage sources.** A `V`/`cV`
   symbol puts its **+ at the START** of the path, so an element whose `b` is + is drawn `b → a`;
   a `I`/`cI` arrow points at the **END**, which is the `a → b` push the model already means.
   That was read off a test render, not off the manual.
+
+A dependent source's value is labelled with `Circuit.controls()`'s own iφ/vΔ notation (spelled
+`\varphi`/`\Delta` in math), not the control resistor's instance name — the same symbol the
+on-page marker and the workbench's constraint equation use. `markers()` draws that marker: a
+`-latex` arrow along the control resistor's own a→b sense for a current read, or +…− across it
+for a voltage read, on whichever perpendicular sits left of a vertical resistor or below a
+horizontal one — the far side from the resistor's own value label. Node names are only emitted
+for a node whose model entry actually carries a `label` (a measuring node, say); a node with no
+explicit name relies on its node-voltage letter already drawn there, and printing the raw model
+id (`n6`) next to it would be pure noise.
 
 Unlike the `.asc` writer this needs no orthogonal layout — circuitikz draws a bipole along any
 path — so every registered generator exports, diagonals included. `SCALE` (cm per grid cell) is
