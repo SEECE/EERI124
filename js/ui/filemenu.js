@@ -64,6 +64,7 @@
       native: function (c, n) { return { text: window.CircuitFile.write(c, n), ext: window.CircuitFile.EXT, mime: 'application/json' }; },
       asc: function (c, n) { return { text: window.LTspice.schematic(c, n), ext: '.asc', mime: 'text/plain' }; },
       cir: function (c, n) { return { text: window.LTspice.netlist(c, n), ext: '.cir', mime: 'text/plain' }; },
+      tex: function (c, n) { return { text: window.Tikz.document(c, n), ext: '.tex', mime: 'text/x-tex' }; },
     };
 
     Array.prototype.forEach.call(root.querySelectorAll('[data-save]'), function (item) {
