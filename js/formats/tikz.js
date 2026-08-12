@@ -18,10 +18,8 @@
      supermesh) not to run into each other. Turn it down and they collide. */
   var SCALE = 3;
 
-  // circuitikz's bipole for each element type; the four controlled sources are the diamond pair.
-  // The trailing `_` is circuitikz's own "mirror the label" flag — every path below is drawn so
-  // its label lands on the right (vertical) or below (horizontal), never the left/above default.
-  var BIPOLE = { R: 'R_', V: 'V_', I: 'I_', E: 'cV_', H: 'cV_', G: 'cI_', F: 'cI_' };
+  // circuitikz's bipole for each element type; the four controlled sources are the diamond pair
+  var BIPOLE = { R: 'R', V: 'V', I: 'I', E: 'cV', H: 'cV', G: 'cI', F: 'cI' };
 
   function num(x) { return String(+(+x).toPrecision(6)); }
 
@@ -116,10 +114,13 @@
          circuitikz's was read off a test render rather than guessed: a voltage source puts its
          + at the START of the path, so an element whose `b` is + is drawn b → a; a current
          source's arrow points at the END, which is the a → b push the model already means.
-         The label is braced because pgfkeys splits an option list on commas and every unit
+         The label sits on key `l_`, circuitikz's own "mirror to the other side" label slot —
+         plain `l` (or the `={...}` shorthand for it) puts the label left of a vertical run or
+         above a horizontal one; `l_` puts it right/below instead, clear of the bipole body.
+         It is braced because pgfkeys splits an option list on commas and every unit here
          carries a \, — an unbraced label ends the key halfway through. */
       var flip = e.type === 'V' || e.type === 'E' || e.type === 'H';
-      out.push('  \\draw ' + pt(flip ? B : A) + ' to[' + BIPOLE[e.type] + '={$' + nm[e.id] +
+      out.push('  \\draw ' + pt(flip ? B : A) + ' to[' + BIPOLE[e.type] + ', l_={$' + nm[e.id] +
         ' = ' + label(e, ctl) + '$}] ' + pt(flip ? A : B) + ';');
     });
 

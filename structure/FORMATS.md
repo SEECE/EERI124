@@ -107,12 +107,14 @@ Four things are settled and should not be re-derived by guessing:
   *"I do not know the key '/tikz/europeanresistors'"* and are ignored. They are chosen to match
   what the site itself draws: a boxed resistor, a circle-with-arrow current source, and + / − on
   the voltage source.
-- **Every bipole carries circuitikz's own `_` suffix** (`R_`, `V_`, `cV_`, `cI_`…) — its
-  "mirror the label" flag. Every path in `picture()` is drawn so its label lands on the right
-  (vertical run) or below (horizontal run); dropping the `_` puts it on the left/above instead.
-- **Every label is braced** — `to[R_={$R_1 = 1\,\mathrm{k}\Omega$}]`. pgfkeys splits an option
-  list on commas, and every unit here carries a `\,`, so an unbraced label ends the key halfway
-  through and the picture fails to compile.
+- **Every label sits on key `l_`**, not the anonymous `={...}` shorthand (which is plain `l`).
+  `l` puts a label left of a vertical run or above a horizontal one; `l_` — circuitikz's own
+  "mirror to the other side" slot — puts it right/below instead, so it never runs into the
+  bipole body. The bipole name itself (`R`, `cV`, …) takes no suffix — `R_` is not a key
+  pgfkeys knows, and circuitikz silently drops the whole label if you write it that way.
+- **Every label is braced** — `to[R, l_={$R_1 = 1\,\mathrm{k}\Omega$}]`. pgfkeys splits an
+  option list on commas, and every unit here carries a `\,`, so an unbraced label ends the key
+  halfway through and the picture fails to compile.
 - **circuitikz's terminal order is the opposite of LTspice's for voltage sources.** A `V`/`cV`
   symbol puts its **+ at the START** of the path, so an element whose `b` is + is drawn `b → a`;
   a `I`/`cI` arrow points at the **END**, which is the `a → b` push the model already means.
