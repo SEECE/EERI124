@@ -76,18 +76,21 @@
   }
 
   /* One marker per (control edge, kind), same as the on-page renderer: a current arrow beside
-     the control resistor running its own a → b sense, or a +…− across it for a voltage read —
-     always on the perpendicular that puts the marker to the LEFT of a vertical resistor or
-     BELOW a horizontal one, so it never collides with the resistor's own value label (which
-     `_` above already pushed to the right/below). */
+     the control resistor running its own a → b sense, or a +…− across it for a voltage read.
+     A control edge is always a plain resistor, so it is always drawn a → b (never flipped),
+     and its own value label always lands on the fixed screen side `picture()` picks for that
+     edge — east for a vertical resistor, south for a horizontal one, regardless of which way
+     a → b happens to point. The marker sits on the opposite FIXED side (west / north) for the
+     same reason: picking it from a → b's own direction, like the value label very nearly was,
+     would put the two on top of each other whenever a → b happened to point the "wrong" way —
+     exactly the collision reported against this circuit's R10. */
   function markers(ctl, at) {
     var out = [];
     ctl.marks.forEach(function (mk) {
       var e = mk.ctrl, A = at[e.a], B = at[e.b];
       var dx = B[0] - A[0], dy = B[1] - A[1], len = Math.hypot(dx, dy) || 1;
       var ux = dx / len, uy = dy / len;
-      var cand = [[-uy, ux], [uy, -ux]];
-      var p = (cand[0][0] + cand[0][1] <= cand[1][0] + cand[1][1]) ? cand[0] : cand[1];
+      var p = Math.abs(dx) < Math.abs(dy) ? [-1, 0] : [0, 1];
       var off = 0.4, mx = (A[0] + B[0]) / 2, my = (A[1] + B[1]) / 2, sym = symTex(mk.sym);
       function shift(x, y, along, across) { return [x + ux * along + p[0] * across, y + uy * along + p[1] * across]; }
       if (mk.kind === 'i') {
@@ -114,14 +117,18 @@
          circuitikz's was read off a test render rather than guessed: a voltage source puts its
          + at the START of the path, so an element whose `b` is + is drawn b → a; a current
          source's arrow points at the END, which is the a → b push the model already means.
-         The label sits on key `l_`, circuitikz's own "mirror to the other side" label slot —
-         plain `l` (or the `={...}` shorthand for it) puts the label left of a vertical run or
-         above a horizontal one; `l_` puts it right/below instead, clear of the bipole body.
-         It is braced because pgfkeys splits an option list on commas and every unit here
-         carries a \, — an unbraced label ends the key halfway through. */
+         The label always wants the SAME screen side regardless of that flip — east for a
+         vertical run, south for a horizontal one — so it is picked from the path as actually
+         drawn (S → E below), not from `l_`'s fixed "mirror" meaning: `l_` is circuitikz's
+         right-of-travel side, which is east/south only when travel itself already runs
+         toward +x/+y, so a path drawn the other way needs plain `l` to land on that same
+         screen side. Braced because pgfkeys splits an option list on commas and every unit
+         here carries a \, — an unbraced label ends the key halfway through. */
       var flip = e.type === 'V' || e.type === 'E' || e.type === 'H';
-      out.push('  \\draw ' + pt(flip ? B : A) + ' to[' + BIPOLE[e.type] + ', l_={$' + nm[e.id] +
-        ' = ' + label(e, ctl) + '$}] ' + pt(flip ? A : B) + ';');
+      var S = flip ? B : A, E = flip ? A : B;
+      var key = (E[0] - S[0]) + (E[1] - S[1]) > 0 ? 'l_' : 'l';
+      out.push('  \\draw ' + pt(S) + ' to[' + BIPOLE[e.type] + ', ' + key +
+        '={$' + nm[e.id] + ' = ' + label(e, ctl) + '$}] ' + pt(E) + ';');
     });
 
     out = out.concat(markers(ctl, at));
