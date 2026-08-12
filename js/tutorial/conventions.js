@@ -28,8 +28,8 @@
    4. THE MARKING IS FREE, THE MOVEMENT IS NOT. The ± pair and the arrow beside an element are
       one decision (the passive sign convention ties them together) and the student may take it
       either way round. The faint arrow ON the wire is where charge actually goes and is not a
-      choice at all — only whether it is drawn as positive flow or as electron drift.
-   5. ELECTRON DRIFT IS AN OVERLAY, NOT A CONVENTION TO COMPUTE IN. Prof Holm's slide settles
+      choice at all — only whether it is drawn as positive flow or as electron flow.
+   5. ELECTRON FLOW IS AN OVERLAY, NOT A CONVENTION TO COMPUTE IN. Prof Holm's slide settles
       it — electrons flow the other way, we use positive current, trust the maths — so the
       setting reverses the overlay and every number on the page stays conventional.
       Re-deriving the whole page in electron currents would teach sign bookkeeping, not the
@@ -282,7 +282,7 @@
   var CHOICES = [
     { key: 'flow', name: 'Charge flow', opts: [
       { id: 'positive', label: 'Positive (+)' },
-      { id: 'electron', label: 'Electron drift' }] },
+      { id: 'electron', label: 'Electron flow' }] },
     { key: 'ref', name: 'Reference 0 V', dyn: 'nodes' },
     { key: 'zero', name: '0 V means', opts: [
       { id: 'chosen', label: 'Where we measure from' },
@@ -751,7 +751,7 @@
         var d = (truth(el).iab >= 0 ? 1 : -1) * (pick.flow === 'electron' ? -1 : 1);
         var f0 = toward([A[0], A[1]], el.seg), f1 = toward([A[2], A[3]], el.seg);
         var s0 = d > 0 ? f0 : f1, s1 = d > 0 ? f1 : f0;
-        Draw.arrow(g, s0[0], s0[1], s1[0], s1[1], 'flow drift');
+        Draw.arrow(g, s0[0], s0[1], s1[0], s1[1], 'flow');
       });
 
       // the mesh loops, only while the page is being written with KVL
@@ -770,7 +770,7 @@
       }
 
       Draw.text(g, 16, 24, pick.flow === 'electron'
-        ? 'faint arrows: where the electrons actually drift'
+        ? 'faint arrows: where the electrons actually flow'
         : 'faint arrows: where the charge actually moves',
         { cls: 't-cap', anchor: 'start' });
       applyLit();
