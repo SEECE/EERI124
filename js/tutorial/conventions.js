@@ -703,27 +703,9 @@
         { cls: 't-cap' + (earth ? ' is-bad' : ''), anchor: cap[2] }));
     }
 
-    /* The bookkeeping arrows, drawn ON the lead at every node an equation is written at —
-       the same marks js/circuit.js puts on a solver page. They are not a second set of
-       currents: they are the phrasing made visible. "Σ leaving = 0" points every one of them
-       away from the node whatever the branch arrow says, because that phrasing does not care;
-       the other two phrasings read the branch arrows back. */
-    function kclArrows(g) {
-      var L = cur(), bad = badNodes();
-      L.kclAt.forEach(function (n) {
-        var flagged = bad.indexOf(n) >= 0;
-        incident(n).forEach(function (t) {
-          if (!t.el.seg) return;
-          var e = L.ends[t.el.k], atA = e.a === n, sg = t.el.seg;
-          var x0 = atA ? sg[0] : sg[2], y0 = atA ? sg[1] : sg[3];
-          var u = unit(atA ? sg : [sg[2], sg[3], sg[0], sg[1]]);
-          var out = pick.kcl === 'leaving' ? true : t.s > 0;
-          var p = out ? 15 : 39, q = out ? 39 : 15;
-          reg(t.el.k, Draw.arrow(g, x0 + u[0] * p, y0 + u[1] * p, x0 + u[0] * q, y0 + u[1] * q,
-            'kcl' + (flagged && t.s < 0 ? ' is-bad' : '')));
-        });
-      });
-    }
+    /* No per-node bookkeeping arrows here. Each element already carries ONE marking arrow, and
+       a second set of little arrows on every lead only crowds the figure — the phrasing is
+       already visible where it matters, in the node equations in the lesson column. */
 
     function drawFigure() {
       var L = cur();
@@ -771,8 +753,6 @@
         var s0 = d > 0 ? f0 : f1, s1 = d > 0 ? f1 : f0;
         Draw.arrow(g, s0[0], s0[1], s1[0], s1[1], 'flow drift');
       });
-
-      if (pick.mode === 'kcl') kclArrows(g);
 
       // the mesh loops, only while the page is being written with KVL
       if (pick.mode === 'kvl') {
@@ -1211,9 +1191,10 @@
               'are two ordinary ways to write that, and they are the same equation.</p>' +
               eq('Σ leaving = 0', 'every branch written as an out, with signs doing the work') +
               eq('Σ in = Σ out', 'the ins on one side, the outs on the other') +
-              '<p>Press between them. The small arrows on the leads at node B move — under ' +
-              '<b>Σ leaving = 0</b> they all point away from B, whatever the branch arrows say, ' +
-              'because that phrasing does not care. The terms are identical either way.</p>' +
+              '<p>Press between them and watch the equation at node B. Under ' +
+              '<b>Σ leaving = 0</b> every branch is written as an out, whatever the branch ' +
+              'arrows say, because that phrasing does not care. The terms are identical ' +
+              'either way.</p>' +
               '<p>There is a third button, <b>One in, rest out</b>, and on this circuit it does ' +
               'nothing at all: B has one arrival and two departures already. Remember that it ' +
               'looked harmless here.</p>';
@@ -1389,8 +1370,8 @@
               '<b>Every one reversed</b> and all eight markings turn together, with every power ' +
               'unmoved.</p>' +
               '<p>What <em>is</em> new is that KCL now needs writing at <b>' + L.kclAt.length +
-              '</b> nodes rather than one. The small arrows on the leads show all ' +
-              L.kclAt.length + ' equations at once.</p>' +
+              '</b> nodes rather than one — all ' + L.kclAt.length +
+              ' equations are listed together in the column beside the figure.</p>' +
               flag('This is the first circuit on the page that can contradict a convention. ' +
                 'That is the only reason it is here.');
           } },

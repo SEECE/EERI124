@@ -264,9 +264,11 @@ charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phr
   charge actually goes and are not a choice at all — only whether they are drawn as positive
   flow or as electron drift. Do not re-introduce a separate arrows picker: it made the marking
   and the polarity look like two independent decisions, which is the misconception.
-- **KCL carries bookkeeping arrows** on the leads at every node in `kclAt`, the same marks
-  `js/circuit.js` puts on a solver page. Σ leaving points them all away from the node whatever
-  the branch arrows say; the other two phrasings read the branch arrows back.
+- **KCL draws no per-node bookkeeping arrows.** It used to put one on every lead at every node
+  in `kclAt`, the same marks `js/circuit.js` puts on a solver page — and that was a second set
+  of arrows over a figure that already carries one marking arrow per element, which is what the
+  student reads. The phrasing is shown where it is actually compared: the node equations in the
+  lesson column. Do not put them back.
 - **"One in, rest out" is legal until it is not, and the page proves it by counting.** With
   *n* nodes to write KCL at and *e* branches running between them, each of those branches
   delivers exactly one arrival to that set however it is drawn — so when *e > n*, some node
