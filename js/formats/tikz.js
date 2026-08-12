@@ -18,8 +18,10 @@
      supermesh) not to run into each other. Turn it down and they collide. */
   var SCALE = 3;
 
-  // circuitikz's bipole for each element type; the four controlled sources are the diamond pair
-  var BIPOLE = { R: 'R', V: 'V', I: 'I', E: 'cV', H: 'cV', G: 'cI', F: 'cI' };
+  // circuitikz's bipole for each element type; the four controlled sources are the diamond pair.
+  // The trailing `_` is circuitikz's own "mirror the label" flag — every path below is drawn so
+  // its label lands on the right (vertical) or below (horizontal), never the left/above default.
+  var BIPOLE = { R: 'R_', V: 'V_', I: 'I_', E: 'cV_', H: 'cV_', G: 'cI_', F: 'cI_' };
 
   function num(x) { return String(+(+x).toPrecision(6)); }
 
@@ -58,20 +60,52 @@
 
   function pt(p) { return '(' + p[0] + ',' + p[1] + ')'; }
 
+  // the slides' own control-variable symbols (iφ, vΔ), spelled in LaTeX math
+  function symTex(s) { return s === 'φ' ? '\\varphi' : s === 'Δ' ? '\\Delta' : s; }
+
   /* What goes beside the element. A source keeps the site's own naming: a controlled source is
-     labelled by the quantity it reads, `v` across its control resistor or `i` through it, which
-     is the same thing the workbench's constraint equation says. */
-  function label(e, nm) {
+     labelled by the quantity it reads — `Circuit.controls()` names it the same iφ/vΔ (or plain
+     letter) the on-page marker and the workbench's constraint equation already use, so the
+     export never invents its own subscript. */
+  function label(e, ctl) {
     var v = e.value;
     if (e.type === 'R') return v >= 1000 ? num(v / 1000) + '\\,\\mathrm{k}\\Omega' : num(v) + '\\,\\Omega';
     if (e.type === 'V') return num(v) + '\\,\\mathrm{V}';
     if (e.type === 'I') return Math.abs(v) >= 1 ? num(v) + '\\,\\mathrm{A}' : num(v * 1000) + '\\,\\mathrm{mA}';
-    var q = (e.type === 'E' || e.type === 'G') ? 'v' : 'i', g = num(v);
-    return (g === '1' ? '' : g + '\\,') + q + '_{' + nm[e.control] + '}';
+    var entry = ctl.of[e.id], mag = num(Math.abs(v));
+    return (v < 0 ? '-' : '') + (mag === '1' ? '' : mag + '\\,') +
+      entry.kind + '_{' + symTex(entry.sym) + '}';
+  }
+
+  /* One marker per (control edge, kind), same as the on-page renderer: a current arrow beside
+     the control resistor running its own a → b sense, or a +…− across it for a voltage read —
+     always on the perpendicular that puts the marker to the LEFT of a vertical resistor or
+     BELOW a horizontal one, so it never collides with the resistor's own value label (which
+     `_` above already pushed to the right/below). */
+  function markers(ctl, at) {
+    var out = [];
+    ctl.marks.forEach(function (mk) {
+      var e = mk.ctrl, A = at[e.a], B = at[e.b];
+      var dx = B[0] - A[0], dy = B[1] - A[1], len = Math.hypot(dx, dy) || 1;
+      var ux = dx / len, uy = dy / len;
+      var cand = [[-uy, ux], [uy, -ux]];
+      var p = (cand[0][0] + cand[0][1] <= cand[1][0] + cand[1][1]) ? cand[0] : cand[1];
+      var off = 0.4, mx = (A[0] + B[0]) / 2, my = (A[1] + B[1]) / 2, sym = symTex(mk.sym);
+      function shift(x, y, along, across) { return [x + ux * along + p[0] * across, y + uy * along + p[1] * across]; }
+      if (mk.kind === 'i') {
+        out.push('  \\draw[-latex] ' + pt(shift(mx, my, -0.25, off)) + ' -- ' + pt(shift(mx, my, 0.25, off)) + ';');
+        out.push('  \\node[font=\\small] at ' + pt(shift(mx, my, 0, off + 0.28)) + ' {$i_{' + sym + '}$};');
+      } else {
+        out.push('  \\node[font=\\small] at ' + pt(shift(A[0], A[1], 0, off)) + ' {$+$};');
+        out.push('  \\node[font=\\small] at ' + pt(shift(B[0], B[1], 0, off)) + ' {$-$};');
+        out.push('  \\node[font=\\small] at ' + pt(shift(mx, my, 0, off + 0.3)) + ' {$v_{' + sym + '}$};');
+      }
+    });
+    return out;
   }
 
   function picture(circuit) {
-    var at = place(circuit), nm = names(circuit), out = [], deg = {};
+    var at = place(circuit), nm = names(circuit), ctl = Circuit.controls(circuit), out = [], deg = {};
 
     circuit.edges.forEach(function (e) {
       var A = at[e.a], B = at[e.b];
@@ -86,20 +120,28 @@
          carries a \, — an unbraced label ends the key halfway through. */
       var flip = e.type === 'V' || e.type === 'E' || e.type === 'H';
       out.push('  \\draw ' + pt(flip ? B : A) + ' to[' + BIPOLE[e.type] + '={$' + nm[e.id] +
-        ' = ' + label(e, nm) + '$}] ' + pt(flip ? A : B) + ';');
+        ' = ' + label(e, ctl) + '$}] ' + pt(flip ? A : B) + ';');
     });
 
-    // junction dots where three or more branches actually meet, and node names pushed outward
+    out = out.concat(markers(ctl, at));
+
+    // junction dots where three or more branches actually meet
+    circuit.nodes.forEach(function (nd) {
+      if (deg[nd.id] >= 3) out.push('  \\draw ' + pt(at[nd.id]) + ' node[circ]{};');
+    });
+    // node names, only where the circuit actually names one (a measuring node etc.) — an
+    // unlabelled node already has its node-voltage letter drawn at the same spot, so a raw
+    // model id ("n6") next to it would just be noise
     var cx = 0, cy = 0, n = circuit.nodes.length || 1;
     circuit.nodes.forEach(function (nd) { cx += at[nd.id][0]; cy += at[nd.id][1]; });
     cx /= n; cy /= n;
     circuit.nodes.forEach(function (nd) {
+      if (!nd.label) return;
       var p = at[nd.id];
-      if (deg[nd.id] >= 3) out.push('  \\draw ' + pt(p) + ' node[circ]{};');
       var where = (p[1] >= cy ? 'above' : 'below') + (p[0] >= cx ? ' right' : ' left');
-      // a node name is text, not maths — the model's own ids ("n0") read wrong in italics
+      // a node name is text, not maths — the model's own labels read wrong in italics
       out.push('  \\node[' + where + ', font=\\small] at ' + pt(p) + ' {' +
-        String(nd.label || nd.id).replace(/([#$%&_{}])/g, '\\$1') + '};');
+        String(nd.label).replace(/([#$%&_{}])/g, '\\$1') + '};');
     });
     return out;
   }
