@@ -264,6 +264,13 @@
           // step 6 (first equation written) on it must never blank out — in either technique
           var kcl = NodeVoltage(c);
           assert(!/undefined|NaN/.test(JSON.stringify(kcl)), 'KCL step text has undefined/NaN');
+          /* KCL runs one step longer than KVL: its step 4 is the convention the student states
+             (Σ leaving = 0 by default, Σ in = Σ out the other way), so its assumption step is 5
+             and its first equation lands in step 7. `mark` is where each technique's assumption
+             marks start, `bd` the first step that must carry the board, `sv` the solve step. */
+          var SHAPE = function (list) {
+            return list === kcl ? { mark: 4, bd: 6, sv: 9 } : { mark: 3, bd: 5, sv: 8 };
+          };
           // step 4's marks are keyed '<edgeId>:<terminalNodeId>' — KVL's polarity pairs (pol) and
           // KCL's leaving-current arrows (flow). Only what the renderer pre-drew can be revealed,
           // so a key naming the wrong terminal shows nothing; and once marked they stay to the end.
@@ -275,13 +282,14 @@
             Array.prototype.forEach.call(psvg.querySelectorAll('.flow-mark'), function (pg) { drawn[pg.getAttribute('data-flow')] = 1; });
             var marksOf = function (view) { return (((view.hl || {}).pol) || []).concat(((view.hl || {}).flow) || []); };
             [steps, kcl].forEach(function (list) {
-              if (!marksOf(list[3]).length) return;         // no unknown node → no KCL, nothing marked
-              list.slice(3).forEach(function (s2) {
+              var mk = SHAPE(list).mark;
+              if (!marksOf(list[mk]).length) return;        // no unknown node → no KCL, nothing marked
+              list.slice(mk).forEach(function (s2) {
                 [s2].concat(s2.subs || []).forEach(function (view) {
                   var keys = marksOf(view);
-                  // inside step 4 the set is still growing (the first walk view has none yet)
-                  if (s2.n > 4) assert(keys.length, 'step ' + s2.n + ' view "' + (view.title || 'overview') + '" lost step 4’s marks');
-                  keys.forEach(function (key) { assert(drawn[key], 'step 4 mark ' + key + ' is not on the drawing'); });
+                  // inside the assumption step the set is still growing (its first walk view has none yet)
+                  if (s2.n > mk + 1) assert(keys.length, 'step ' + s2.n + ' view "' + (view.title || 'overview') + '" lost step ' + (mk + 1) + '’s marks');
+                  keys.forEach(function (key) { assert(drawn[key], 'step ' + (mk + 1) + ' mark ' + key + ' is not on the drawing'); });
                 });
               });
             });
@@ -292,7 +300,7 @@
                 assert(!/eq-board/.test(view.body || ''), 'step ' + s2.n + ' still has the board inside its body');
               });
             });
-            list.slice(5).forEach(function (s2) {
+            list.slice(SHAPE(list).bd).forEach(function (s2) {
               [s2].concat(s2.subs || []).forEach(function (view) {
                 assert(/eq-board/.test(view.board || ''), 'step ' + s2.n + ' view "' + (view.title || 'overview') + '" lost its board');
               });
@@ -303,7 +311,7 @@
           // every such step from the solve on must end on a substep that shows the results
           [steps, kcl].forEach(function (list) {
             list.forEach(function (s2) {
-              if (s2.n < 8 || !(s2.subs || []).length || !(s2.eq || []).length) return;
+              if (s2.n < SHAPE(list).sv || !(s2.subs || []).length || !(s2.eq || []).length) return;
               var last = s2.subs[s2.subs.length - 1];
               assert((last.eq || []).length, 'step ' + s2.n + ' hides its results with no recap substep');
             });
@@ -326,6 +334,14 @@
             assert(kb.indexOf('<td>' + Solve.si(nsol.v[grp], 'V') + '</td>') >= 0,
               'KCL board never reached ' + ln.letter[grp] + ' = ' + Solve.si(nsol.v[grp], 'V'));
           });
+          /* KCL's step 4 is the convention the student states. It must default to the phrasing
+             the module teaches, mark whichever one is in force — and change NOTHING else: the
+             same circuit written Σ in = Σ out has to land on the same board. */
+          assert(kcl.length === 10, '10 KCL steps expected (the PPT’s 9 plus the convention), got ' + kcl.length);
+          assert(/data-kcl-conv="leaving"[^>]*aria-pressed="true"/.test(kcl[3].body), 'step 4 does not default to Σ leaving = 0');
+          var inout = NodeVoltage(c, { kcl: 'inout' });
+          assert(/data-kcl-conv="inout"[^>]*aria-pressed="true"/.test(inout[3].body), 'step 4 does not mark the chosen convention');
+          assert(lastBoard(inout) === kb, 'the KCL convention changed an answer');
           var mb = lastBoard(steps);
           mc.order.forEach(function (f, idx) {
             assert(mb.indexOf('<td>' + Solve.si(mc.i[mc.meshOf[f]], 'A') + '</td>') >= 0,

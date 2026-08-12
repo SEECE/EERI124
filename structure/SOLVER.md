@@ -68,9 +68,10 @@ Everything follows from that one fact:
 - **Two flags, not one.** A group held by a boundary current source is `fixed` (structural — no
   KVL row, its constraint takes the place) and, only if that source is **independent**, also
   `known` (the value is handed over outright, the PPT's step 3). A controlled one is `fixed`
-  without being `known`: it is a constraint, step 7's business, not step 3's.
-- **Techniques.** The source rides through step 6 as its own symbol (`iφ`, `vΔ`); **step 7**
-  replaces the symbol with the combination above; from there the algebra is the algebra the
+  without being `known`: it is a constraint, the constraint step's business (KVL 7, KCL 8), not
+  step 3's.
+- **Techniques.** The source rides through the equation-building step as its own symbol
+  (`iφ`, `vΔ`); the **constraint step** (KVL 7, KCL 8) replaces the symbol with the combination above; from there the algebra is the algebra the
   student already did. `js/techniques/controls.js` (`ControlVars`) owns the naming, the gain
   labels, the marker keys and the little `Lin` linear-form type both techniques use; it is
   key-agnostic because KCL keys by electrical node and KVL keys by mesh.
@@ -98,10 +99,10 @@ so, rather than dividing by zero.
 
 | Layer | Files | Owns |
 |---|---|---|
-| **Kit** | `js/techniques/kit.js` | `StepKit` — the presentation and small-algebra layer both techniques share: fraction/subscript fragments, the status and board tables, number formatting that never prints `-12` or `− -5`, and the `{ c, t }` expression objects (`cleanT`, `resolveSelf`, `snap`, `settle`, `fmtExpr`) their step 8s substitute into one another. Knows nothing about circuits. |
+| **Kit** | `js/techniques/kit.js` | `StepKit` — the presentation and small-algebra layer both techniques share: fraction/subscript fragments, the status and board tables, number formatting that never prints `-12` or `− -5`, and the `{ c, t }` expression objects (`cleanT`, `resolveSelf`, `snap`, `settle`, `fmtExpr`) their solve steps substitute into one another. Knows nothing about circuits. |
 | **Controls** | `js/techniques/controls.js` | `ControlVars` — everything a step list says about a dependent source (type names, symbol, gain label, sign-aware term text, marker key) plus `Lin`, the key-agnostic linear form. |
 | **Engine** | `js/solve.js` | `si` (SI/engineering value formatting), `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (**MNA**, any number of sources), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
-| **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — sets up equations in step 6, hand-works the solve in step 8), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
+| **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — states the convention in step 4, sets up equations in step 7, hand-works the solve in step 9), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
 | **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view and highlights the circuit via `Circuit.highlight`. |
 | **Page wiring** | `js/solver-page.js` | shared by every solver page: fills the topology dropdown from the registry, maps the technique dropdown to a builder, renders the circuit + drives the stepper. |
 | **Page** | `topics/<slug>/index.html` | picks generator files, the registry filter(s) and the technique options, then calls `SolverPage({ filter })` or, for a page with more than one topology set, `SolverPage({ sets })`. No logic of its own. |
@@ -144,12 +145,12 @@ A technique returns an array of steps:
   made it jump around and vanish.
   Build it with the technique's local `WB()` helper **at the point the view is created**: the board
   is time-varying, so stamping it later records the wrong state. A view with no `board` hides the
-  panel — intended only for steps 1–5, before the first equation exists.
+  panel — intended only for the steps before the first equation exists (KVL 1–5, KCL 1–6).
 - **A step's `eq` is its result *summary*, and the stepper shows it only when the step has no
   substeps.** Handing out the answers on the overview and *then* walking the derivation reads as
   if the walk were undoing them, so the results arrive at the end: each substep shows its own
-  line and the last substep recaps the set (step 8's "all nodes/meshes solved", step 9's "all
-  branch currents", step 10's "balance"). Keep the summary on the step — it is what the recap
+  line and the last substep recaps the set (the solve step's "all nodes/meshes solved", the
+  currents step's "all branch currents", KVL step 10's "balance"). Keep the summary on the step — it is what the recap
   substep is built from — the stepper folds it into a **"Show this step's result" disclosure**
   on the overview, so a student who wants the answer and the next step rather than the walk gets
   it in one click (opened once, it stays open across steps) — and add a recap substep to any
@@ -168,8 +169,10 @@ A technique returns an array of steps:
 ## Stay true to the PowerPoints
 
 The two PPTs in the repo root give the **exact** step order — node-voltage **9 steps**, mesh
-**10 steps**. Steps that only fire for special cases are **shown, never skipped**. For KCL the
-**supernode step 5** carries **real content** when a source floats between two non-reference
+**10 steps**. KCL adds **one** step the slides do not have, the convention (step 4, above), so
+its list runs 1–10 with every PPT step shifted one later; nothing else is added, reordered or
+dropped. Steps that only fire for special cases are **shown, never skipped**. For KCL the
+**supernode step 6** carries **real content** when a source floats between two non-reference
 nodes — **any** voltage source, independent or dependent, which is the slides' own rule (it
 says "Nothing to do" only when every source is pinned by an already-known node). For mesh,
 **step 3** (known current), **step 5** (supermesh) and **step 7** (constraint) fire the moment
@@ -202,12 +205,31 @@ The whole solve is **Ohm's law only — grade-12 algebra, no conductance / no si
 at this stage know only V = IR). Everything is worked by *clearing fractions*, never by summing
 1/R conductances.
 
-- **Step 6 builds the equations** — **one substep per unknown node**: names the node's resistor
-  neighbours and writes its "currents leaving = 0" equation (source-fixed neighbour as its number,
-  still-unknown neighbour as a letter). A floating source between two unknown nodes adds one extra
-  *constraint* substep. No arithmetic here — seeing every equation at once is intimidating, so each
-  node gets its own build view.
-- **Step 8 solves**, ordered so a node whose neighbours are **all known** goes first (it solves in
+- **Step 4 states the convention** — the one step that is *not* in the PPT, and the reason KCL
+  runs to **ten** steps, one more than the PPT's nine. The slides pick a phrasing and never say they
+  picked one; that is the habit this step exists to break, because a marker cannot tell a sign
+  slip from an unstated convention. **This module fixes the convention to Σ currents leaving = 0**
+  — the step body shows Σ in = Σ out next to it, written for the same node, so a student who has
+  met that phrasing elsewhere recognises it as the same equation with the equals sign moved, not
+  a competing method; its button (`data-kcl-conv="inout"`) is rendered `disabled`, on purpose —
+  there is nothing to click. The technique still takes the choice as `NodeVoltage(circuit, { kcl })`
+  (anything but `'inout'` is the default) so the underlying capability isn't lost — the self-check
+  calls it directly with `{ kcl: 'inout' }` to assert the last board is identical either way, proving
+  the "same equation" claim the step body makes — but `js/solver-page.js` never passes anything but
+  the default, so the live steps are always Σ leaving = 0.
+  **What the choice may touch, when exercised through the API, is the writing and nothing else.**
+  Every KCL line is assembled as one list of signed pieces (`kclParts` → `kclLine`); `Σ leaving = 0`
+  prints them all on the left, `Σ in = Σ out` prints the entering ones on the left where they turn
+  positive, an empty side reads `0`. The *statement* lines follow the choice (step 7's equations,
+  step 9's "write the equation" and "put the control variable in"); from "clear the fractions" on
+  the equation is brought to one side and the algebra is the same either way, which the step body
+  says out loud.
+- **Step 7 builds the equations** — **one substep per unknown node**: names the node's resistor
+  neighbours and writes its KCL equation in the chosen phrasing (source-fixed neighbour as its
+  number, still-unknown neighbour as a letter). A floating source between two unknown nodes adds
+  one extra *constraint* substep. No arithmetic here — seeing every equation at once is
+  intimidating, so each node gets its own build view.
+- **Step 9 solves**, ordered so a node whose neighbours are **all known** goes first (it solves in
   one shot, then feeds the next — never start at a 4-unknown node):
   - **One-shot node** (`P.open`): *write the equation (knowns filled in) → clear the fractions
     (multiply through by the resistances) → multiply out → collect v → divide → answer*, one move

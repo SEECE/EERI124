@@ -14,6 +14,7 @@ lines.
 | `.eeri` | read + write | `js/formats/native.js` | the site's own circuit file |
 | `.asc` | write | `js/formats/ltspice.js` | an LTspice **schematic** you can look at and edit |
 | `.cir` | write | `js/formats/ltspice.js` | a SPICE **netlist** — simulates anything |
+| LaTeX | write, clipboard | `js/formats/tikz.js` | a **circuitikz** picture — the circuit in a LaTeX write-up |
 
 ## .eeri — the site's own file
 
@@ -86,6 +87,62 @@ Both writers ground **the same node `js/solve.js` does** — the first voltage s
 terminal, or, in a current-source-only circuit, the node the first one draws from. Keep it that
 way: it is what makes LTspice's node voltages read the same as the ones the workbench derived,
 which is the entire point of exporting.
+
+## LaTeX — circuitikz
+
+A **circuitikz** picture, not raw TikZ: circuitikz already draws a resistor, and hand-drawing
+the zigzags here would be a second renderer to keep in step with `js/circuit.js`.
+
+The File menu's "Copy LaTeX Diagram" writes no file — `js/ui/filemenu.js` puts
+`Tikz.document()`'s text straight on the clipboard (`navigator.clipboard.writeText`), because
+the only place this ever goes is pasted into a report the student already has open. `Tikz` still
+builds a whole `article` document that compiles with `pdflatex` untouched, with the
+`circuitikz` environment fenced by two comment lines so the pasted block also lifts straight out
+again. No `standalone` — it is not in every TeX install; `article` is.
+
+Four things are settled and should not be re-derived by guessing:
+
+- **The style options are PACKAGE options**, `\usepackage[europeanresistors, americancurrents,
+  americanvoltages]{circuitikz}`. Passed as `\begin{circuitikz}[…]` keys instead they raise
+  *"I do not know the key '/tikz/europeanresistors'"* and are ignored. They are chosen to match
+  what the site itself draws: a boxed resistor, a circle-with-arrow current source, and + / − on
+  the voltage source.
+- **Every label sits on key `l` or `l_`**, chosen per edge, not the anonymous `={...}`
+  shorthand (always plain `l`) and never a suffix on the bipole name itself — `R_` is not a
+  key pgfkeys knows, and circuitikz silently drops the whole label if you write it that way.
+  `l_` is circuitikz's "mirror to the other side" slot, and which one lands the label on the
+  wanted screen side — east for a vertical run, south for a horizontal one — depends on which
+  way the path is actually drawn: `l_` is right-of-travel, `l` is left-of-travel, and a
+  polarity-flipped element (see the terminal-order bullet below) is drawn the reverse of the
+  model's own a → b. So `picture()` picks the key from the drawn S → E vector itself
+  (`(E[0]-S[0]) + (E[1]-S[1]) > 0 ? 'l_' : 'l'`), not from the element's type — the type only
+  decides which point is S and which is E.
+- **Every label is braced** — `to[R, l_={$R_1 = 1\,\mathrm{k}\Omega$}]`. pgfkeys splits an
+  option list on commas, and every unit here carries a `\,`, so an unbraced label ends the key
+  halfway through and the picture fails to compile.
+- **circuitikz's terminal order is the opposite of LTspice's for voltage sources.** A `V`/`cV`
+  symbol puts its **+ at the START** of the path, so an element whose `b` is + is drawn `b → a`;
+  a `I`/`cI` arrow points at the **END**, which is the `a → b` push the model already means.
+  That was read off a test render, not off the manual.
+
+A dependent source's value is labelled with `Circuit.controls()`'s own iφ/vΔ notation (spelled
+`\varphi`/`\Delta` in math), not the control resistor's instance name — the same symbol the
+on-page marker and the workbench's constraint equation use. `markers()` draws that marker: a
+`-latex` arrow along the control resistor's own a→b sense for a current read, or +…− across it
+for a voltage read, on the FIXED far side from the resistor's own value label — west for a
+vertical resistor, north for a horizontal one, always, regardless of which way its own a → b
+happens to point (a control edge is always a plain resistor, so it is never terminal-flipped).
+Picking the marker's side from a → b's own direction instead — as the value label very nearly
+is — would put the two on top of each other whenever a → b pointed the "wrong" way.
+
+Node names are only emitted for a node whose model entry actually carries a `label` (a measuring node, say); a node with no
+explicit name relies on its node-voltage letter already drawn there, and printing the raw model
+id (`n6`) next to it would be pure noise.
+
+Unlike the `.asc` writer this needs no orthogonal layout — circuitikz draws a bipole along any
+path — so every registered generator exports, diagonals included. `SCALE` (cm per grid cell) is
+the one knob: at 3 the value labels on the densest circuit here (the three-mesh supermesh) clear
+each other, and below that they collide.
 
 ## No LTspice import
 

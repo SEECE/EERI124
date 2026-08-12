@@ -42,6 +42,18 @@
   vertical-align: 1px;
 }
 
+/* a choice made inside a step — KCL's step 4 convention (js/techniques/node-voltage.js).
+   Stacked, not side by side: the two labels are equations, and equations do not truncate. */
+.choice-row { display: flex; flex-direction: column; gap: var(--sp-2); margin: var(--sp-3) 0; }
+.choice-row > .btn { flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; white-space: normal; }
+.choice-row > .btn > small { font-size: 11px; font-weight: 400; color: var(--text-faint); }
+.choice-row > .btn[aria-pressed='true'] {
+  color: var(--text);
+  background-color: var(--tint);
+  border-color: var(--violet-400);
+}
+.choice-row > .btn[aria-pressed='true'] > small { color: var(--text-dim); }
+
 /* ── equations ── */
 .step-eq {
   background: var(--panel-hi);

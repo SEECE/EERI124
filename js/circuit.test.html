@@ -17,6 +17,7 @@
   <script src="generators/current-source.js"></script>
   <script src="generators/dependent.js"></script>
   <script src="solve.js"></script>
+  <script src="formats/tikz.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -144,6 +145,23 @@
       threw = false;
       try { Circuit.importJSON(noSource); } catch (err) { threw = true; }
       assert(threw, 'importJSON accepted a circuit with no independent source');
+    });
+
+    /* The .tex writer, over every generator. A browser cannot run pdflatex, so this checks the
+       two things that silently produce an uncompilable file: a label that leaks NaN/undefined,
+       and an unbraced label — pgfkeys splits an option list on commas and every unit carries a
+       \, (structure/FORMATS.md). Every non-wire edge must reach the picture exactly once. */
+    check('tikz picture for every generator', function () {
+      all.forEach(function (g) {
+        var c = g.generate(), tex = Tikz.picture(c);
+        assert(!/NaN|undefined/.test(tex), g.name + ': NaN or undefined in the picture');
+        var bipoles = tex.match(/to\[/g) || [];
+        var elements = c.edges.filter(function (e) { return e.type !== 'W'; });
+        assert(bipoles.length === elements.length, g.name + ': ' + bipoles.length + ' bipoles for ' + elements.length + ' elements');
+        (tex.match(/to\[[^\n]*/g) || []).forEach(function (line) {
+          assert(/to\[[A-Za-z]+=\{\$.*\$\}\]/.test(line), g.name + ': unbraced bipole label — ' + line);
+        });
+      });
     });
 
     check('render smoke', function () {

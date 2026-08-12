@@ -276,10 +276,6 @@
 .figure--drawn .probe-black { stroke: var(--ink); stroke-width: 3.2; fill: none; stroke-linecap: round; }
 /* where the charge actually goes — an overlay, never a set of numbers (js/tutorial/conventions.js) */
 .figure--drawn .flow.drift { opacity: 0.28; stroke: var(--ink-soft); fill: var(--ink-soft); }
-/* KCL's bookkeeping arrows: one per lead at every node an equation is written at, drawn ON the
-   wire so they never read as a second marking. Same marks js/circuit.js puts on a solver page. */
-.figure--drawn .kcl { stroke: var(--accent-deep); fill: var(--accent-deep); }
-.figure--drawn .kcl line { stroke-width: 2.4; }
 /* a mark the maths cannot survive — a sign that contradicts another sign on the same figure */
 .figure--drawn .is-bad { stroke: #b4293c; }
 .figure--drawn text.is-bad, .figure--drawn .flow.is-bad { fill: #b4293c; stroke: none; }

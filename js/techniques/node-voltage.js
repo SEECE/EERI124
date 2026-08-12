@@ -4,9 +4,16 @@
    js/stepper.js. Several steps carry substeps (see the stepper) so a student can drill each
    node / source / equation or skip the whole step.
 
-   The nine PPT steps. Step 5 (supernode) is real content when a source bridges two
+   Ten steps: the PPT's nine, plus **step 4, where the student states their KCL convention** —
+   Σ currents leaving = 0 (the default, and what the module teaches) or Σ in = Σ out. Both are
+   the same sum with the equals sign in a different place, so the choice changes how every
+   equation from step 5 on is WRITTEN and nothing else; `opts.kcl` carries it in and a page
+   that never touches it gets the default. It is a step and not a rail dropdown because the
+   thing being taught is that a solve on paper has to SAY which one it is using.
+
+   The nine PPT steps. Step 6 (supernode) is real content when a source bridges two
    non-reference nodes — ANY voltage source, independent or dependent, which is the slides'
-   own rule. Step 7 (constraints) is the dependent sources' step: each controlled source is
+   own rule. Step 8 (constraints) is the dependent sources' step: each controlled source is
    carrying a symbol (iφ, vΔ), and because its control edge is a resistor, Ohm's law rewrites
    that symbol in node voltages — after which the system is ordinary. A controlled voltage
    source straight onto an already-known node PINS its other node: no KCL can be written
@@ -16,8 +23,8 @@
    The equation-assembly engine (plan()) propagates from the reference: source-connected
    nodes are fixed first, then KCL equations "open up" one at a time as each becomes a
    single-unknown equation; a mutually-coupled core stays a simultaneous block.
-   Step 6 BUILDS the equations — one substep per unknown node ("here's the node, its
-   neighbours, its equation"), no numbers crunched. Step 8 SOLVES with Ohm's law only
+   Step 7 BUILDS the equations — one substep per unknown node ("here's the node, its
+   neighbours, its equation"), no numbers crunched. Step 9 SOLVES with Ohm's law only
    (grade-12 algebra — no conductance, no siemens): a node whose neighbours are all known
    solves in one shot by clearing the fractions (multiply through by the resistances,
    multiply out, collect, divide); a coupled core is solved by substituting
@@ -33,7 +40,11 @@
   var frac = K.frac, extend = K.extend, diff = K.diff, prod = K.prod, signed = K.signed, round = K.round, num = K.num;
   function vsub(letter) { return K.sub('v', letter); }
 
-  window.NodeVoltage = function (circuit) {
+  window.NodeVoltage = function (circuit, opts) {
+    // step 4's choice. Anything other than 'inout' is the module's default phrasing, so a caller
+    // that knows nothing about conventions (and a student who walks past step 4) gets Σ leaving.
+    var conv = (opts && opts.kcl) === 'inout' ? 'inout' : 'leaving';
+    var CONV = conv === 'inout' ? 'Σ currents in = Σ currents out' : 'Σ currents leaving = 0';
     var ln = S.letterNodes(circuit);
     var of = ln.of, order = ln.groups, letter = ln.letter;
     var sol = S.nodeVoltages(circuit);
@@ -78,7 +89,7 @@
     // as its own symbol (3·iφ) instead of a number. A controlled VOLTAGE source (E/H) behaves
     // like a V source structurally — it forms supernodes, it pins a node it shares with a known
     // one — except its volts are not known until its control variable is. Both are LINEAR in the
-    // node voltages, which is what lets step 8 keep the ordinary algebra.
+    // node voltages, which is what lets step 9 keep the ordinary algebra.
     var CV = window.ControlVars(circuit), Lin = window.ControlVars.Lin;
     var isDepV = window.ControlVars.isDepV, isDepI = window.ControlVars.isDepI;
     function depIAt(g) {                                          // F/G touching g
@@ -101,10 +112,6 @@
       return Lin.trim(L, ref);
     }
     function qOf(g) { return Lin.value(qLin(g), V); }             // net current LEAVING g, as a number
-    function injTerms(g) {                                        // the "+ I" / "− 3·iφ" pieces of the sum
-      return isrcAt(g).map(function (e) { return (leaveSign(e, g) > 0 ? ' + ' : ' − ') + round(e.value); })
-        .concat(depIAt(g).map(function (e) { return CV.term(e, leaveSign(e, g)); })).join('');
-    }
     // other node voltages g's own equation drags in through a control term — they count as
     // unknowns for the "can this node be solved yet" question exactly like a resistor neighbour
     function ctrlNodes(g) {
@@ -224,19 +231,42 @@
     var P = plan();
     var m = P.unknown.length;
 
-    // symbolic KCL (currents leaving g): fixed neighbours shown as their number, unknowns as v-letters
-    function kclEq(g) {
+    /* ---- writing a KCL statement, in whichever phrasing step 4 chose ----
+       Every KCL line here is one list of signed pieces: a resistor branch always counts as
+       LEAVING (that is step 5's assumption, drawn as the arrows), a current source counts
+       whichever way it points. `Σ leaving = 0` prints them all on the left; `Σ in = Σ out`
+       prints the entering ones on the left, where they turn positive, and the leaving ones on
+       the right. Same terms, same values, same answer — only the equals sign moves, which is
+       the whole reason step 4 is free to choose. An empty side is written 0. */
+    function injParts(g) {
+      return isrcAt(g).map(function (e) { return { s: leaveSign(e, g), t: round(e.value) }; })
+        .concat(depIAt(g).map(function (e) {
+          // a negative gain already prints as a minus, so the sign a term is MET with is not
+          // the sign it is WRITTEN with — same reading CV.term() does
+          var p = CV.gainParts(e);
+          return { s: (leaveSign(e, g) < 0) !== p.neg ? -1 : 1, t: p.mag };
+        }));
+    }
+    function kclLine(parts, how) {
+      if ((how || conv) === 'leaving') {
+        return parts.map(function (p, i) { return (p.s < 0 ? ' − ' : (i ? ' + ' : '')) + p.t; }).join('') + ' = 0';
+      }
+      function side(list) {
+        return list.length ? list.map(function (p, i) { return (i ? ' + ' : '') + p.t; }).join('') : '0';
+      }
+      return side(parts.filter(function (p) { return p.s < 0; })) + ' = ' +
+        side(parts.filter(function (p) { return p.s > 0; }));
+    }
+    // symbolic KCL at g: fixed neighbours shown as their number, unknowns as v-letters.
+    // `numeric` fills in every neighbour's value instead (the solve step's opening line).
+    function kclParts(g, numeric) {
       return resAt(g).map(function (e) {
         var o = other(e, g);
-        return frac(diff(vsub(L(g)), P.fixed[o] ? round(V(o)) : vsub(L(o))), e.value);
-      }).join(' + ') + injTerms(g) + ' = 0';
+        return { s: 1, t: frac(diff(vsub(L(g)), (numeric || P.fixed[o]) ? round(V(o)) : vsub(L(o))), e.value) };
+      }).concat(injParts(g));
     }
-    // fully-substituted numeric line for the solve step (every neighbour as its value)
-    function kclNumeric(g) {
-      return resAt(g).map(function (e) {
-        return frac(diff(vsub(L(g)), round(V(other(e, g)))), e.value);
-      }).join(' + ') + injTerms(g) + ' = 0';
-    }
+    function kclEq(g) { return kclLine(kclParts(g, false)); }
+    function kclNumeric(g) { return kclLine(kclParts(g, true)); }
 
     // status table for the equation-assembly step: for each still-unknown node, how many
     // of its resistor neighbours are themselves still unknown — a node is solvable the
@@ -258,8 +288,8 @@
     // this table alone stays local: it is the only one with per-node columns rather than the
     // single-cell / two-column shapes StepKit renders
 
-    // "current equation" board — one row per node, updated live as step 6 builds each
-    // equation and step 8 folds unknowns down to numbers. Each substep snapshots this
+    // "current equation" board — one row per node, updated live as step 7 builds each
+    // equation and step 9 folds unknowns down to numbers. Each substep snapshots this
     // table as it's built, so stepping through nodes shows the whole board settle,
     // merge-sort-style, from letters/fractions down to solved voltages.
     var board = {};
@@ -324,8 +354,8 @@
       n: 3, title: 'Identify known node voltages',
       body: 'Each <b>voltage</b> source fixes the voltage difference across its two nodes. Walking out from the reference, that pins ' +
         Object.keys(P.fixed).length + ' node voltage' + (Object.keys(P.fixed).length === 1 ? '' : 's') + '.' +
-        (nI ? ' A <b>current</b> source fixes no voltage at all — it dictates a current and lets the circuit decide the voltage, so it pins nothing here. It shows up in step 6 instead, as a known term in the current sum.' : '') +
-        (CV.any ? ' A <b>dependent</b> source pins nothing either, whichever kind it is: until we know what it is reading, we do not know what it is worth. Its control variable gets a name here and an equation in step 7.' : '') +
+        (nI ? ' A <b>current</b> source fixes no voltage at all — it dictates a current and lets the circuit decide the voltage, so it pins nothing here. It shows up in step 7 instead, as a known term in the current sum.' : '') +
+        (CV.any ? ' A <b>dependent</b> source pins nothing either, whichever kind it is: until we know what it is reading, we do not know what it is worth. Its control variable gets a name here and an equation in step 8.' : '') +
         ' Step through each source.',
       eq: fixedLines,
       hl: { nodes: order.filter(function (g) { return P.fixed[g]; }).reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []),
@@ -338,7 +368,7 @@
         var knownEnds = [a, b].filter(function (g) { return P.fixed[g]; });
         if (a === ref || b === ref) body += ' One terminal is the reference (0 V), so the other node’s voltage is now known outright.';
         else if (P.fixed[a] && P.fixed[b]) body += ' Both terminals are reached from the reference through other sources, so both voltages are already known.';
-        else body += ' Neither terminal is reachable from the reference through sources, so this pair is a <b>supernode</b> (see step 5).';
+        else body += ' Neither terminal is reachable from the reference through sources, so this pair is a <b>supernode</b> (see step 6).';
         return { title: si(e.value, 'V') + ' source', body: body,
           eq: [vsub(L(b)) + ' − ' + vsub(L(a)) + ' = ' + si(e.value, 'V')],
           hl: { edges: [e.id], nodes: nodeIdsOf(a).concat(nodeIdsOf(b)), volts: voltsFor(knownEnds) } };
@@ -348,7 +378,7 @@
           title: si(e.value, 'A') + ' source',
           body: 'The ' + si(e.value, 'A') + ' source pushes its current out of node <b>' + L(b) + '</b> and back into node <b>' + L(a) +
             '</b>. It says nothing about either node’s voltage — whatever voltage it takes to drive that current is what appears across it. So neither ' +
-            vsub(L(a)) + ' nor ' + vsub(L(b)) + ' is known from it; the current itself is what we use, in step 6.',
+            vsub(L(a)) + ' nor ' + vsub(L(b)) + ' is known from it; the current itself is what we use, in step 7.',
           eq: ['i = ' + si(e.value, 'A') + '  (from ' + L(a) + ' to ' + L(b) + ')'],
           hl: { edges: [e.id], nodes: nodeIdsOf(a).concat(nodeIdsOf(b)), volts: voltsFor(order.filter(function (g) { return P.fixed[g]; })) },
         };
@@ -364,7 +394,7 @@
           body: 'This diamond is a <b>' + CV.long(e) + '</b>. Call the ' + reads + ' the ' + si(ce.value, 'Ω') +
             ' resistor <b>' + CV.sym(e) + '</b> — that is the quantity it reads, marked on the drawing from the start. ' +
             delivers + '. Neither number is known yet, because ' + CV.sym(e) +
-            ' is not known yet — but ' + CV.sym(e) + ' is made of node voltages like everything else here, and step 7 writes it as such.',
+            ' is not known yet — but ' + CV.sym(e) + ' is made of node voltages like everything else here, and step 8 writes it as such.',
           eq: [(CV.out(e) === 'v' ? vsub(L(b)) + ' − ' + vsub(L(a)) : 'i (from ' + L(a) + ' to ' + L(b) + ')') + ' = ' + CV.gain(e)],
           hl: { edges: [e.id, ce.id], nodes: nodeIdsOf(a).concat(nodeIdsOf(b)),
             marks: [CV.markKey(e)], volts: voltsFor(order.filter(function (g) { return P.fixed[g]; })) },
@@ -372,13 +402,53 @@
       })),
     });
 
-    // Step 4 — KCL prelude, one substep per unknown node.
+    /* Step 4 — state the convention. Not in the PPT, and deliberately so: the slides pick one
+       phrasing and never say they picked it, which is exactly the habit that costs marks in a
+       test. This module teaches (and fixes) Σ currents leaving = 0; Σ in = Σ out is shown next
+       to it only so a student who has seen that phrasing elsewhere recognises it as the same
+       equation, not a competing method — the button is disabled, there is nothing to click.
+       The technique still accepts `opts.kcl === 'inout'` as a programmatic override (used by
+       the self-check to prove both phrasings land on the same board); the page just never
+       offers it, so the live steps are always Σ leaving = 0. */
+    (function () {
+      var demo = P.kclNodes[0];
+      var parts = demo ? kclParts(demo, false) : null;
+      var lead = demo ? 'Node <b>' + L(demo) + '</b> of this circuit, written both ways:' : '';
+      var lines = demo
+        ? ['Σ leaving = 0:  ' + kclLine(parts, 'leaving'), 'Σ in = Σ out:  ' + kclLine(parts, 'inout')]
+        : ['Σ leaving = 0:  i<sub>1</sub> + i<sub>2</sub> + i<sub>3</sub> = 0',
+          'Σ in = Σ out:  i<sub>1</sub> = i<sub>2</sub> + i<sub>3</sub>'];
+      function opt(key, label, note, disabled) {
+        return '<button type="button" class="btn btn--soft btn--sm" data-kcl-conv="' + key +
+          '" aria-pressed="' + (conv === key ? 'true' : 'false') + '"' + (disabled ? ' disabled' : '') + '>' + label +
+          '<small>' + note + '</small></button>';
+      }
+      steps.push({
+        n: 4, title: 'KCL convention',
+        body: 'KCL says charge does not pile up at a node. There are two ordinary ways to write ' +
+          'that down, and they are the <b>same equation</b> — only the side of the equals sign ' +
+          'moves. Neither is more correct, but a marker reading your paper cannot tell a sign ' +
+          'slip from an unstated convention, so a solve has to <b>say which one it uses</b> and ' +
+          'keep to it. <b>This module uses Σ currents leaving = 0</b> throughout — that is fixed, ' +
+          'not a choice you make here.' +
+          '<div class="choice-row" role="group" aria-label="KCL convention">' +
+          opt('leaving', 'Σ currents leaving = 0', 'every branch written as an out; signs do the work') +
+          opt('inout', 'Σ in = Σ out', 'arrivals on the left, departures on the right — shown for reference only', true) +
+          '</div>' +
+          '<p>' + lead + ' Both lines are the same equation with the equals sign moved — recognising ' +
+          'that is the point of seeing the second one, not switching to it.</p>',
+        eq: lines,
+        hl: { nodes: P.unknown.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
+      });
+    })();
+
+    // Step 5 — KCL prelude, one substep per unknown node.
     // What this method assumes is a DIRECTION, not a polarity: every unknown current leaves the
     // node. So the drawing gets an arrow off each of the node's resistors, pointing away from it —
     // a + … − pair would only invite the question "which end is +?", whose answer is the direction
     // we just assumed. Both ends of a resistor between two unknown nodes get one (each belongs to
     // its own node's sum, and they sit at opposite ends of the element), and once drawn an arrow
-    // stays for the rest of the method: `curFlow` grows through step 4 and rides on every hl after.
+    // stays for the rest of the method: `curFlow` grows through step 5 and rides on every hl after.
     function flowAt(g, e) { return e.id + ':' + (of[e.a] === g ? e.a : e.b); }
     var flowDrawn = {}, curFlow = [];
     function flowAdd(g) {   // mark node g's resistors as "current leaves here", return the set so far
@@ -386,12 +456,12 @@
       return (curFlow = Object.keys(flowDrawn));
     }
     // the full set the walk ends on — a PINNED node writes no sum, so it assumes nothing and
-    // contributes no arrow (step 4 says as much on its own substep)
+    // contributes no arrow (step 5 says as much on its own substep)
     var flowAll = P.unknown.filter(function (g) { return !P.pinnedOf[g]; })
       .reduce(function (a, g) { resAt(g).forEach(function (e) { a.push(flowAt(g, e)); }); return a; }, []);
     steps.push({
-      n: 4, title: 'Set up KCL at each unknown node',
-      body: m ? 'Every node not fixed by a source needs one equation. Assume all unknown currents leave the node; by KCL their sum is zero. Each current is (v<sub>node</sub> − v<sub>neighbour</sub>)/R (Ohm’s law). That assumption is drawn as an arrow on each resistor leaving the node. A resistor between two unknown nodes gets an arrow at <i>both</i> ends — each node writes its own sum, and both assumptions can be made at once; whichever one is backwards simply comes out negative at the end. The arrows stay on for the rest of the solve. Step through each node.'
+      n: 5, title: 'Set up KCL at each unknown node',
+      body: m ? 'Every node not fixed by a source needs one equation. Assume all unknown currents leave the node; by KCL, written as <b>' + CONV + '</b> (step 4), that is what the equation says. Each current is (v<sub>node</sub> − v<sub>neighbour</sub>)/R (Ohm’s law). That assumption is drawn as an arrow on each resistor leaving the node. A resistor between two unknown nodes gets an arrow at <i>both</i> ends — each node writes its own sum, and both assumptions can be made at once; whichever one is backwards simply comes out negative at the end. The arrows stay on for the rest of the solve. Step through each node.'
         : 'Every node voltage is already fixed by the sources — there are no unknowns, so no KCL equation is needed.',
       hl: { nodes: P.unknown.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []), flow: flowAll },
       subs: P.unknown.map(function (g) {
@@ -402,11 +472,13 @@
           return { title: 'node ' + L(g) + ' — no KCL', board: boardHtml(),
             body: 'Node <b>' + L(g) + '</b> is reached from the known node <b>' + L(pin.from) + '</b> through a <b>' + CV.long(pin.e) +
               '</b>. No KCL sum can be written here — the current through that source is an unknown in its own right, not something Ohm’s law gives us. Instead the source’s own equation <i>is</i> node ' + L(g) +
-              '’s equation, and it is written in step 7.',
+              '’s equation, and it is written in step 8.',
             hl: { nodes: nodeIdsOf(g), edges: [pin.e.id], marks: [CV.markKey(pin.e)], flow: curFlow } };
         }
         var body = 'At node <b>' + L(g) + '</b>, sum the currents leaving through ' + rs.length + ' resistor' + (rs.length === 1 ? '' : 's') +
-          ' and set the total to zero:<br>Σ (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R = 0. The arrows now on ' +
+          (conv === 'inout'
+            ? ', and put them opposite whatever arrives:<br>Σ in = Σ (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R.'
+            : ' and set the total to zero:<br>Σ (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R = 0.') + ' The arrows now on ' +
           L(g) + '’s resistors all point away from it — that is the assumption, drawn.';
         if (is.length) body += ' A current source also meets this node, and its current is already known — it joins the sum as a plain number (' +
           is.map(function (e) { return (leaveSign(e, g) > 0 ? 'leaving: +' : 'entering: −') + si(e.value, 'A'); }).join(', ') + ').';
@@ -419,14 +491,14 @@
       }),
     });
 
-    // Step 5 — supernodes (real content when a source bridges two non-reference nodes)
+    // Step 6 — supernodes (real content when a source bridges two non-reference nodes)
     var supers = P.supernodes;
     steps.push({
-      n: 5, title: 'Identify supernode(s)', todo: supers.length === 0,
+      n: 6, title: 'Identify supernode(s)', todo: supers.length === 0,
       body: supers.length
         ? 'A voltage source between two non-reference nodes forms a supernode — <b>any</b> voltage source, independent or dependent, because what matters is that its own branch current is unknown, not where its value comes from. Enclose both nodes, write KCL for the enclosure (the source’s current cancels inside it) and add the source voltage as a constraint. ' +
           supers.length + ' here: ' + supers.map(function (e) { return L(of[e.a]) + '–' + L(of[e.b]); }).join(', ') + '.' +
-          (supers.some(isDepV) ? ' The controlled one’s constraint is the equation that gives its value, so it lands in step 7 with the other control variables.' : '')
+          (supers.some(isDepV) ? ' The controlled one’s constraint is the equation that gives its value, so it lands in step 8 with the other control variables.' : '')
         : 'A supernode forms when a voltage source — independent or dependent — connects two non-reference nodes. ' +
           (CV.volt.length ? 'Every voltage source here has a terminal at a node we already know, so no supernode forms.'
             : 'Every source here has a terminal at the reference, so no supernode forms.'),
@@ -434,11 +506,11 @@
       hl: supers.length ? { edges: supers.map(function (e) { return e.id; }), nodes: supers.reduce(function (a, e) { return a.concat(nodeIdsOf(of[e.a])).concat(nodeIdsOf(of[e.b])); }, []) } : {},
     });
 
-    // Step 6 — BUILD the equations, one substep per unknown node. Each substep names the node's
+    // Step 7 — BUILD the equations, one substep per unknown node. Each substep names the node's
     // resistor neighbours and writes its "currents leaving = 0" equation: a source-fixed neighbour
-    // shows as its number, a still-unknown neighbour stays as a letter. NO solving here — step 6
+    // shows as its number, a still-unknown neighbour stays as a letter. NO solving here — step 7
     // just sets up how many equations there are and what each looks like; seeing all of them at
-    // once is intimidating, so every node gets its own build view. The arithmetic is all step 8.
+    // once is intimidating, so every node gets its own build view. The arithmetic is all step 9.
     function unitHl(u) { return { nodes: u.groups.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []), edges: u.groups.reduce(function (a, g) { return a.concat(resAt(g).map(function (e) { return e.id; })); }, []) }; }
     (function () {
       var boardBefore = boardHtml();               // the substeps below fill the board in; the
@@ -451,18 +523,18 @@
           ? ' ' + (unk.length === 1 ? 'Neighbour ' + unk[0] + ' is' : 'Neighbours ' + unk.join(', ') + ' are') +
             ' still unknown, so ' + (unk.length === 1 ? 'its letter stays' : 'their letters stay') + ' in the equation — node ' + L(g) +
             ' can’t be found on its own until we know ' + (unk.length === 1 ? 'that voltage' : 'those voltages') + '.'
-          : ' Every neighbour is already a known voltage, so ' + vsub(L(g)) + ' is the only unknown — node ' + L(g) + ' solves in one shot in step 8.';
+          : ' Every neighbour is already a known voltage, so ' + vsub(L(g)) + ' is the only unknown — node ' + L(g) + ' solves in one shot in step 9.';
         board[g] = kclEq(g);
         return {
           title: 'equation for ' + L(g),
           body: 'Node <b>' + L(g) + '</b> connects through ' + nbr.length + ' resistor' + (nbr.length === 1 ? '' : 's') + ' to ' + nbrList +
-            '. Add up every current leaving node ' + L(g) + ' — by Ohm’s law each branch carries (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R — and set the total to zero.' +
+            '. Add up every current leaving node ' + L(g) + ' — by Ohm’s law each branch carries (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R — and write it as <b>' + CONV + '</b>, the convention chosen in step 4.' +
             (isrcAt(g).length ? ' The current source on this node contributes its own known current: ' +
               isrcAt(g).map(function (e) { return (leaveSign(e, g) > 0 ? '+' : '−') + si(e.value, 'A'); }).join(', ') +
               ' (positive when it draws current <i>out</i> of the node).' : '') +
             (depIAt(g).length ? ' The <b>dependent</b> current source on this node contributes in exactly the same place, as ' +
               depIAt(g).map(function (e) { return (leaveSign(e, g) > 0 ? '+' : '−') + CV.gain(e); }).join(', ') +
-              ' — a symbol rather than a number, and step 7 says what that symbol is.' : '') + tail, board: boardHtml(),
+              ' — a symbol rather than a number, and step 8 says what that symbol is.' : '') + tail, board: boardHtml(),
           eq: [kclEq(g)],
           hl: extend(unitHl({ groups: [g] }), { marks: depIAt(g).map(function (e) { return CV.markKey(e); }) }),
         };
@@ -473,7 +545,7 @@
           title: 'constraint ' + L(of[e.a]) + '–' + L(of[e.b]),
           body: 'A ' + srcVolts(e) + (isDepV(e) ? ' controlled source' : ' V source') + ' floats between nodes <b>' + L(of[e.a]) + '</b> and <b>' + L(of[e.b]) +
             '</b>, so it fixes the difference between their voltages — an extra equation on top of the KCL ones.' +
-            (isDepV(e) ? ' It is only half an equation as it stands, though: ' + CV.sym(e) + ' is not a number yet. Step 7 finishes it.' : ''), board: boardHtml(),
+            (isDepV(e) ? ' It is only half an equation as it stands, though: ' + CV.sym(e) + ' is not a number yet. Step 8 finishes it.' : ''), board: boardHtml(),
           eq: [vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + srcVolts(e)],
           hl: isDepV(e) ? { edges: [e.id, CV.ctrlEdge(e).id], marks: [CV.markKey(e)] } : { edges: [e.id] },
         });
@@ -481,12 +553,12 @@
 
       var nEq = P.kclNodes.length;
       steps.push(WB({
-        n: 6, title: 'Node-voltage equations  (Σ currents leaving = 0)',
-        body: nEq ? 'One equation per unknown node — assume every current leaves the node and set the sum to zero. That is <b>' + nEq + '</b> equation' + (nEq === 1 ? '' : 's') +
+        n: 7, title: 'Node-voltage equations  (' + CONV + ')',
+        body: nEq ? 'One equation per unknown node — assume every current leaves the node, and write each one the way step 4 said: <b>' + CONV + '</b>. That is <b>' + nEq + '</b> equation' + (nEq === 1 ? '' : 's') +
           (P.supernodes.length ? ' plus ' + P.supernodes.length + ' source constraint' + (P.supernodes.length === 1 ? '' : 's') : '') +
           (P.pins.length ? ' (node' + (P.pins.length === 1 ? '' : 's') + ' ' + P.pins.map(function (p) { return L(p.to); }).join(', ') +
-            ' get no KCL — a controlled source pins ' + (P.pins.length === 1 ? 'it' : 'them') + ' to a known node, and the equation that gives its value is step 7)' : '') +
-          ' to build. Step through each node to see how its equation is put together; the solving is step 8.'
+            ' get no KCL — a controlled source pins ' + (P.pins.length === 1 ? 'it' : 'them') + ' to a known node, and the equation that gives its value is step 8)' : '') +
+          ' to build. Step through each node to see how its equation is put together; the solving is step 9.'
           : 'No node needs a KCL equation here: every node voltage is either fixed by a source or pinned by a controlled one.',
         board: boardBefore,
         eq: P.kclNodes.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }),
@@ -499,7 +571,7 @@
       return e ? vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + srcVolts(e) : '';
     }
 
-    // Step 7 — constraints. This is the dependent sources' step: each one is still holding a
+    // Step 8 — constraints. This is the dependent sources' step: each one is still holding a
     // symbol (iφ, vΔ), and every symbol is a resistor's current or voltage, which Ohm's law
     // writes in node voltages. Once they are written the system is ordinary again.
     // Reading a control variable as node voltages, e.g. iφ = (v_a − v_b)/220.
@@ -509,7 +581,7 @@
       return CV.kind(e) === 'i' ? frac(pair, ce.value) : pair;
     }
     steps.push(WB({
-      n: 7, title: 'Constraint equations', todo: !CV.any,
+      n: 8, title: 'Constraint equations', todo: !CV.any,
       body: CV.any
         ? 'Every controlled source is still written as a symbol. Each symbol is a current or a voltage <i>on a resistor</i>, so Ohm’s law turns it into node voltages — and that is the last thing standing between us and an ordinary set of equations. ' +
           CV.all.length + ' constraint' + (CV.all.length === 1 ? '' : 's') + ' here' +
@@ -522,7 +594,7 @@
         var pin = P.pinnedOf[of[e.a]] || P.pinnedOf[of[e.b]];
         var role = (pin && pin.e === e)
           ? ' Node <b>' + L(pin.to) + '</b> had no KCL equation of its own, so this constraint <i>is</i> its equation.'
-          : ' Substituting it is the first move of the algebra in step 8.';
+          : ' Substituting it is the first move of the algebra in step 9.';
         return {
           title: 'constraint for ' + CV.sym(e), board: boardHtml(),
           body: '<b>' + CV.sym(e) + '</b> is the ' + (CV.kind(e) === 'i' ? 'current through' : 'voltage across') + ' the ' +
@@ -537,7 +609,7 @@
       }),
     }));
 
-    // Step 8 — SOLVE, Ohm's law only (grade-12 algebra: no conductance, no siemens). Order is
+    // Step 9 — SOLVE, Ohm's law only (grade-12 algebra: no conductance, no siemens). Order is
     // pedagogy: a node whose neighbours are ALL known solves "one shot", so plan()'s reveal order
     // does the easy nodes first, each answer feeding the next. Method per node: write its equation
     // (knowns plugged in), CLEAR THE FRACTIONS by multiplying through by the resistances, multiply
@@ -666,14 +738,16 @@
       return {
         vg: vg, terms: terms, deps: ds, M: M, Cg: Cg, rhsSym: rhsSym, expr: R.expr, degenerate: R.degenerate,
         Rlist: denoms(g).join(' × '),
-        write: terms.map(function (t) { return frac(diff(vg, otherTxt(t)), t.R); }).join(' + ') + injTerms(g) + ' = 0',
+        // the two STATEMENT lines are written in step 4's phrasing; from `clear` on the equation
+        // is brought to one side and the algebra is the same either way (see step 9's body)
+        write: kclLine(terms.map(function (t) { return { s: 1, t: frac(diff(vg, otherTxt(t)), t.R) }; }).concat(injParts(g))),
         // only when there is something to put in: the same sum with each control symbol replaced
-        substituted: ds.length ? terms.map(function (t) { return frac(diff(vg, otherTxt(t)), t.R); }).join(' + ') +
-          isrcAt(g).map(function (e) { return (leaveSign(e, g) > 0 ? ' + ' : ' − ') + round(e.value); }).join('') +
-          ds.map(function (e) {
+        substituted: ds.length ? kclLine(terms.map(function (t) { return { s: 1, t: frac(diff(vg, otherTxt(t)), t.R) }; })
+          .concat(isrcAt(g).map(function (e) { return { s: leaveSign(e, g), t: round(e.value) }; }))
+          .concat(ds.map(function (e) {
             var p = CV.gainParts(e);
-            return ((leaveSign(e, g) < 0) !== p.neg ? ' − ' : ' + ') + CV.expandGain(e, ctrlPair(e, cset));
-          }).join('') + ' = 0' : null,
+            return { s: (leaveSign(e, g) < 0) !== p.neg ? -1 : 1, t: CV.expandGain(e, ctrlPair(e, cset)) };
+          }))) : null,
         clear: terms.map(function (t) { return t.ce + '·(' + diff(vg, otherTxt(t)) + ')'; }).join(' + ') + injClear() + ' = 0',
         mult: terms.map(function (t) { return t.ce + '·' + vg; }).join(' + ') +
           terms.map(function (t) {
@@ -712,7 +786,7 @@
           body: 'Node <b>' + L(g) + '</b>’s neighbours are all known now, so ' + vg + ' is the only unknown in its equation — it solves in one shot. It stays highlighted, and each move stacks under the last so you can watch the equation simplify.' + tableBefore, board: boardHtml(),
           hl: hl,
         });
-        step('write the equation', 'Node ' + L(g) + '’s equation from step 6, with each known neighbour voltage filled in.' +
+        step('write the equation', 'Node ' + L(g) + '’s equation from step 7, with each known neighbour voltage filled in.' +
           (q ? ' The current source’s ' + si(Math.abs(q), 'A') + ' is already a number — it just sits in the sum.' : ''), Q.write);
         if (Q.degenerate) {                                   // nothing to divide by — see solveFor
           board[g] = si(V(g), 'V');
@@ -726,9 +800,11 @@
           return;
         }
         if (Q.substituted) step('put the control variable in',
-          'The dependent source is still a symbol. Step 7 said what ' + Q.deps.map(function (e) { return CV.sym(e); }).join(' and ') +
+          'The dependent source is still a symbol. Step 8 said what ' + Q.deps.map(function (e) { return CV.sym(e); }).join(' and ') +
           ' is — put that in its place, and every term in the line is made of node voltages again.', Q.substituted);
-        step('clear the fractions', 'The divisions make this awkward. Multiply every term by everything underneath (' + Q.Rlist + '); each division cancels, leaving whole-number coefficients — pure Ohm’s-law algebra, no fractions.' +
+        step('clear the fractions', (conv === 'inout'
+          ? 'First bring every term to one side — the same equation, now reading Σ leaving = 0, which is the form the algebra is easiest in. '
+          : '') + 'The divisions make this awkward. Multiply every term by everything underneath (' + Q.Rlist + '); each division cancels, leaving whole-number coefficients — pure Ohm’s-law algebra, no fractions.' +
           (q || Q.deps.length ? ' The source term is multiplied by the same ' + Q.M + '.' : ''), Q.clear);
         step('multiply out', 'Multiply each bracket out.', Q.mult);
         step('collect ' + vg, 'Add the ' + vg + ' terms together' +
@@ -764,7 +840,7 @@
           vg + ' = ' + base + (sign > 0 ? ' + ' : ' − ') + CV.gain(p.e));
         var cset = {}; cset[g] = true;
         step('put the control variable in', 'And ' + CV.sym(p.e) + ' is a resistor’s ' +
-          (CV.kind(p.e) === 'i' ? 'current' : 'voltage') + ', from step 7.',
+          (CV.kind(p.e) === 'i' ? 'current' : 'voltage') + ', from step 8.',
           vg + ' = ' + round(V(p.from)) + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(p.e, ctrlPair(p.e, cset)));
         board[g] = si(V(g), 'V');
         chain.push(vg + ' = ' + si(V(g), 'V'));
@@ -792,7 +868,7 @@
             title: 'supernode ' + u.groups.map(L).join('+') + ' — set up',
             body: 'A source floats between nodes ' + u.groups.map(L).join(' and ') + ', so solve them as a pair: their two current equations plus the source’s voltage constraint.' +
               (innerDep ? ' The source here is a <b>' + CV.long(innerDep) + '</b>, so its constraint carries ' + CV.sym(innerDep) +
-                ' — which step 7 already wrote in node voltages, so the pair is still just two equations in two unknowns.' : '') + tableBefore, board: boardHtml(),
+                ' — which step 8 already wrote in node voltages, so the pair is still just two equations in two unknowns.' : '') + tableBefore, board: boardHtml(),
             eq: u.groups.map(function (g) { return 'Node ' + L(g) + ':  ' + kclNumeric(g); }).concat(['constraint:  ' + supernodeConstraint(u)])
               .concat(innerDep ? ['with  ' + CV.sym(innerDep) + ' = ' + ctrlAsNodes(innerDep)] : []),
             hl: extend(hl, { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }),
@@ -859,7 +935,7 @@
               });
               stepG('the source equation', 'Its + terminal decides the sign.', Pq.write);
               stepG('put the control variable in', CV.sym(Pq.e) + ' is a resistor’s ' +
-                (CV.kind(Pq.e) === 'i' ? 'current' : 'voltage') + ', from step 7.', Pq.substituted);
+                (CV.kind(Pq.e) === 'i' ? 'current' : 'voltage') + ', from step 8.', Pq.substituted);
               if (Pq.degenerate) {                            // nothing to divide by — see solveFor
                 board[g] = si(V(g), 'V');
                 solveSubs.push({ title: 'node ' + L(g) + ' — from the system', board: boardHtml(), hl: gHl,
@@ -880,7 +956,7 @@
               body: 'Node <b>' + L(g) + '</b> has a neighbour that is also still unknown, so it can’t be found on its own yet — but its equation still clears the same way as any other node.', board: boardHtml(),
               hl: gHl,
             });
-            stepG('write the equation', 'Node ' + L(g) + '’s equation from step 6, known neighbours filled in as numbers, coupled ones left as letters.', Q.write);
+            stepG('write the equation', 'Node ' + L(g) + '’s equation from step 7, known neighbours filled in as numbers, coupled ones left as letters.', Q.write);
             if (Q.degenerate) {                               // nothing to divide by — see solveFor
               board[g] = si(V(g), 'V');
               solveSubs.push({
@@ -891,8 +967,9 @@
               return;
             }
             if (Q.substituted) stepG('put the control variable in',
-              'Replace ' + Q.deps.map(function (e) { return CV.sym(e); }).join(' and ') + ' with what step 7 said it is. It may bring another node’s letter in with it — that is fine, this node was coupled anyway.', Q.substituted);
-            stepG('clear the fractions', 'Multiply every term by everything underneath (' + Q.Rlist + '); each division cancels.', Q.clear);
+              'Replace ' + Q.deps.map(function (e) { return CV.sym(e); }).join(' and ') + ' with what step 8 said it is. It may bring another node’s letter in with it — that is fine, this node was coupled anyway.', Q.substituted);
+            stepG('clear the fractions', (conv === 'inout' ? 'Bring every term to one side, then m' : 'M') +
+              'ultiply every term by everything underneath (' + Q.Rlist + '); each division cancels.', Q.clear);
             stepG('multiply out', 'Multiply each bracket out.', Q.mult);
             stepG('collect ' + vg, 'Collect the ' + vg + ' terms on the left and everything else on the right.', Q.collect);
             board[g] = vg + ' = ' + fmtExpr(expr[g]);
@@ -990,7 +1067,7 @@
             solveSubs.push({
               title: 'constraint ' + L(of[e.a]) + '–' + L(of[e.b]),
               body: 'The ' + srcVolts(e) + ' source between these two nodes fixes the difference between their voltages.' +
-                (isDepV(e) ? ' It is controlled, so ' + CV.sym(e) + ' goes in as step 7 wrote it.' : ''), board: boardHtml(),
+                (isDepV(e) ? ' It is controlled, so ' + CV.sym(e) + ' goes in as step 8 wrote it.' : ''), board: boardHtml(),
               eq: [vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + srcVolts(e)]
                 .concat(isDepV(e) ? [CV.sym(e) + ' = ' + ctrlAsNodes(e)] : []),
               hl: extend({ edges: [e.id] }, { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }),
@@ -999,7 +1076,7 @@
           CV.current.filter(function (e) { return cset[of[e.a]] || cset[of[e.b]]; }).forEach(function (e) {
             solveSubs.push({
               title: 'constraint for ' + CV.sym(e), board: boardHtml(),
-              body: 'The controlled current source in this block is worth ' + CV.gain(e) + ', and step 7 wrote ' + CV.sym(e) + ' in node voltages — so it is one more ordinary term in the system.',
+              body: 'The controlled current source in this block is worth ' + CV.gain(e) + ', and step 8 wrote ' + CV.sym(e) + ' in node voltages — so it is one more ordinary term in the system.',
               eq: [CV.sym(e) + ' = ' + ctrlAsNodes(e)],
               hl: extend({ edges: [e.id, CV.ctrlEdge(e).id] }, { volts: voltsFor(Object.keys(solvedNow)), marks: [CV.markKey(e)] }),
             });
@@ -1023,15 +1100,15 @@
       });
     })();
     steps.push({
-      n: 8, title: 'Solve the equations',
-      body: (m ? 'Solve the ' + m + ' equation' + (m === 1 ? '' : 's') + ' from step 6 with Ohm’s law only — clear the fractions, multiply out, collect and divide. Start with any node whose neighbours are all known (it solves in one shot); each answer then unlocks the next. Step through node by node.'
+      n: 9, title: 'Solve the equations',
+      body: (m ? 'Solve the ' + m + ' equation' + (m === 1 ? '' : 's') + ' from step 7 — written as ' + CONV + ' — with Ohm’s law only: clear the fractions, multiply out, collect and divide. Start with any node whose neighbours are all known (it solves in one shot); each answer then unlocks the next. Step through node by node.'
         : 'Nothing to solve — the node voltages are read straight off the sources.'), board: boardAtStart,
       eq: order.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
       hl: { nodes: circuit.nodes.map(function (n) { return n.id; }), volts: voltsAtStart },
       subs: solveSubs,
     });
 
-    // Step 9 — currents & power, one substep per resistor + per source, dissipation over the circuit
+    // Step 10 — currents & power, one substep per resistor + per source, dissipation over the circuit
     var Rbr = br.filter(function (r) { return r.edge.type === 'R'; });
     var Vbr = br.filter(function (r) { return r.edge.type !== 'R' && r.edge.type !== 'W'; });
     var resSubs = Rbr.map(function (r) {
@@ -1063,7 +1140,7 @@
       };
     });
     steps.push({
-      n: 9, title: 'Currents & power check',
+      n: 10, title: 'Currents & power check',
       body: 'Ohm’s law gives each resistor current and its dissipation; each source’s power is V·I. Total dissipated must equal total generated. Step through every element.', board: boardHtml(),
       eq: ['ΣP<sub>diss</sub> = ' + si(pc.dissipated, 'W'), 'ΣP<sub>gen</sub> = ' + si(pc.generated, 'W') + ' ' + (pc.ok ? '✓' : '✗')],
       hl: {},
@@ -1078,10 +1155,10 @@
     // node letters and the ground symbol are introduced in step 2; reveal both from there
     // onward, on the step and every substep. Likewise a voltage, once known, must never
     // disappear on a later step: steps 3–7 always carry at least the source-fixed voltages
-    // (step 8 already builds its own progressively-growing set and is left alone), and step
+    // (step 9 already builds its own progressively-growing set and is left alone), and step
     // 9 — everything solved by now — always shows the full set.
     // …and the control-variable markers behave the same way: a substep that is about ONE
-    // dependent source shows only that source's marker (it set `marks` itself), but from step 4
+    // dependent source shows only that source's marker (it set `marks` itself), but from step 5
     // on — once every control variable has been named in step 3 — a view that says nothing about
     // them keeps the whole set, so notation never blinks out mid-derivation.
     var labelledIds = circuit.nodes.filter(function (n) { return n.label; }).map(function (n) { return n.id; });
@@ -1092,16 +1169,17 @@
       if (s.n < 2) return;
       s.hl = s.hl || {}; s.hl.labels = labelledIds; s.hl.ground = groundIds;
       if (s.n >= 4 && !s.hl.marks) s.hl.marks = CV.marks;
-      // step 4's arrows stay on to the end (its own views carry the growing set and win here)
-      if (s.n >= 4 && !s.hl.flow) s.hl.flow = flowAll;
-      if (s.n >= 3 && s.n <= 7) s.hl.volts = extend(fixedVolts, s.hl.volts || {});
-      if (s.n >= 9) s.hl.volts = allVolts;
+      // step 5's arrows stay on to the end (its own views carry the growing set and win here);
+      // step 4 is the convention and predates the assumption, so it draws none
+      if (s.n >= 5 && !s.hl.flow) s.hl.flow = flowAll;
+      if (s.n >= 3 && s.n <= 8) s.hl.volts = extend(fixedVolts, s.hl.volts || {});
+      if (s.n >= 10) s.hl.volts = allVolts;
       (s.subs || []).forEach(function (ss) {
         ss.hl = ss.hl || {}; ss.hl.labels = labelledIds; ss.hl.ground = groundIds;
         if (s.n >= 4 && !ss.hl.marks) ss.hl.marks = CV.marks;
-        if (s.n >= 4 && !ss.hl.flow) ss.hl.flow = flowAll;
-        if (s.n >= 3 && s.n <= 7) ss.hl.volts = extend(fixedVolts, ss.hl.volts || {});
-        if (s.n >= 9) ss.hl.volts = allVolts;
+        if (s.n >= 5 && !ss.hl.flow) ss.hl.flow = flowAll;
+        if (s.n >= 3 && s.n <= 8) ss.hl.volts = extend(fixedVolts, ss.hl.volts || {});
+        if (s.n >= 10) ss.hl.volts = allVolts;
       });
     });
 
