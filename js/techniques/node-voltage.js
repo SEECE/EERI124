@@ -122,6 +122,14 @@
     // what a voltage-type source is worth: a number for an independent one, its gain expression
     // for a controlled one. Everywhere a source's volts are written, this is what writes them.
     function srcVolts(e) { return isDepV(e) ? CV.gain(e) : si(e.value, 'V'); }
+    // the same source's constraint REARRANGED — v_+ = v_− + volts. That is the form the algebra
+    // uses (substitute it and one of the two unknowns disappears), so it is the form the student
+    // is shown, not just the "difference = volts" statement it came from.
+    function constraintFor(e) {
+      var lhs = vsub(L(of[e.b])), base = vsub(L(of[e.a]));
+      if (isDepV(e)) return lhs + ' = ' + base + ' + ' + CV.gain(e);
+      return lhs + ' = ' + base + (e.value < 0 ? ' − ' + si(-e.value, 'V') : ' + ' + si(e.value, 'V'));
+    }
 
     // =====================================================================
     // Equation-assembly engine: which nodes are source-fixed, the order the
@@ -220,13 +228,14 @@
         p.shared = unitOf[find(p.to)].groups.length > 1;   // also half of a supernode
         pinnedOf[p.to] = p;
       });
-      // nodes that actually get a "Σ currents leaving = 0" equation — a pinned node does not
-      // …a node that is ALSO half of a supernode still appears — the pair's enclosure KCL is
-      // written per member, the same as any other supernode
-      var kclNodes = unknown.filter(function (g) { return !pinnedOf[g] || pinnedOf[g].shared; });
+      // the units that actually get a "Σ currents leaving = 0" equation. ONE per unit, never one
+      // per node: a supernode's two members share a single enclosure equation (see unitTerms),
+      // and a pinned lone node gets none at all — its source's gain equation is its equation.
+      var kclUnits = units.filter(function (u) { return !(u.pins.length && u.groups.length === 1); });
+      var uOf = {}; units.forEach(function (u) { u.groups.forEach(function (g) { uOf[g] = u; }); });
       return { fixed: fixed, chain: chain, unknown: unknown, open: open, coupled: coupled,
-        units: units, pins: pins, pinnedOf: pinnedOf, kclNodes: kclNodes,
-        innerSrcs: innerSrcs, supernodes: supernodes };
+        coupledUnits: remaining.slice(), units: units, uOf: uOf, pins: pins, pinnedOf: pinnedOf,
+        kclUnits: kclUnits, innerSrcs: innerSrcs, supernodes: supernodes };
     }
     var P = plan();
     var m = P.unknown.length;
@@ -257,29 +266,56 @@
       return side(parts.filter(function (p) { return p.s < 0; })) + ' = ' +
         side(parts.filter(function (p) { return p.s > 0; }));
     }
-    // symbolic KCL at g: fixed neighbours shown as their number, unknowns as v-letters.
-    // `numeric` fills in every neighbour's value instead (the solve step's opening line).
-    function kclParts(g, numeric) {
-      return resAt(g).map(function (e) {
-        var o = other(e, g);
-        return { s: 1, t: frac(diff(vsub(L(g)), (numeric || P.fixed[o]) ? round(V(o)) : vsub(L(o))), e.value) };
-      }).concat(injParts(g));
+    /* ---- one UNIT's KCL: the enclosure sum ----
+       A lone node's unit is ordinary KCL. A SUPERNODE's unit is the pair's enclosure: both
+       members' outward currents added together, with every branch that stays inside the
+       enclosure left out — the source's own branch current leaves one member and enters the
+       other, so it cancels, and a resistor tied across the pair cancels the same way. That
+       cancellation is the whole reason the pair is written as ONE equation. Writing KCL at one
+       member on its own would be FALSE: the source's branch current is an unknown in its own
+       right and Ohm's law cannot supply it, so it would simply be missing from the sum. */
+    function unitTerms(u) {
+      var inside = {}; u.groups.forEach(function (g) { inside[g] = 1; });
+      var out = [];
+      u.groups.forEach(function (g) {
+        resAt(g).forEach(function (e) {
+          var o = other(e, g);
+          if (inside[o]) return;                       // internal branch: cancels in the enclosure
+          out.push({ R: e.value, self: g, o: o, known: !!P.fixed[o], Vo: round(V(o)) });
+        });
+      });
+      return out;
     }
-    function kclEq(g) { return kclLine(kclParts(g, false)); }
-    function kclNumeric(g) { return kclLine(kclParts(g, true)); }
+    function unitInj(u) { return u.groups.reduce(function (a, g) { return a.concat(injParts(g)); }, []); }
+    // symbolic: fixed neighbours shown as their number, unknowns as v-letters.
+    // `numeric` fills in every neighbour's value instead (the solve step's opening line).
+    function unitParts(u, numeric) {
+      return unitTerms(u).map(function (t) {
+        return { s: 1, t: frac(diff(vsub(L(t.self)), (numeric || t.known) ? t.Vo : vsub(L(t.o))), t.R) };
+      }).concat(unitInj(u));
+    }
+    function unitEq(u) { return kclLine(unitParts(u, false)); }
+    function unitNumeric(u) { return kclLine(unitParts(u, true)); }
+    function unitName(u) { return u.groups.map(L).join('+'); }
+    function unitTitle(u) { return (u.supernode ? 'supernode ' : 'node ') + unitName(u); }
 
     // status table for the equation-assembly step: for each still-unknown node, how many
     // of its resistor neighbours are themselves still unknown — a node is solvable the
     // moment that count hits zero (its own voltage is the only unknown left in its KCL sum).
+    // rows are per UNIT, so a supernode's pair is one line: they are found together, and a row
+    // per member would ask the reader to judge readiness of an equation neither node owns
     function neighborTable(remaining, solvedSet) {
-      var rows = remaining.map(function (g) {
-        // a control variable drags another node's voltage into this node's equation just as a
-        // resistor does, so it counts here too — otherwise the table would say "solve now" for
-        // a node whose equation still holds someone else's letter
-        var neighbours = resAt(g).map(function (e) { return other(e, g); }).concat(ctrlNodes(g));
+      var units = [];
+      remaining.forEach(function (g) { var u = P.uOf[g]; if (u && units.indexOf(u) < 0) units.push(u); });
+      var rows = units.map(function (u) {
+        // a control variable drags another node's voltage into this equation just as a resistor
+        // does, so it counts here too — otherwise the table would say "solve now" for a unit
+        // whose equation still holds someone else's letter
+        var neighbours = unitTerms(u).map(function (t) { return t.o; })
+          .concat(u.groups.reduce(function (a, g) { return a.concat(ctrlNodes(g)); }, []));
         var unknown = neighbours.filter(function (o) { return !solvedSet[o]; });
         var ready = unknown.length === 0;
-        return '<tr' + (ready ? ' class="row-ready"' : '') + '><td>' + L(g) + '</td><td>' + neighbours.length +
+        return '<tr' + (ready ? ' class="row-ready"' : '') + '><td>' + unitName(u) + '</td><td>' + neighbours.length +
           '</td><td>' + (neighbours.length - unknown.length) + '</td><td>' + unknown.length + '</td><td>' +
           (ready ? 'solve now' : 'waiting on ' + unknown.map(L).join(', ')) + '</td></tr>';
       }).join('');
@@ -411,9 +447,10 @@
        the self-check to prove both phrasings land on the same board); the page just never
        offers it, so the live steps are always Σ leaving = 0. */
     (function () {
-      var demo = P.kclNodes[0];
-      var parts = demo ? kclParts(demo, false) : null;
-      var lead = demo ? 'Node <b>' + L(demo) + '</b> of this circuit, written both ways:' : '';
+      var demo = P.kclUnits[0];
+      var parts = demo ? unitParts(demo, false) : null;
+      var lead = demo ? (demo.supernode ? 'Supernode <b>' + unitName(demo) + '</b>' : 'Node <b>' + L(demo.groups[0]) + '</b>') +
+        ' of this circuit, written both ways:' : '';
       var lines = demo
         ? ['Σ leaving = 0:  ' + kclLine(parts, 'leaving'), 'Σ in = Σ out:  ' + kclLine(parts, 'inout')]
         : ['Σ leaving = 0:  i<sub>1</sub> + i<sub>2</sub> + i<sub>3</sub> = 0',
@@ -484,6 +521,10 @@
           is.map(function (e) { return (leaveSign(e, g) > 0 ? 'leaving: +' : 'entering: −') + si(e.value, 'A'); }).join(', ') + ').';
         if (ds.length) body += ' A <b>dependent</b> current source meets it too. It joins the same sum, and in the same place — the only difference is that it goes in as its symbol (' +
           ds.map(function (e) { return CV.gain(e); }).join(', ') + ') rather than as a number, because we do not know its value yet.';
+        var u = P.uOf[g];
+        if (u && u.supernode) body += ' A voltage source also meets node <b>' + L(g) + '</b>, tying it to node ' +
+          u.groups.filter(function (h) { return h !== g; }).map(L).join(', ') +
+          ' — and Ohm’s law says nothing about the current through a source, so this sum <i>cannot be closed on its own</i>. The arrows still hold; the sum is finished in step 6 by adding it to the other node’s.';
         return { title: 'node ' + L(g), body: body,
           hl: { nodes: nodeIdsOf(g), edges: rs.concat(is).concat(ds).map(function (e) { return e.id; }),
             flow: flowAdd(g),
@@ -506,62 +547,80 @@
       hl: supers.length ? { edges: supers.map(function (e) { return e.id; }), nodes: supers.reduce(function (a, e) { return a.concat(nodeIdsOf(of[e.a])).concat(nodeIdsOf(of[e.b])); }, []) } : {},
     });
 
-    // Step 7 — BUILD the equations, one substep per unknown node. Each substep names the node's
-    // resistor neighbours and writes its "currents leaving = 0" equation: a source-fixed neighbour
-    // shows as its number, a still-unknown neighbour stays as a letter. NO solving here — step 7
-    // just sets up how many equations there are and what each looks like; seeing all of them at
-    // once is intimidating, so every node gets its own build view. The arithmetic is all step 9.
+    // Step 7 — BUILD the equations, one substep per UNIT (a lone unknown node, or a supernode's
+    // two nodes together). Each substep names the unit's resistor neighbours and writes its
+    // "currents leaving = 0" equation: a source-fixed neighbour shows as its number, a
+    // still-unknown neighbour stays as a letter. NO solving here — step 7 just sets up how many
+    // equations there are and what each looks like; seeing all of them at once is intimidating,
+    // so every unit gets its own build view. The arithmetic is all step 9.
     function unitHl(u) { return { nodes: u.groups.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []), edges: u.groups.reduce(function (a, g) { return a.concat(resAt(g).map(function (e) { return e.id; })); }, []) }; }
     (function () {
       var boardBefore = boardHtml();               // the substeps below fill the board in; the
-      var subs = P.kclNodes.map(function (g) {     // overview must show it as it is on entry
-        var nbr = resAt(g).map(function (e) { return { n: other(e, g), R: e.value }; });
-        var unk = nbr.filter(function (x) { return !P.fixed[x.n]; }).map(function (x) { return L(x.n); })
-          .concat(ctrlNodes(g).filter(function (n) { return !P.fixed[n]; }).map(L));
-        var nbrList = nbr.map(function (x) { return '<b>' + L(x.n) + '</b> (' + x.R + ' Ω)'; }).join(', ');
+      var subs = P.kclUnits.map(function (u) {     // overview must show it as it is on entry
+        var who = u.supernode ? 'Supernode <b>' + unitName(u) + '</b>' : 'Node <b>' + L(u.groups[0]) + '</b>';
+        var terms = unitTerms(u);
+        var unk = terms.filter(function (t) { return !t.known; }).map(function (t) { return L(t.o); })
+          .concat(u.groups.reduce(function (a, g) { return a.concat(ctrlNodes(g).filter(function (n) { return !P.fixed[n]; }).map(L)); }, []));
+        var nbrList = terms.map(function (t) { return '<b>' + L(t.o) + '</b> (' + t.R + ' Ω)'; }).join(', ');
+        var vlist = u.groups.map(function (g) { return vsub(L(g)); }).join(' and ');
         var tail = unk.length
           ? ' ' + (unk.length === 1 ? 'Neighbour ' + unk[0] + ' is' : 'Neighbours ' + unk.join(', ') + ' are') +
-            ' still unknown, so ' + (unk.length === 1 ? 'its letter stays' : 'their letters stay') + ' in the equation — node ' + L(g) +
+            ' still unknown, so ' + (unk.length === 1 ? 'its letter stays' : 'their letters stay') + ' in the equation — ' + unitName(u) +
             ' can’t be found on its own until we know ' + (unk.length === 1 ? 'that voltage' : 'those voltages') + '.'
-          : ' Every neighbour is already a known voltage, so ' + vsub(L(g)) + ' is the only unknown — node ' + L(g) + ' solves in one shot in step 9.';
-        board[g] = kclEq(g);
+          : ' Every neighbour is already a known voltage, so ' + vlist + ' ' + (u.supernode ? 'are the only unknowns' : 'is the only unknown') +
+            ' — ' + unitName(u) + ' solves in one shot in step 9.';
+        var isrcs = u.groups.reduce(function (a, g) { return a.concat(isrcAt(g).map(function (e) { return { e: e, g: g }; })); }, []);
+        var deps = u.groups.reduce(function (a, g) { return a.concat(depIAt(g).map(function (e) { return { e: e, g: g }; })); }, []);
+        board[u.groups[0]] = unitEq(u);
         return {
-          title: 'equation for ' + L(g),
-          body: 'Node <b>' + L(g) + '</b> connects through ' + nbr.length + ' resistor' + (nbr.length === 1 ? '' : 's') + ' to ' + nbrList +
-            '. Add up every current leaving node ' + L(g) + ' — by Ohm’s law each branch carries (' + vsub(L(g)) + ' − v<sub>neighbour</sub>)/R — and write it as <b>' + CONV + '</b>, the convention chosen in step 4.' +
-            (isrcAt(g).length ? ' The current source on this node contributes its own known current: ' +
-              isrcAt(g).map(function (e) { return (leaveSign(e, g) > 0 ? '+' : '−') + si(e.value, 'A'); }).join(', ') +
-              ' (positive when it draws current <i>out</i> of the node).' : '') +
-            (depIAt(g).length ? ' The <b>dependent</b> current source on this node contributes in exactly the same place, as ' +
-              depIAt(g).map(function (e) { return (leaveSign(e, g) > 0 ? '+' : '−') + CV.gain(e); }).join(', ') +
+          title: (u.supernode ? 'equation for supernode ' : 'equation for ') + unitName(u),
+          body: (u.supernode
+            ? 'Nodes <b>' + u.groups.map(L).join('</b> and <b>') + '</b> are bridged by a voltage source, so neither can close its own sum — the current through that source is an unknown Ohm’s law cannot supply. Draw one enclosure around <i>both</i> and add their sums together: that current leaves one node and enters the other, so it cancels and drops out. What is left is every current crossing the enclosure, through '
+            : who + ' connects through ') + terms.length + ' resistor' + (terms.length === 1 ? '' : 's') + ' to ' + nbrList +
+            '. Add up every current leaving ' + (u.supernode ? 'the enclosure' : 'node ' + L(u.groups[0])) +
+            ' — by Ohm’s law each branch carries (v<sub>node</sub> − v<sub>neighbour</sub>)/R — and write it as <b>' + CONV + '</b>, the convention chosen in step 4.' +
+            (u.supernode ? ' That is <b>one</b> equation for the pair, not two; the second one they need is the source’s own constraint, next.' : '') +
+            (isrcs.length ? ' The current source on this ' + (u.supernode ? 'enclosure' : 'node') + ' contributes its own known current: ' +
+              isrcs.map(function (x) { return (leaveSign(x.e, x.g) > 0 ? '+' : '−') + si(x.e.value, 'A'); }).join(', ') +
+              ' (positive when it draws current <i>out</i>).' : '') +
+            (deps.length ? ' The <b>dependent</b> current source here contributes in exactly the same place, as ' +
+              deps.map(function (x) { return (leaveSign(x.e, x.g) > 0 ? '+' : '−') + CV.gain(x.e); }).join(', ') +
               ' — a symbol rather than a number, and step 8 says what that symbol is.' : '') + tail, board: boardHtml(),
-          eq: [kclEq(g)],
-          hl: extend(unitHl({ groups: [g] }), { marks: depIAt(g).map(function (e) { return CV.markKey(e); }) }),
+          eq: [unitEq(u)],
+          hl: extend(unitHl(u), { marks: deps.map(function (x) { return CV.markKey(x.e); }) }),
         };
       });
-      // a floating source between two unknown nodes adds one extra "constraint" equation
+      // a floating source between two unknown nodes adds one extra "constraint" equation — the
+      // second of the pair's two, and the one that pays back the equation the enclosure cost
       P.supernodes.forEach(function (e) {
+        var a = of[e.a], b = of[e.b], u = P.uOf[b] || P.uOf[a];
+        // the row of whichever member is not the unit's lead now carries the constraint: that is
+        // the line the algebra will actually use, so the board shows it from here on
+        if (u) u.groups.forEach(function (g) { if (g !== u.groups[0] && (g === a || g === b)) board[g] = constraintFor(e); });
         subs.push({
-          title: 'constraint ' + L(of[e.a]) + '–' + L(of[e.b]),
-          body: 'A ' + srcVolts(e) + (isDepV(e) ? ' controlled source' : ' V source') + ' floats between nodes <b>' + L(of[e.a]) + '</b> and <b>' + L(of[e.b]) +
-            '</b>, so it fixes the difference between their voltages — an extra equation on top of the KCL ones.' +
+          title: 'constraint ' + L(a) + '–' + L(b),
+          body: 'A ' + srcVolts(e) + (isDepV(e) ? ' controlled source' : ' V source') + ' floats between nodes <b>' + L(a) + '</b> and <b>' + L(b) +
+            '</b>, so it fixes the difference between their voltages — the second equation the pair needs, in place of the one the enclosure cost us. Rearranged, it writes ' +
+            vsub(L(b)) + ' in terms of ' + vsub(L(a)) + ', which is how it gets used in step 9.' +
             (isDepV(e) ? ' It is only half an equation as it stands, though: ' + CV.sym(e) + ' is not a number yet. Step 8 finishes it.' : ''), board: boardHtml(),
-          eq: [vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + srcVolts(e)],
+          eq: [vsub(L(b)) + ' − ' + vsub(L(a)) + ' = ' + srcVolts(e), constraintFor(e)],
           hl: isDepV(e) ? { edges: [e.id, CV.ctrlEdge(e).id], marks: [CV.markKey(e)] } : { edges: [e.id] },
         });
       });
 
-      var nEq = P.kclNodes.length;
+      var nEq = P.kclUnits.length, nSuper = P.kclUnits.filter(function (u) { return u.supernode; }).length;
       steps.push(WB({
         n: 7, title: 'Node-voltage equations  (' + CONV + ')',
-        body: nEq ? 'One equation per unknown node — assume every current leaves the node, and write each one the way step 4 said: <b>' + CONV + '</b>. That is <b>' + nEq + '</b> equation' + (nEq === 1 ? '' : 's') +
+        body: nEq ? 'One equation per unknown node — except a supernode’s two nodes, which share one equation between them. Assume every current leaves the node, and write each one the way step 4 said: <b>' + CONV + '</b>. That is <b>' + nEq + '</b> equation' + (nEq === 1 ? '' : 's') +
+          (nSuper ? ' (' + nSuper + ' of them an enclosure around a supernode’s pair)' : '') +
           (P.supernodes.length ? ' plus ' + P.supernodes.length + ' source constraint' + (P.supernodes.length === 1 ? '' : 's') : '') +
           (P.pins.length ? ' (node' + (P.pins.length === 1 ? '' : 's') + ' ' + P.pins.map(function (p) { return L(p.to); }).join(', ') +
             ' get no KCL — a controlled source pins ' + (P.pins.length === 1 ? 'it' : 'them') + ' to a known node, and the equation that gives its value is step 8)' : '') +
-          ' to build. Step through each node to see how its equation is put together; the solving is step 9.'
+          ' to build. Step through each one to see how it is put together; the solving is step 9.'
           : 'No node needs a KCL equation here: every node voltage is either fixed by a source or pinned by a controlled one.',
         board: boardBefore,
-        eq: P.kclNodes.map(function (g) { return 'Node ' + L(g) + ':  ' + kclEq(g); }),
+        eq: P.kclUnits.map(function (u) { return (u.supernode ? 'Supernode ' : 'Node ') + unitName(u) + ':  ' + unitEq(u); })
+          .concat(P.supernodes.map(function (e) { return 'Constraint:  ' + constraintFor(e); })),
         hl: { nodes: P.unknown.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
         subs: subs,
       }));
@@ -866,10 +925,10 @@
           var innerDep = P.innerSrcs(u).filter(isDepV)[0];
           solveSubs.push({
             title: 'supernode ' + u.groups.map(L).join('+') + ' — set up',
-            body: 'A source floats between nodes ' + u.groups.map(L).join(' and ') + ', so solve them as a pair: their two current equations plus the source’s voltage constraint.' +
+            body: 'A source floats between nodes ' + u.groups.map(L).join(' and ') + ', so solve them as a pair: the enclosure’s <i>one</i> current equation plus the source’s voltage constraint — two equations for the two unknowns.' +
               (innerDep ? ' The source here is a <b>' + CV.long(innerDep) + '</b>, so its constraint carries ' + CV.sym(innerDep) +
                 ' — which step 8 already wrote in node voltages, so the pair is still just two equations in two unknowns.' : '') + tableBefore, board: boardHtml(),
-            eq: u.groups.map(function (g) { return 'Node ' + L(g) + ':  ' + kclNumeric(g); }).concat(['constraint:  ' + supernodeConstraint(u)])
+            eq: [unitName(u) + ':  ' + unitNumeric(u), 'constraint:  ' + supernodeConstraint(u)]
               .concat(innerDep ? ['with  ' + CV.sym(innerDep) + ' = ' + ctrlAsNodes(innerDep)] : []),
             hl: extend(hl, { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }),
           });
@@ -1059,9 +1118,14 @@
             body: 'These <b>' + cn + '</b> nodes are linked, and a source sits between two of them (a supernode) — that adds a voltage constraint. This one is a genuine simultaneous system; lay it out and finish with a matrix or calculator, then read off each node.' + sysTable(P.coupled), board: boardHtml(),
             hl: extend(cHl, { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }),
           });
-          P.coupled.forEach(function (g) {
-            if (P.pinnedOf[g]) return;                  // no KCL at a pinned node — its source is its equation
-            solveSubs.push({ title: 'equation for ' + L(g), body: 'KCL at node <b>' + L(g) + '</b>, coupled neighbours left as letters.', board: boardHtml(), eq: [kclEq(g)], hl: extend(unitHl({ groups: [g] }), { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }) });
+          P.coupledUnits.forEach(function (u) {
+            if (u.pins.length && !u.supernode) return;   // no KCL at a pinned node — its source is its equation
+            solveSubs.push({ title: 'equation for ' + unitName(u),
+              body: (u.supernode
+                ? 'The enclosure KCL for supernode <b>' + unitName(u) + '</b> — one equation for the pair, with the source’s own branch current cancelled out'
+                : 'KCL at node <b>' + L(u.groups[0]) + '</b>') + ', coupled neighbours left as letters.',
+              board: boardHtml(), eq: [unitEq(u)],
+              hl: extend(unitHl(u), { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }) });
           });
           innerSrc.concat(innerPins.map(function (p) { return p.e; })).forEach(function (e) {
             solveSubs.push({
