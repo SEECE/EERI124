@@ -239,6 +239,13 @@ at this stage know only V = IR). Everything is worked by *clearing fractions*, n
   was the bug). `unitTerms` builds the **enclosure** sum instead: both members' outward currents
   added together, with every branch that stays inside the enclosure dropped because it cancels.
   One equation for the pair, and the constraint is the second.
+
+  The general rule the self-check enforces: **a group gets a KCL equation only if every voltage
+  source touching it has both ends inside the group.** That is the only way a source's own branch
+  current cancels. So a unit a controlled source **pins** to an already-known node gets *no* KCL,
+  whether the pinned node stands alone or is half of a supernode — that current crosses the
+  boundary. Its equations are the pin's gain equation (`pinEquation`, which folds the bridge's
+  constraint in) plus the bridge's constraint: one per unknown, exactly.
 - **Step 9 solves**, ordered so a unit whose neighbours are **all known** goes first (it solves in
   one shot, then feeds the next — never start at a 4-unknown node):
   - **One-shot unit** (`P.open`): *write the equation (knowns filled in) → **use the constraint**

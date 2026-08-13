@@ -727,6 +727,8 @@
        lowest common multiple clears the fractions just as completely with numbers a student can
        still read (310200 → 3102·, 141·, 660·, 940·), and it is the same move they were taught for
        adding fractions. Non-integer resistances fall back to the product. */
+    // "3·v", but a plain "v" when the coefficient is 1 — which the LCM makes common
+    function coef(c, sym) { return c === 1 ? sym : c === -1 ? '−' + sym : c + '·' + sym; }
     function gcd(a, b) { while (b) { var t = a % b; a = b; b = t; } return a; }
     function clearMult(ds) {
       if (!ds.every(function (d) { return d > 0 && Math.abs(d - Math.round(d)) < 1e-9; })) return prod(ds);
@@ -860,7 +862,7 @@
         substituted: vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlPair(e, cset, false)),
         constrained: folded.length
           ? vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlPair(e, cset, true)) : null,
-        collect: R.Cg + '·' + vg + ' = ' + R.rhsTxt,
+        collect: coef(R.Cg, vg) + ' = ' + R.rhsTxt,
         ratio: vg + ' = ' + fmtExpr(R.expr),
       };
     }
@@ -950,16 +952,18 @@
           })); }, []))) : null,
         // the constraint used: every member's letter replaced by (v_lead ± δ)
         constrained: folded.length ? sum(true) : null,
-        clear: terms.map(function (t) { return t.ce + '·(' + diff(selfTxt(t, true), otherTxt(t, true)) + ')'; }).join(' + ') + injClear() + ' = 0',
+        clear: terms.map(function (t) { return coef(t.ce, '(' + diff(selfTxt(t, true), otherTxt(t, true)) + ')'); }).join(' + ') + injClear() + ' = 0',
         // the δs are already gathered into dsum below, so each side is just its lead's symbol
-        mult: terms.map(function (t) { var so = memberOffset(t.self); return t.ce + '·' + vsub(L(so ? so.lead : t.self)); }).join(' + ') +
+        mult: terms.map(function (t) { var so = memberOffset(t.self); return coef(t.ce, vsub(L(so ? so.lead : t.self))); }).join(' + ') +
           terms.map(function (t) {
             if (t.known) { if (t.Vo === 0) return ''; return (t.Vo > 0 ? ' − ' : ' + ') + round(t.ce * Math.abs(t.Vo)); }
             var oo = memberOffset(t.o);
-            return ' − ' + t.ce + '·' + vsub(L(oo ? oo.lead : t.o));
+            return ' − ' + coef(t.ce, vsub(L(oo ? oo.lead : t.o)));
           }).join('') + (round(dsum) ? signed(dsum) : '') + injMult() + ' = 0',
-        collect: Cg + '·' + vg + ' = ' + R.rhsTxt,
-        divide: rhsSym.length ? null : vg + ' = ' + frac(num(round(rhsK)), Cg),
+        collect: coef(Cg, vg) + ' = ' + R.rhsTxt,
+        // nothing to divide by when the coefficient is already 1: `collect` said it all
+        divide: rhsSym.length || Cg === 1 ? null : vg + ' = ' +
+          (Cg === -1 ? num(round(-rhsK)) : frac(num(round(rhsK)), Cg)),
       };
     }
 
@@ -1022,7 +1026,7 @@
         step('collect ' + vg, 'Add the ' + vg + ' terms together' +
           (Q.deps.length ? ' — including the one the control variable brought with it, which is why the coefficient is not just the sum of the resistor terms' : '') +
           ', and move the plain number to the right-hand side.', Q.collect);
-        step('divide', 'Divide both sides by the number in front of ' + vg + '.', Q.divide);
+        if (Q.divide) step('divide', 'Divide both sides by the number in front of ' + vg + '.', Q.divide);
         board[g] = si(V(g), 'V');
         chain.push(vg + ' = ' + si(V(g), 'V'));
         solveSubs.push({
@@ -1227,7 +1231,10 @@
             stepG('multiply out', 'Multiply each bracket out.', Q.mult);
             stepG('collect ' + vg, 'Collect the ' + vg + ' terms on the left and everything else on the right.', Q.collect);
             board[g] = vg + ' = ' + fmtExpr(expr[g]);
-            stepG('divide', 'Divide both sides by ' + Q.Cg + ' — ' + vg + ' is now written in volts plus a ratio of its still-unknown neighbour(s).', vg + ' = ' + fmtExpr(expr[g]));
+            stepG(Q.Cg === 1 ? 'read it off' : 'divide',
+              (Q.Cg === 1 ? 'The coefficient is already 1, so there is nothing to divide by: ' + vg
+                : 'Divide both sides by ' + Q.Cg + ' — ' + vg) +
+              ' is now written in volts plus a ratio of its still-unknown neighbour(s).', vg + ' = ' + fmtExpr(expr[g]));
           });
 
           // Now substitute those expressions into one another until one node falls out as a
