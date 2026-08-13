@@ -218,31 +218,48 @@ at this stage know only V = IR). Everything is worked by *clearing fractions*, n
   the "same equation" claim the step body makes — but `js/solver-page.js` never passes anything but
   the default, so the live steps are always Σ leaving = 0.
   **What the choice may touch, when exercised through the API, is the writing and nothing else.**
-  Every KCL line is assembled as one list of signed pieces (`kclParts` → `kclLine`); `Σ leaving = 0`
+  Every KCL line is assembled as one list of signed pieces (`unitParts` → `kclLine`); `Σ leaving = 0`
   prints them all on the left, `Σ in = Σ out` prints the entering ones on the left where they turn
   positive, an empty side reads `0`. The *statement* lines follow the choice (step 7's equations,
   step 9's "write the equation" and "put the control variable in"); from "clear the fractions" on
   the equation is brought to one side and the algebra is the same either way, which the step body
   says out loud.
-- **Step 7 builds the equations** — **one substep per unknown node**: names the node's resistor
-  neighbours and writes its KCL equation in the chosen phrasing (source-fixed neighbour as its
-  number, still-unknown neighbour as a letter). A floating source between two unknown nodes adds
-  one extra *constraint* substep. No arithmetic here — seeing every equation at once is
-  intimidating, so each node gets its own build view.
-- **Step 9 solves**, ordered so a node whose neighbours are **all known** goes first (it solves in
+- **Step 7 builds the equations** — **one substep per unit**, where a *unit* is one unknown node
+  **or a supernode's nodes together**: names the unit's resistor neighbours and writes its KCL
+  equation in the chosen phrasing (source-fixed neighbour as its number, still-unknown neighbour
+  as a letter). A floating source between two unknown nodes adds one extra *constraint* substep,
+  shown both as written (`v_c − v_a = 5 V`) and **rearranged** (`v_c = v_a + 5 V`), which is the
+  form the algebra uses. No arithmetic here — seeing every equation at once is intimidating, so
+  each unit gets its own build view.
+
+  **Never write KCL at one member of a supernode.** That sum cannot be closed: the current
+  through the bridging source is an unknown in its own right and Ohm's law does not supply it, so
+  a per-member line is simply *false* and a set of them is not an independent system (the engine
+  never used them — it is MNA — so the answers were right while the shown equations were not; that
+  was the bug). `unitTerms` builds the **enclosure** sum instead: both members' outward currents
+  added together, with every branch that stays inside the enclosure dropped because it cancels.
+  One equation for the pair, and the constraint is the second.
+- **Step 9 solves**, ordered so a unit whose neighbours are **all known** goes first (it solves in
   one shot, then feeds the next — never start at a 4-unknown node):
-  - **One-shot node** (`P.open`): *write the equation (knowns filled in) → clear the fractions
-    (multiply through by the resistances) → multiply out → collect v → divide → answer*, one move
-    per view. The node stays highlighted; the neighbour table is re-shown before each so counts
-    visibly fall. Coefficients after clearing are whole numbers (each is the product of the *other*
-    resistances) — no siemens.
-  - **Coupled core** (`P.coupled`, ≤4 unknowns, e.g. a grid or bridge): from each node's cleared
-    equation write `v = volts + ratio·v_neighbour` (a voltage-divider-style ratio, dimensionless),
-    then **substitute those expressions into one another** — self-terms collect and divide out —
-    until one node falls out as a number, then back-substitute. Ratios/volts only, no siemens. The
+  - **One-shot unit** (`P.open`): *write the equation (knowns filled in) → **use the constraint**
+    (supernode only) → clear the fractions → multiply out → collect v → divide → answer*, one move
+    per view, then the pair's second node from the constraint. The unit stays highlighted; the
+    neighbour table is re-shown before each so counts visibly fall. Fractions are cleared by the
+    denominators' **lowest common multiple** (`clearMult`) — the product blows a four-fraction
+    supernode line up to nine-digit coefficients; the LCM keeps them readable and is the move
+    students already know from adding fractions. Falls back to the product for non-integer
+    resistances. No siemens either way.
+  - **Coupled core** (`P.coupledUnits`, ≤4 unknowns, e.g. a grid or bridge): from each unit's
+    cleared equation write `v = volts + ratio·v_neighbour` (a voltage-divider-style ratio,
+    dimensionless), then **substitute those expressions into one another** — self-terms collect and
+    divide out — until one falls out as a number, then back-substitute. Ratios/volts only. The
     arithmetic is verified to reproduce `nodeVoltages`.
-  - **Floating source inside the coupled block** (a supernode — its source-branch current a
-    resistor-only substitution can't see): don't fake it. Lay out the KCL equations plus the source
+  - **A supernode inside the coupled block** is *not* special: its constraint gives every member a
+    numeric offset from the unit's **lead** (`u.lead`, `u.delta`), so `foldMembers` rewrites the
+    pair in the lead's symbol and the unit takes up **one** unknown in the system, exactly like a
+    lone node. The partner comes back at the end with one addition.
+  - **A CONTROLLED source bridging the block** is the one case that cannot be folded: the offset is
+    `gain·control`, not a number. Don't fake it — lay out the enclosure equation plus the
     constraint, hand off to a matrix/calculator solve, reveal each answer on its own view.
 
 This ordering is pedagogy — the displayed values always come from `nodeVoltages`.
