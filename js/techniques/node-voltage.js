@@ -169,14 +169,27 @@
       unknown.forEach(function (g) { var r = find(g); if (!unitOf[r]) { unitOf[r] = { groups: [], supernode: false, pins: [] }; units.push(unitOf[r]); } unitOf[r].groups.push(g); });
       units.forEach(function (u) { u.supernode = u.groups.length > 1; });
 
+      // A CONTROLLED voltage source straight onto an already-known node PINS its other node:
+      // there is no KCL to write there (the source's branch current is an unknown of its own),
+      // so the source's gain equation is that node's equation. The independent case never
+      // reaches here — it was already walked into `fixed` above.
+      circuit.edges.forEach(function (e) {
+        if (!isDepV(e)) return;
+        var a = of[e.a], b = of[e.b];
+        if (!fixed[a] && fixed[b]) unitOf[find(a)].pins.push({ e: e, from: b, to: a });
+        else if (!fixed[b] && fixed[a]) unitOf[find(b)].pins.push({ e: e, from: a, to: b });
+      });
+
       // Each member's voltage relative to the unit's LEAD, walked along the sources inside the
       // enclosure: v_member = v_lead + δ. For an INDEPENDENT source that offset is a number, so
       // the constraint rewrites the whole supernode in the lead's symbol alone — one line of
       // algebra, and the pair costs no more work than a single node. A CONTROLLED bridge makes
       // the offset gain·control: still linear, but not a number, so those members keep their own
       // symbol and the pair is solved with the constraint alongside (what the slides do there).
+      // A PINNED node leads its unit: its own equation is the one that starts the pair off.
       units.forEach(function (u) {
-        u.lead = u.groups[0]; u.delta = {}; u.via = {}; u.depLink = false;
+        u.lead = u.pins.length ? u.pins[0].to : u.groups[0];
+        u.delta = {}; u.via = {}; u.depLink = false;
         u.delta[u.lead] = 0;
         var moved = true, guard = 0;
         while (moved && guard++ < 50) {
@@ -190,17 +203,6 @@
         }
         u.groups.forEach(function (g) { if (u.delta[g] === undefined) { u.delta[g] = 0; u.depLink = true; } });
       });
-
-      // A CONTROLLED voltage source straight onto an already-known node PINS its other node:
-      // there is no KCL to write there (the source's branch current is an unknown of its own),
-      // so the source's gain equation is that node's equation. The independent case never
-      // reaches here — it was already walked into `fixed` above.
-      circuit.edges.forEach(function (e) {
-        if (!isDepV(e)) return;
-        var a = of[e.a], b = of[e.b];
-        if (!fixed[a] && fixed[b]) unitOf[find(a)].pins.push({ e: e, from: b, to: a });
-        else if (!fixed[b] && fixed[a]) unitOf[find(b)].pins.push({ e: e, from: a, to: b });
-      });
       // the voltage sources inside a unit — a supernode's own bridge(s)
       function innerSrcs(u) {
         var inside = {}; u.groups.forEach(function (g) { inside[g] = 1; });
@@ -211,11 +213,12 @@
       // every node voltage OUTSIDE the unit that the unit's own equations mention
       function needs(u, inside) {
         var need = [];
-        // pinned AND alone: the gain equation is the whole story, so nothing else is needed.
-        // A pinned node that is also half of a supernode still needs the pair's KCL, so it falls
-        // through to the general case below.
-        if (u.pins.length && u.groups.length === 1) {
+        // A PINNED unit writes no KCL at all — see kclUnits — so the only voltages it mentions
+        // are the pin's own (the known node it hangs off, and its control variable) plus, when
+        // the pinned node is half of a supernode, whatever its bridge's constraint drags in.
+        if (u.pins.length) {
           u.pins.forEach(function (p) { need.push(p.from); need = need.concat(Lin.keys(ctrlLin(p.e))); });
+          innerSrcs(u).forEach(function (e) { if (isDepV(e)) need = need.concat(Lin.keys(ctrlLin(e))); });
           return need;
         }
         u.groups.forEach(function (g) {
@@ -249,14 +252,15 @@
       });
       var pins = units.reduce(function (a, u) { return a.concat(u.pins); }, []);
       var pinnedOf = {};
-      pins.forEach(function (p) {
-        p.shared = unitOf[find(p.to)].groups.length > 1;   // also half of a supernode
-        pinnedOf[p.to] = p;
-      });
-      // the units that actually get a "Σ currents leaving = 0" equation. ONE per unit, never one
-      // per node: a supernode's two members share a single enclosure equation (see unitTerms),
-      // and a pinned lone node gets none at all — its source's gain equation is its equation.
-      var kclUnits = units.filter(function (u) { return !(u.pins.length && u.groups.length === 1); });
+      pins.forEach(function (p) { pinnedOf[p.to] = p; });
+      /* the units that actually get a "Σ currents leaving = 0" equation. ONE per unit, never one
+         per node: a supernode's two members share a single enclosure equation (see unitTerms).
+         A PINNED unit gets none at all, whether the pinned node stands alone or is half of a
+         supernode: the controlled source's branch current CROSSES the enclosure (its other end
+         is an already-known node outside), so that current never cancels and the sum cannot be
+         closed in node voltages. Its equations are the source's gain equation plus the bridge's
+         own constraint — exactly as many as the unit has unknowns. */
+      var kclUnits = units.filter(function (u) { return !u.pins.length; });
       var uOf = {}; units.forEach(function (u) { u.groups.forEach(function (g) { uOf[g] = u; }); });
       return { fixed: fixed, chain: chain, unknown: unknown, open: open, coupled: coupled,
         coupledUnits: remaining.slice(), units: units, uOf: uOf, pins: pins, pinnedOf: pinnedOf,
@@ -336,8 +340,11 @@
         // a control variable drags another node's voltage into this equation just as a resistor
         // does, so it counts here too — otherwise the table would say "solve now" for a unit
         // whose equation still holds someone else's letter
-        var neighbours = unitTerms(u).map(function (t) { return t.o; })
-          .concat(u.groups.reduce(function (a, g) { return a.concat(ctrlNodes(g)); }, []));
+        var neighbours = (u.pins.length                        // a pinned unit waits on its pin only
+          ? u.pins.reduce(function (a, p) { return a.concat([p.from], Lin.keys(ctrlLin(p.e))); }, [])
+          : unitTerms(u).map(function (t) { return t.o; })
+            .concat(u.groups.reduce(function (a, g) { return a.concat(ctrlNodes(g)); }, [])))
+          .filter(function (o) { return u.groups.indexOf(o) < 0; });
         var unknown = neighbours.filter(function (o) { return !solvedSet[o]; });
         var ready = unknown.length === 0;
         return '<tr' + (ready ? ' class="row-ready"' : '') + '><td>' + unitName(u) + '</td><td>' + neighbours.length +
@@ -640,7 +647,9 @@
           (nSuper ? ' (' + nSuper + ' of them an enclosure around a supernode’s pair)' : '') +
           (P.supernodes.length ? ' plus ' + P.supernodes.length + ' source constraint' + (P.supernodes.length === 1 ? '' : 's') : '') +
           (P.pins.length ? ' (node' + (P.pins.length === 1 ? '' : 's') + ' ' + P.pins.map(function (p) { return L(p.to); }).join(', ') +
-            ' get no KCL — a controlled source pins ' + (P.pins.length === 1 ? 'it' : 'them') + ' to a known node, and the equation that gives its value is step 8)' : '') +
+            ' get no KCL — a controlled source pins ' + (P.pins.length === 1 ? 'it' : 'them') + ' to a known node, and the equation that gives its value is step 8' +
+            (P.units.some(function (u) { return u.pins.length && u.supernode; })
+              ? ', and nor does a node sharing a supernode with one: that source’s current crosses any enclosure drawn around the pair instead of cancelling inside it' : '') + ')' : '') +
           ' to build. Step through each one to see how it is put together; the solving is step 9.'
           : 'No node needs a KCL equation here: every node voltage is either fixed by a source or pinned by a controlled one.',
         board: boardBefore,
@@ -757,24 +766,29 @@
       var d = round(mo.d);
       return d === 0 ? vsub(L(mo.lead)) : '(' + vsub(L(mo.lead)) + (d > 0 ? ' + ' : ' − ') + Math.abs(d) + ')';
     }
+    // which of these nodes are written through a constraint, de-duplicated — an equation's
+    // `folded` list, and what the "use the constraint" line is about
+    function foldedIn(nodes, cset) {
+      var seen = {}, out = [];
+      nodes.forEach(function (n) {
+        var mo = memberOffset(n);
+        if (!mo || seen[n] || !cset[mo.lead]) return;
+        seen[n] = 1; out.push(n);
+      });
+      return out;
+    }
     // the sentence that goes with the "use the constraint" move — it names the substitution and
     // the number, because this is the step students skip and then wonder where the pair went
     function constraintNote(Q) {
-      var seen = {}, bits = [], who = [];
-      Q.terms.forEach(function (t) {
-        [t.self].concat(t.known ? [] : [t.o]).forEach(function (n) {
-          var mo = memberOffset(n);
-          if (!mo || seen[n]) return;
-          seen[n] = 1;
-          var d = round(mo.d);
-          who.push(vsub(L(n)));
-          bits.push(vsub(L(n)) + ' = ' + vsub(L(mo.lead)) + (d > 0 ? ' + ' : ' − ') + Math.abs(d) +
-            ' (the ' + si(Math.abs(d), 'V') + ' the source forces)');
-        });
+      var bits = Q.folded.map(function (n) {
+        var mo = memberOffset(n), d = round(mo.d);
+        return vsub(L(n)) + ' = ' + vsub(L(mo.lead)) + (d > 0 ? ' + ' : ' − ') + Math.abs(d) +
+          ' (the ' + si(Math.abs(d), 'V') + ' the source forces)';
       });
       return 'The supernode’s constraint from step 7 says ' + bits.join(', and ') + '. Put that in wherever ' +
-        who.join(' or ') + ' appears' + (Q.u.supernode ? ' — the enclosure is then written in ' + Q.vg + ' alone, one unknown for one equation.'
-          : ', and this node’s equation stops mentioning it.');
+        Q.folded.map(function (n) { return vsub(L(n)); }).join(' or ') + ' appears' +
+        (Q.pair ? ' — the equation is then written in ' + Q.vg + ' alone, one unknown for one equation.'
+          : ', and this equation stops mentioning it.');
     }
     function foldMembers(E) {               // the same substitution, done to the linear form
       Object.keys(E.t).forEach(function (n) {
@@ -786,9 +800,12 @@
       });
       return E;
     }
-    function ctrlPair(e, cset) {            // (v_x − v_y), known ends already numbers
+    // (v_x − v_y), known ends already numbers; `folded` ⇒ a supernode member is written
+    // through its lead, the same as everywhere else in the equation
+    function ctrlPair(e, cset, folded) {
       var ce = CV.ctrlEdge(e), a = of[ce.a], b = of[ce.b];
-      return diff(cset[a] ? vsub(L(a)) : round(V(a)), cset[b] ? vsub(L(b)) : round(V(b)));
+      return diff(letterFor(a, cset) ? vTxt(a, folded) : round(V(a)),
+        letterFor(b, cset) ? vTxt(b, folded) : round(V(b)));
     }
     // render v = volts + ratio·v… ; valueFn plugs known numbers for the back-substitution
     function fmtExpr(e, valueFn) {
@@ -830,13 +847,19 @@
       var E = Lin.of(0);                                 // v_g − v_from − sign·gain·control ≡ 0
       Lin.bump(E, g, 1); Lin.bump(E, p.from, -1);
       Lin.add(E, ctrlLin(e), -sign * e.value);
+      // the control variable may be read across a node this pin's own supernode partner sits on;
+      // that node is not known, it is v_g + δ, so fold it like every other member
+      foldMembers(E);
       var R = solveFor(g, E, cset);
-      var baseTxt = cset[p.from] ? vsub(L(p.from)) : round(V(p.from));
+      var baseTxt = letterFor(p.from, cset) ? vsub(L(p.from)) : round(V(p.from));
+      var folded = foldedIn(Lin.keys(ctrlLin(e)), cset);
       return {
-        e: e, from: p.from, expr: R.expr, degenerate: R.degenerate,
+        e: e, from: p.from, expr: R.expr, degenerate: R.degenerate, folded: folded, pair: true, vg: vg,
         selfRef: Math.abs(R.Cg - 1) > 1e-9, Cg: R.Cg, rhsTxt: R.rhsTxt,
         write: vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.gain(e),
-        substituted: vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlPair(e, cset)),
+        substituted: vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlPair(e, cset, false)),
+        constrained: folded.length
+          ? vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlPair(e, cset, true)) : null,
         collect: R.Cg + '·' + vg + ' = ' + R.rhsTxt,
         ratio: vg + ' = ' + fmtExpr(R.expr),
       };
@@ -855,9 +878,11 @@
       terms.forEach(function (t) { t.ce = M / t.R; });   // clearing coefficient = the OTHER resistances
       function selfTxt(t, folded) { return vTxt(t.self, folded); }
       function otherTxt(t, folded) { return t.known ? t.Vo : vTxt(t.o, folded); }
-      // does any letter in this equation belong to a supernode member? then the constraint has
-      // somewhere to be used, and the derivation earns its extra line
-      var foldable = terms.some(function (t) { return memberOffset(t.self) || (!t.known && memberOffset(t.o)); });
+      // which letters in this equation belong to a supernode member? each is one place the
+      // constraint has to be used, and together they earn the derivation its extra line
+      var folded = foldedIn(terms.reduce(function (a, t) {
+        return a.concat([t.self], t.known ? [] : [t.o]);
+      }, []), cset);
 
       var E = Lin.of(0);
       terms.forEach(function (t) { Lin.bump(E, t.self, t.ce); Lin.bump(E, t.o, -t.ce); });
@@ -875,7 +900,7 @@
         eachDep(function (e, g) {
           var c = round(M * CV.scale(e) * Math.abs(e.value));
           var minus = (leaveSign(e, g) < 0) !== (e.value < 0);
-          out += (minus ? ' − ' : ' + ') + (c === 1 ? '' : c + '·') + '(' + ctrlPair(e, cset) + ')';
+          out += (minus ? ' − ' : ' + ') + (c === 1 ? '' : c + '·') + '(' + ctrlPair(e, cset, true) + ')';
         });
         return out;
       }
@@ -906,13 +931,13 @@
       }
       return {
         u: u, vg: vg, terms: terms, deps: ds, M: M, Cg: Cg, rhsSym: rhsSym, expr: R.expr, degenerate: R.degenerate,
+        folded: folded, pair: u.supernode,
         // how the "multiply through" move is worded: by their lowest common multiple when that is
         // smaller than the product, otherwise by everything underneath
         clearNote: M < prod(dlist)
           ? 'Multiply every term by the smallest number all the denominators (' + dlist.join(', ') +
             ') divide into — their lowest common multiple, <b>' + M + '</b>'
           : 'Multiply every term by everything underneath (' + dlist.join(' × ') + ')',
-        foldable: foldable,
         // the two STATEMENT lines are written in step 4's phrasing; from `clear` on the equation
         // is brought to one side and the algebra is the same either way (see step 9's body)
         write: sum(false),
@@ -921,10 +946,10 @@
           .concat(u.groups.reduce(function (a, g) { return a.concat(isrcAt(g).map(function (e) { return { s: leaveSign(e, g), t: round(e.value) }; })); }, []))
           .concat(u.groups.reduce(function (a, g) { return a.concat(depIAt(g).map(function (e) {
             var p = CV.gainParts(e);
-            return { s: (leaveSign(e, g) < 0) !== p.neg ? -1 : 1, t: CV.expandGain(e, ctrlPair(e, cset)) };
+            return { s: (leaveSign(e, g) < 0) !== p.neg ? -1 : 1, t: CV.expandGain(e, ctrlPair(e, cset, false)) };
           })); }, []))) : null,
         // the constraint used: every member's letter replaced by (v_lead ± δ)
-        constrained: foldable ? sum(true) : null,
+        constrained: folded.length ? sum(true) : null,
         clear: terms.map(function (t) { return t.ce + '·(' + diff(selfTxt(t, true), otherTxt(t, true)) + ')'; }).join(' + ') + injClear() + ' = 0',
         // the δs are already gathered into dsum below, so each side is just its lead's symbol
         mult: terms.map(function (t) { var so = memberOffset(t.self); return t.ce + '·' + vsub(L(so ? so.lead : t.self)); }).join(' + ') +
@@ -1034,7 +1059,7 @@
       // ---- a node with no KCL of its own: a controlled voltage source ties it to a node we
       // already know, so its value follows straight from the gain equation. ----
       function solvePinned(u, hl, tableBefore) {
-        var g = u.groups[0], p = u.pins[0], vg = vsub(L(g));
+        var g = u.lead, p = u.pins[0], vg = vsub(L(g));      // the pinned node leads its unit
         var sign = of[p.e.b] === g ? 1 : -1;              // b is the + terminal
         var base = vsub(L(p.from));
         hl = extend(hl, { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks, edges: [p.e.id, CV.ctrlEdge(p.e).id] });
@@ -1043,15 +1068,20 @@
         solveSubs.push({
           title: 'node ' + L(g) + ' — from its source',
           body: 'Node <b>' + L(g) + '</b> never got a KCL equation: a <b>' + CV.long(p.e) + '</b> sits between it and node <b>' + L(p.from) +
-            '</b>, which we already know. The source’s own equation is all we need.' + tableBefore, board: boardHtml(),
+            '</b>, which we already know. The source’s own equation is all we need.' +
+            (u.supernode ? ' Nor did the pair it belongs to: that source’s current crosses any enclosure drawn around ' +
+              unitName(u) + ' — it does not cancel inside — so there is no supernode sum to write either. The gain equation and the bridge’s constraint are the pair’s two equations.' : '') +
+            tableBefore, board: boardHtml(),
           hl: hl,
         });
         step('the source equation', 'Its + terminal is at node ' + L(sign > 0 ? g : p.from) + ', so the difference across it is ' + CV.gain(p.e) + '.',
           vg + ' = ' + base + (sign > 0 ? ' + ' : ' − ') + CV.gain(p.e));
         var cset = {}; cset[g] = true;
+        var Q = pinEquation(g, cset);
         step('put the control variable in', 'And ' + CV.sym(p.e) + ' is a resistor’s ' +
-          (CV.kind(p.e) === 'i' ? 'current' : 'voltage') + ', from step 8.',
-          vg + ' = ' + round(V(p.from)) + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(p.e, ctrlPair(p.e, cset)));
+          (CV.kind(p.e) === 'i' ? 'current' : 'voltage') + ', from step 8.', Q.substituted);
+        if (Q.constrained) step('use the constraint', constraintNote(Q), Q.constrained);
+        if (Q.selfRef) step('collect ' + vg, 'That put ' + vg + ' on both sides — collect it on the left, then divide.', Q.collect);
         board[g] = si(V(g), 'V');
         chain.push(vg + ' = ' + si(V(g), 'V'));
         solveSubs.push({
@@ -1062,11 +1092,12 @@
           eq: chain.slice(),
           hl: extend(hl, { volts: voltsFor(Object.keys(solvedNow).concat([g])) }),
         });
+        recoverMembers(u, hl, Object.keys(solvedNow).concat([g]));
       }
 
       P.open.forEach(function (u) {
         var hl = unitHl(u), tableBefore = neighborTable(remaining, solvedNow);
-        if (u.pins.length && !u.supernode) {      // solvePinned speaks for one node only
+        if (u.pins.length) {                      // no KCL here: the pin's own equation leads
           solvePinned(u, hl, tableBefore);
         } else if (!u.supernode || !u.depLink) {
           solveOpenUnit(u, hl, tableBefore);       // a supernode walks the same moves, plus the constraint
@@ -1118,7 +1149,7 @@
           var expr = {};   // expr[lead] = { c: volts, t: { neighbour: ratio } }
           cU.forEach(function (u) {
             var g = u.lead;
-            expr[g] = (P.pinnedOf[g] && !u.supernode ? pinEquation(g, cset) : unitEquation(u, cset)).expr;
+            expr[g] = (P.pinnedOf[g] ? pinEquation(g, cset) : unitEquation(u, cset)).expr;
           });
           var cleanT = K.cleanT, resolveSelf = K.resolveSelf;
           function poolNodes(pool) {                 // leads back out to every node they speak for
@@ -1143,18 +1174,20 @@
             var chainG = [];
             function stepG(title, body, line) { chainG.push(line); solveSubs.push({ title: unitTitle(u) + ' — ' + title, body: body, board: boardHtml(), eq: chainG.slice(), hl: gHl }); }
 
-            if (P.pinnedOf[g] && !P.pinnedOf[g].shared) {
+            if (P.pinnedOf[g]) {
               // no KCL to clear — the source's gain equation already IS this node's expression,
               // it just needs its control variable written out
               var Pq = pinEquation(g, cset), pvg = vsub(L(g));
               solveSubs.push({
-                title: 'node ' + L(g) + ' — from its source', board: boardHtml(), hl: gHl,
+                title: unitTitle(u) + ' — from its source', board: boardHtml(), hl: gHl,
                 body: 'Node <b>' + L(g) + '</b> has no KCL equation — a <b>' + CV.long(Pq.e) + '</b> ties it to node <b>' + L(Pq.from) +
-                  '</b>. That source’s own equation is what we rearrange instead, and it is one line shorter than a KCL sum.',
+                  '</b>. That source’s own equation is what we rearrange instead, and it is one line shorter than a KCL sum.' +
+                  (u.supernode ? ' Neither does the pair ' + unitName(u) + ': that source’s current crosses any enclosure round them rather than cancelling inside it, so the gain equation and the bridge’s constraint are their two equations.' : ''),
               });
               stepG('the source equation', 'Its + terminal decides the sign.', Pq.write);
               stepG('put the control variable in', CV.sym(Pq.e) + ' is a resistor’s ' +
                 (CV.kind(Pq.e) === 'i' ? 'current' : 'voltage') + ', from step 8.', Pq.substituted);
+              if (Pq.constrained) stepG('use the constraint', constraintNote(Pq), Pq.constrained);
               if (Pq.degenerate) {                            // nothing to divide by — see solveFor
                 board[g] = si(V(g), 'V');
                 solveSubs.push({ title: 'node ' + L(g) + ' — from the system', board: boardHtml(), hl: gHl,
@@ -1284,7 +1317,7 @@
             hl: extend(cHl, { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }),
           });
           P.coupledUnits.forEach(function (u) {
-            if (u.pins.length && !u.supernode) return;   // no KCL at a pinned node — its source is its equation
+            if (u.pins.length) return;                   // no KCL at a pinned unit — its source is its equation
             solveSubs.push({ title: 'equation for ' + unitName(u),
               body: (u.supernode
                 ? 'The enclosure KCL for supernode <b>' + unitName(u) + '</b> — one equation for the pair, with the source’s own branch current cancelled out'

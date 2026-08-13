@@ -311,11 +311,24 @@
              so a supernode's pair is one enclosure line and never two. A per-member line leaves
              out the source's own branch current — it is not a true equation, whatever the engine
              then answers. */
-          var seenIn = {};
+          var seenIn = {}, lnc = Solve.letterNodes(c);
           kcl[6].eq.filter(function (l) { return /^(Node|Supernode) /.test(l); }).forEach(function (l) {
-            l.split(':')[0].replace(/^(Node|Supernode) /, '').split('+').forEach(function (nm) {
+            var letters = l.split(':')[0].replace(/^(Node|Supernode) /, '').split('+');
+            letters.forEach(function (nm) {
               assert(!seenIn[nm], 'node ' + nm + ' gets more than one KCL equation in step 7');
               seenIn[nm] = 1;
+            });
+            /* …and a sum only closes when every voltage source touching it has BOTH ends inside:
+               that is the only way its own branch current cancels. One end out — a controlled
+               source pinning a member to an already-known node — leaves an unknown current
+               crossing the boundary, and then no KCL can be written for that group at all. */
+            var inside = {};
+            lnc.groups.forEach(function (grp) { if (letters.indexOf(lnc.letter[grp]) >= 0) inside[grp] = 1; });
+            c.edges.forEach(function (e) {
+              if (e.type !== 'V' && e.type !== 'E' && e.type !== 'H') return;
+              assert(!inside[lnc.of[e.a]] === !inside[lnc.of[e.b]],
+                'the ' + e.type + ' source ' + e.id + ' crosses the enclosure of "' + letters.join('+') +
+                '", so that KCL sum cannot be written');
             });
           });
           /* KCL runs one step longer than KVL: its step 4 is the convention the student states
