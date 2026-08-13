@@ -101,6 +101,49 @@
       assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
     });
 
+    /* ---- the supernode's ALGEBRA, not just its answer ----
+       A 3×2 resistor grid with a 9 V source pinning one node and a 5 V source floating between
+       two unknown ones, so a–c is a supernode and every unknown node is mutually coupled. The
+       engine (MNA) always got v_a = 3.2 V, v_c = 8.2 V; what used to be wrong was the WORKING —
+       KCL was written at each member on its own (false: the source's branch current is missing
+       from that sum, and the four lines were not an independent system), and the solve was then
+       handed to "a matrix or calculator" without ever using the constraint. These are the
+       assertions that would have caught it. */
+    check('supernode narration (enclosure equation, constraint used, no hand-off)', function () {
+      var c = C(10, [['R', 0, 1, 100], ['R', 0, 3, 2200], ['R', 1, 2, 470], ['R', 1, 4, 1000],
+        ['R', 2, 5, 330], ['R', 3, 4, 220], ['R', 4, 5, 470], ['W', 3, 6], ['V', 6, 7, 9],
+        ['W', 7, 5], ['W', 0, 8], ['V', 8, 9, 5], ['W', 9, 2]]);
+      var ln = Solve.letterNodes(c), sol = Solve.nodeVoltages(c);
+      var ga = ln.of.n0, gc = ln.of.n2, A = ln.letter[ga], Cc = ln.letter[gc];
+      assert(near(sol.v[ga], 3.2, 5e-3) && near(sol.v[gc], 8.2, 5e-3),
+        'engine values moved: ' + sol.v[ga] + ', ' + sol.v[gc]);
+      var steps = NodeVoltage(c), va = 'v<sub>' + A + '</sub>', vc = 'v<sub>' + Cc + '</sub>';
+
+      // step 7: ONE equation for the pair, carrying both members' branches — and none for either
+      // member alone, which is the line that could not be closed
+      var labels = steps[6].eq.filter(function (l) { return /^(Node|Supernode) /.test(l); })
+        .map(function (l) { return l.split(':')[0]; });
+      assert(labels.indexOf('Node ' + A) < 0 && labels.indexOf('Node ' + Cc) < 0,
+        'a supernode member still gets a KCL equation of its own: ' + labels.join(' | '));
+      var encl = steps[6].eq.filter(function (l) { return l.indexOf('Supernode ' + A + '+' + Cc) === 0; })[0];
+      assert(encl, 'no enclosure equation for the pair: ' + labels.join(' | '));
+      assert(encl.indexOf(va) > 0 && encl.indexOf(vc) > 0, 'the enclosure sum is missing a member: ' + encl);
+      assert(steps[6].eq.some(function (l) { return l.indexOf(vc + ' = ' + va) > 0; }),
+        'the constraint is never rearranged into the form the algebra uses');
+
+      // step 9: the constraint is substituted, the partner is recovered from it, and an
+      // INDEPENDENT supernode never reaches the simultaneous hand-off
+      var titles = (steps[8].subs || []).map(function (s) { return s.title; }).join(' | ');
+      assert(/use the constraint/.test(titles), 'step 9 never uses the constraint: ' + titles);
+      assert(titles.indexOf('node ' + Cc + ' — from the constraint') >= 0,
+        'the pair’s second node is never recovered from the constraint: ' + titles);
+      assert(!/solve the system/.test(titles), 'an independent supernode was handed to a matrix solve');
+      // the substituted line really is the enclosure written in the lead's symbol
+      var used = (steps[8].subs || []).filter(function (s) { return /use the constraint/.test(s.title); })[0];
+      var line = used.eq[used.eq.length - 1];
+      assert(line.indexOf(vc) < 0 && line.indexOf(va + ' + 5') > 0, 'constraint not actually substituted: ' + line);
+    });
+
     // ---- current source into two parallel 100 Ω: v = 0.1 × 50 = 5 V, 0.5 W generated ----
     check('current source (parallel)', function () {
       var c = C(2, [['I', 0, 1, 0.1], ['R', 0, 1, 100], ['R', 0, 1, 100]]);
@@ -264,6 +307,30 @@
           // step 6 (first equation written) on it must never blank out — in either technique
           var kcl = NodeVoltage(c);
           assert(!/undefined|NaN/.test(JSON.stringify(kcl)), 'KCL step text has undefined/NaN');
+          /* One KCL equation per UNIT: a node appears in at most one of step 7's equation labels,
+             so a supernode's pair is one enclosure line and never two. A per-member line leaves
+             out the source's own branch current — it is not a true equation, whatever the engine
+             then answers. */
+          var seenIn = {}, lnc = Solve.letterNodes(c);
+          kcl[6].eq.filter(function (l) { return /^(Node|Supernode) /.test(l); }).forEach(function (l) {
+            var letters = l.split(':')[0].replace(/^(Node|Supernode) /, '').split('+');
+            letters.forEach(function (nm) {
+              assert(!seenIn[nm], 'node ' + nm + ' gets more than one KCL equation in step 7');
+              seenIn[nm] = 1;
+            });
+            /* …and a sum only closes when every voltage source touching it has BOTH ends inside:
+               that is the only way its own branch current cancels. One end out — a controlled
+               source pinning a member to an already-known node — leaves an unknown current
+               crossing the boundary, and then no KCL can be written for that group at all. */
+            var inside = {};
+            lnc.groups.forEach(function (grp) { if (letters.indexOf(lnc.letter[grp]) >= 0) inside[grp] = 1; });
+            c.edges.forEach(function (e) {
+              if (e.type !== 'V' && e.type !== 'E' && e.type !== 'H') return;
+              assert(!inside[lnc.of[e.a]] === !inside[lnc.of[e.b]],
+                'the ' + e.type + ' source ' + e.id + ' crosses the enclosure of "' + letters.join('+') +
+                '", so that KCL sum cannot be written');
+            });
+          });
           /* KCL runs one step longer than KVL: its step 4 is the convention the student states
              (Σ leaving = 0 by default, Σ in = Σ out the other way), so its assumption step is 5
              and its first equation lands in step 7. `mark` is where each technique's assumption
