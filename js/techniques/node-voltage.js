@@ -712,6 +712,17 @@
     // source is simply one more contribution to E: it enters the written line as its symbol,
     // gets replaced by node voltages in the "put the control variable in" move, and from there
     // it is indistinguishable from a resistor branch.
+    /* What to multiply through by to clear the fractions. "Everything underneath" is the obvious
+       answer and it is what a lone node used, but a supernode's sum has every member's resistors
+       in it, and 100 × 2200 × 470 × 330 turns a readable line into 341220000·(v_a − v_b). The
+       lowest common multiple clears the fractions just as completely with numbers a student can
+       still read (310200 → 3102·, 141·, 660·, 940·), and it is the same move they were taught for
+       adding fractions. Non-integer resistances fall back to the product. */
+    function gcd(a, b) { while (b) { var t = a % b; a = b; b = t; } return a; }
+    function clearMult(ds) {
+      if (!ds.every(function (d) { return d > 0 && Math.abs(d - Math.round(d)) < 1e-9; })) return prod(ds);
+      return ds.reduce(function (m, d) { d = Math.round(d); return m / gcd(m, d) * d; }, 1);
+    }
     function denoms(u) {                     // everything the fractions must be multiplied by
       var ds = [], seen = {};
       unitTerms(u).forEach(function (t) { ds.push(t.R); });
@@ -840,7 +851,7 @@
         return { R: t.R, self: t.self, o: t.o, known: !letterFor(t.o, cset), Vo: round(V(t.o)) };
       });
       var ds = u.groups.reduce(function (a, g) { return a.concat(depIAt(g)); }, []);
-      var M = prod(denoms(u));
+      var dlist = denoms(u), M = clearMult(dlist);
       terms.forEach(function (t) { t.ce = M / t.R; });   // clearing coefficient = the OTHER resistances
       function selfTxt(t, folded) { return vTxt(t.self, folded); }
       function otherTxt(t, folded) { return t.known ? t.Vo : vTxt(t.o, folded); }
@@ -895,7 +906,13 @@
       }
       return {
         u: u, vg: vg, terms: terms, deps: ds, M: M, Cg: Cg, rhsSym: rhsSym, expr: R.expr, degenerate: R.degenerate,
-        Rlist: denoms(u).join(' × '), foldable: foldable,
+        // how the "multiply through" move is worded: by their lowest common multiple when that is
+        // smaller than the product, otherwise by everything underneath
+        clearNote: M < prod(dlist)
+          ? 'Multiply every term by the smallest number all the denominators (' + dlist.join(', ') +
+            ') divide into — their lowest common multiple, <b>' + M + '</b>'
+          : 'Multiply every term by everything underneath (' + dlist.join(' × ') + ')',
+        foldable: foldable,
         // the two STATEMENT lines are written in step 4's phrasing; from `clear` on the equation
         // is brought to one side and the algebra is the same either way (see step 9's body)
         write: sum(false),
@@ -974,7 +991,7 @@
         if (Q.constrained) step('use the constraint', constraintNote(Q), Q.constrained);
         step('clear the fractions', (conv === 'inout'
           ? 'First bring every term to one side — the same equation, now reading Σ leaving = 0, which is the form the algebra is easiest in. '
-          : '') + 'The divisions make this awkward. Multiply every term by everything underneath (' + Q.Rlist + '); each division cancels, leaving whole-number coefficients — pure Ohm’s-law algebra, no fractions.' +
+          : '') + 'The divisions make this awkward. ' + Q.clearNote + '; each division cancels, leaving whole-number coefficients — pure Ohm’s-law algebra, no fractions.' +
           (q || Q.deps.length ? ' The source term is multiplied by the same ' + Q.M + '.' : ''), Q.clear);
         step('multiply out', 'Multiply each bracket out.', Q.mult);
         step('collect ' + vg, 'Add the ' + vg + ' terms together' +
@@ -1172,8 +1189,8 @@
             if (Q.substituted) stepG('put the control variable in',
               'Replace ' + Q.deps.map(function (e) { return CV.sym(e); }).join(' and ') + ' with what step 8 said it is. It may bring another node’s letter in with it — that is fine, this node was coupled anyway.', Q.substituted);
             if (Q.constrained) stepG('use the constraint', constraintNote(Q), Q.constrained);
-            stepG('clear the fractions', (conv === 'inout' ? 'Bring every term to one side, then m' : 'M') +
-              'ultiply every term by everything underneath (' + Q.Rlist + '); each division cancels.', Q.clear);
+            stepG('clear the fractions', (conv === 'inout' ? 'Bring every term to one side, then ' + Q.clearNote.charAt(0).toLowerCase() + Q.clearNote.slice(1) : Q.clearNote) +
+              '; each division cancels.', Q.clear);
             stepG('multiply out', 'Multiply each bracket out.', Q.mult);
             stepG('collect ' + vg, 'Collect the ' + vg + ' terms on the left and everything else on the right.', Q.collect);
             board[g] = vg + ' = ' + fmtExpr(expr[g]);
