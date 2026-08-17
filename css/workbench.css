@@ -121,6 +121,19 @@
 .kcl-status tr.row-ready td { color: var(--aqua-300); font-weight: 650; }
 .eq-board td:last-child { font-family: var(--font-math); font-style: italic; color: var(--text); }
 
+/* The equivalent-resistance walk pins a picture of the working network instead of a table: the
+   real renderer's output (js/circuit.js) on paper, inside the dark panel. Deliberately NOT in
+   circuit.css with `.stage`/`.figure` — those two hide the pre-drawn letters and readings at
+   opacity 0 for a step to reveal, and this drawing wants everything it holds visible at once. */
+.mini-circuit {
+  background: var(--paper);
+  border-radius: var(--radius-xs);
+  padding: var(--sp-2);
+}
+.mini-circuit svg { display: block; width: 100%; height: auto; max-height: 22vh; }
+.mini-circuit .edge.hl line { stroke: var(--accent-hover); stroke-width: 3.5; }
+.mini-circuit .edge.hl rect { stroke: var(--accent-hover); stroke-width: 3; }
+
 .step-board {
   padding: var(--sp-2) var(--sp-3);
   background: var(--shell-2);

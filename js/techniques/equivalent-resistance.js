@@ -59,6 +59,57 @@
     // "R₃ (22 Ω)" — the symbol the narration tracks next to the value drawn on the circuit
     function named(r) { return r.sym + ' (' + fmtR(r.value) + ')'; }
 
+    /* ---------- the working network, redrawn ----------
+       Every move changes what is left, and a student cannot follow "R₉ from B to E" on a drawing
+       that still shows the original resistors. So each step pins a picture of the network AS IT
+       STANDS to the board: the same renderer the stage uses (js/circuit.js — no second drawing
+       code), fed a throwaway model whose nodes are the surviving groups at the coordinates the
+       real circuit put them, and whose edges are the working resistors. The source is not in it;
+       "remove the source" is the first thing the goal step asks for. */
+    var pos = {};
+    ln.groups.forEach(function (g) {
+      var ms = circuit.nodes.filter(function (n) { return ln.of[n.id] === g; });
+      var sx = 0, sy = 0;
+      ms.forEach(function (n) { sx += n.x; sy += n.y; });
+      pos[g] = { x: sx / ms.length, y: sy / ms.length };     // a wired-together group draws as one node
+    });
+
+    function snapshot(W, lit) {
+      var used = {}; used[portA] = 1; used[portB] = 1;
+      W.forEach(function (r) { used[r.a] = 1; used[r.b] = 1; });
+      var nodes = Object.keys(used).map(function (g) {
+        return { id: g, x: pos[g].x, y: pos[g].y, label: nm(g) };
+      });
+      var edges = [], hl = [], seen = {}, k = 0;
+      W.forEach(function (r) {
+        var key = r.a < r.b ? r.a + '|' + r.b : r.b + '|' + r.a;
+        seen[key] = (seen[key] || 0) + 1;
+        var id = 'm' + (k++);
+        if (seen[key] === 1) {
+          edges.push({ id: id, type: 'R', a: r.a, b: r.b, value: Math.round(r.value * 1000) / 1000 });
+        } else {
+          // a second resistor across the same pair of nodes would draw straight on top of the
+          // first, so bow it out through a bend node and a wire — how a parallel pair is drawn
+          // by hand. ponytail: the bend node draws as a junction dot; harmless, and cheaper than
+          // teaching the renderer about curved branches.
+          var p = pos[r.a], q = pos[r.b];
+          var dx = q.x - p.x, dy = q.y - p.y, L = Math.hypot(dx, dy) || 1;
+          var off = 0.5 * Math.ceil((seen[key] - 1) / 2) * (seen[key] % 2 ? 1 : -1);
+          var bend = 'bend-' + id;
+          nodes.push({ id: bend, x: (p.x + q.x) / 2 - dy / L * off, y: (p.y + q.y) / 2 + dx / L * off });
+          edges.push({ id: id, type: 'R', a: r.a, b: bend, value: Math.round(r.value * 1000) / 1000 });
+          edges.push({ id: 'w-' + id, type: 'W', a: bend, b: r.b });
+        }
+        if (lit && lit.indexOf(r) >= 0) hl.push(id);
+      });
+      var host = document.createElement('div');
+      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      host.appendChild(svg);
+      Circuit.render({ nodes: nodes, edges: edges }, svg);
+      Circuit.highlight(svg, { edges: hl });
+      return '<div class="mini-circuit">' + host.innerHTML + '</div>';
+    }
+
     var Req = reqNumeric(makeW(), portA, portB);            // authoritative
     var reduction = reduce(makeW(), portA, portB);          // pedagogy (mutates its own copy)
     var stuck = reduction.interior;                         // interior node left ⇒ not series-parallel
@@ -75,10 +126,17 @@
         'drop what carries no current, or, when neither is left, turn a Y into a Δ — and the detail row shows ' +
         'why that move is available before it does the arithmetic.',
       hl: { edges: rIds.concat([src.id]) },
+      board: reduction.opening,
     });
 
+    // The board carries the network the step is looking at; its last detail — the one that lands
+    // the answer — swaps in the network the move leaves behind, so the picture changes exactly
+    // when the arithmetic does.
     reduction.moves.forEach(function (m) {
-      push({ title: m.title, body: m.body, eq: m.eq, subs: m.subs, hl: { edges: m.hl } });
+      var subs = (m.subs || []).map(function (s, i) {
+        return i === m.subs.length - 1 ? K.extend(s, { board: m.after }) : s;
+      });
+      push({ title: m.title, body: m.body, eq: m.eq, subs: subs, hl: { edges: m.hl }, board: m.before });
     });
 
     // ---------- result ----------
@@ -88,6 +146,7 @@
         body: 'R<sub>eq</sub> = ∞. There is no closed conducting path between the terminals, so no current can flow — ' +
           'the network only senses voltage (a hanging resistor net).',
         hl: { nodes: nodesOfPort(portA).concat(nodesOfPort(portB)) },
+        board: reduction.closing,
       });
     } else if (stuck) {
       var extra = Req > 0
@@ -100,6 +159,7 @@
           '</b>, which is the answer — it just was not reached by reduction.' + extra,
         eq: ['R<sub>eq</sub> = ' + fmtR(Req)],
         hl: { edges: rIds },
+        board: reduction.closing,
       });
     } else {
       push({
@@ -112,6 +172,7 @@
           'P = V·I = ' + S.si(Vsrc * Vsrc / Req, 'W'),
         ],
         hl: { edges: [src.id] },
+        board: reduction.closing,
       });
     }
 
@@ -173,22 +234,28 @@
           'swap a three-terminal group for the other three-terminal group that behaves identically at its terminals.';
       }
 
+      var opening = snapshot(W, []);
       while (guard++ < 400) {
+        var pre = W.slice();                 // finders add/remove, never mutate, so a copy is enough
         var m = selfLoop() || deadEnd() || parallelPair() || seriesPair() || starToDelta();
         if (!m) break;
+        m.before = snapshot(pre, m.parts);   // the network the move looks at, participants lit
+        m.after = snapshot(W, m.made);       // and what it leaves behind, the new resistor lit
         moves.push(m);
       }
 
       // an interior node still present ⇒ series/parallel alone cannot finish this network
       var interior = false;
       W.forEach(function (e) { if (e.a !== A && e.a !== B) interior = true; if (e.b !== A && e.b !== B) interior = true; });
-      return { moves: moves, interior: interior, last: W.length === 1 ? W[0] : null };
+      return { moves: moves, interior: interior, last: W.length === 1 ? W[0] : null,
+        opening: opening, closing: snapshot(W, []) };
 
       function selfLoop() {
         var r = W.filter(function (e) { return e.a === e.b; })[0];
         if (!r) return null;
         drop(r);
         return {
+          parts: [r], made: [],
           title: 'Remove a self-loop — ' + r.sym,
           body: named(r) + ' leaves node <b>' + nm(r.a) + '</b> and comes straight back to it.',
           hl: r.orig.slice(),
@@ -207,6 +274,7 @@
         var r = edgesAt(x)[0];
         drop(r);
         return {
+          parts: [r], made: [],
           title: 'Prune a dead end — ' + r.sym,
           body: 'Node <b>' + nm(x) + '</b> has only ' + named(r) + ' attached, and it is not a terminal.',
           hl: r.orig.slice(),
@@ -230,6 +298,7 @@
         var nr = { a: r1.a, b: r1.b, value: val, orig: r1.orig.concat(r2.orig), sym: symbol() };
         drop(r1, r2); W.push(nr);
         return {
+          parts: [r1, r2], made: [nr],
           title: 'Parallel combination — ' + r1.sym + ' ∥ ' + r2.sym,
           body: named(r1) + ' and ' + named(r2) + ' both run from node <b>' + nm(nr.a) + '</b> to node <b>' +
             nm(nr.b) + '</b>. Replace the pair with ' + nr.sym + '.',
@@ -271,6 +340,7 @@
         var nr = { a: other(r1, x), b: other(r2, x), value: val, orig: r1.orig.concat(r2.orig), sym: symbol() };
         drop(r1, r2); W.push(nr);
         return {
+          parts: [r1, r2], made: [nr],
           title: 'Series combination — ' + r1.sym + ' + ' + r2.sym,
           body: named(r1) + ' and ' + named(r2) + ' meet at node <b>' + nm(x) + '</b> and nothing else is attached ' +
             'there. Replace the pair with ' + nr.sym + ', running from <b>' + nm(nr.a) + '</b> to <b>' + nm(nr.b) + '</b>.',
@@ -354,9 +424,16 @@
               return r.sym + ' = ' + K.frac(fmt(P), fmt(r.opp.value)) + ' = ' + fmtR(r.value);
             })),
         });
+        subs.push({
+          title: 'Redraw it',
+          body: 'The picture below is the network with the Y gone and the Δ in its place — node <b>' + nm(c) +
+            '</b> is no longer on it, and the three new resistors close a triangle on <b>' + nm(o[0]) + '</b>, <b>' +
+            nm(o[1]) + '</b>, <b>' + nm(o[2]) + '</b>. Redraw it on paper too before carrying on: the pairs that ' +
+            'are now in series or in parallel are hard to see in the old drawing and obvious in this one.',
+        });
 
         return {
-          transform: true,
+          transform: true, parts: arm, made: made,
           title: 'Y→Δ transform — the star at node ' + nm(c),
           body: 'Nothing is in series or parallel any more, but node <b>' + nm(c) + '</b> is the centre of a Y: ' +
             'three arms and nothing else. Swap that Y for the Δ joining <b>' + nm(o[0]) + '</b>, <b>' + nm(o[1]) +
