@@ -682,9 +682,19 @@
         .textContent = n.label;
     });
 
+    /* A model may pin the drawing's extent with `frame` — a [minX, minY, maxX, maxY] box in the
+       same user units this function works in, read back from `data-frame` below. The computed box
+       is unioned with it, so the drawing can grow but never shrink. That is what lets a technique
+       redraw the same circuit step by step (equivalent resistance) without the scale changing the
+       moment a branch — and the value label sticking out beyond it — leaves the drawing. */
+    if (circuit.frame) {
+      minX = Math.min(minX, circuit.frame[0]); minY = Math.min(minY, circuit.frame[1]);
+      maxX = Math.max(maxX, circuit.frame[2]); maxY = Math.max(maxY, circuit.frame[3]);
+    }
     // set last: minX…maxY have grown to cover every label, so nothing is clipped
     svg.setAttribute('viewBox',
       (minX - PAD) + ' ' + (minY - PAD) + ' ' + (maxX - minX + 2 * PAD) + ' ' + (maxY - minY + 2 * PAD));
+    svg.setAttribute('data-frame', minX + ' ' + minY + ' ' + maxX + ' ' + maxY);
   }
 
   /* Toggle a 'hl' class on the edges/nodes a solver step wants to emphasise.

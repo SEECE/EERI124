@@ -348,14 +348,32 @@ numbers substituted, answer. Working resistors carry **symbols** — originals `
 order, each combination taking the next free number — so a later step can say `R₉ = R₃ + R₄` and be
 followed.
 
-**The canvas shows the working network, not the original.** This is the one technique whose steps
-change the circuit, so each step hands the stepper its own model (`draw`, above) and the stage
-redraws the network *as it stands* — a throwaway model of the surviving node groups at their real
-coordinates, source excluded — with the participating resistors lit; the step's last substep swaps
-in what the move left behind, so the drawing changes exactly when the arithmetic does. The last
-step puts the source back across the single remaining resistor. A second element across the same
-node pair is bowed through a bend node so parallel twins don't draw on top of each other. The
-page's circuit is never touched — Open/Save still write the original.
+**The canvas shows the working network, and it must not jump.** This is the one technique whose
+steps change the circuit, so each step hands the stepper its own model (`draw`, above) and the
+stage redraws it, participants lit; the step's last substep swaps in what the move left behind, so
+the drawing changes exactly when the arithmetic does. The page's circuit is never touched —
+Open/Save still write the original.
+
+A redrawn step is **the same circuit with its resistors rewritten**, never a fresh sketch, because
+a student who has to re-find the circuit each step is not following the reduction:
+
+- Every original node keeps its own coordinates, and the source and wires are drawn untouched. The
+  source marks the two terminals; leaving it there is what keeps the picture recognisable.
+- A merged resistor keeps **the path it was merged along**: `R₁ + R₂` through a corner draws as the
+  combined resistor on the first leg and plain wire on the second — the corner stays a corner
+  rather than becoming a new diagonal between the far ends. Each working resistor carries `segs`,
+  the ordered branch it occupies, reusing the **original edge ids** so a highlight means the same
+  thing in every drawing. A parallel merge keeps one branch and the other leaves the drawing.
+- Only a **Y→Δ product** is a genuinely new branch (drawn straight between two outer nodes), and
+  only the three arms it replaces disappear. The star's centre stays on the paper as a bare
+  junction. A new branch across a pair that already has one is bowed through a bend node, towards
+  the middle of the drawing so it cannot push the bounding box out.
+- **One frame for the whole walk.** `Circuit.render` honours a `frame` box on the model
+  (`[minX, minY, maxX, maxY]`, the same units it reports back on the svg's `data-frame`) and never
+  draws smaller than it. The technique renders every snapshot into a detached svg once, unions the
+  boxes and pins that frame on all of them, so the scale and position on screen are identical from
+  the first step to the last. Without it, the step where a branch and its value label disappear
+  re-fits the viewBox and the whole circuit visibly jumps — which is the bug this replaced.
 
 **Y→Δ.** When no series, parallel or dead-end move is left, an interior node carrying exactly three
 resistors *is* a Y whatever the drawing looks like. The step names the star, says what ran out and

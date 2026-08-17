@@ -36,6 +36,13 @@ A node's optional `label` (set via a 3rd element in its `build()` coord, `[x, y,
 drawn next to it — e.g. the Wheatstone bridge's B/D measuring nodes. Cosmetic only; the
 solver ignores it.
 
+A model may also carry `frame: [minX, minY, maxX, maxY]` — a **drawing hint, not circuit data**:
+`Circuit.render` unions its computed extent with it, so the drawing can grow but never shrink, and
+reports the extent it used back on the svg as `data-frame`. Nothing generates it; a technique that
+redraws the same circuit step by step (equivalent resistance, see [SOLVER.md](SOLVER.md)) uses it to
+keep the scale from changing between steps. Generators, `build()`, the solver and the file writers
+all ignore it — it never reaches a saved file.
+
 Element type codes:
 
 | Code | Element | Status |

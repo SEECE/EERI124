@@ -484,10 +484,15 @@
         // why it stalled → spot the Y → the rule → the numbers → the redraw
         assert(t.subs.length === 5, 'the Y→Δ step walks ' + t.subs.length + ' details, expected 5');
         assert(t.subs[4].draw, 'the Y→Δ step never redraws the network');
-        // one real node fewer — the star's centre. (Bend nodes are drawing scaffolding for the
-        // parallel pairs the Δ just created, so they don't count.)
-        function real(m) { return m.nodes.filter(function (nd) { return nd.id.indexOf('bend-') !== 0; }).length; }
-        assert(real(t.subs[4].draw) === real(t.draw) - 1, 'the Y→Δ redraw did not lose the star centre');
+        // the redraw is the ONLY move that adds branches: three new Δ sides straight between the
+        // outer nodes, and the three arms gone. The star's centre stays on the paper as a bare
+        // junction — every original node keeps its place, which is what stops the picture jumping.
+        function ydSides(m) { return m.edges.filter(function (e) { return /^yd/.test(e.id); }).length; }
+        assert(ydSides(t.draw) === 0 && ydSides(t.subs[4].draw) === 3,
+          'the Y→Δ redraw did not put a Δ on the circuit: ' + ydSides(t.subs[4].draw) + ' new sides');
+        var armsBefore = t.draw.edges.filter(function (e) { return e.type === 'R'; }).length;
+        var armsAfter = t.subs[4].draw.edges.filter(function (e) { return e.type === 'R'; }).length;
+        assert(armsAfter === armsBefore, 'the Δ did not replace the Y one-for-one');
       }
     });
 
@@ -501,15 +506,19 @@
       var box = {};
       ['count', 'subcount', 'title', 'body', 'eq', 'board'].forEach(function (k) { box[k] = document.createElement('div'); });
       ['prev', 'next', 'subPrev', 'subNext'].forEach(function (k) { box[k] = document.createElement('button'); });
-      function drawnIds() {
+      // id + class + the value text drawn inside it: a series merge keeps the same two branches
+      // but turns one into wire and re-labels the other, so the ids alone would not show it
+      function canvasNow() {
         return Array.prototype.map.call(svg.querySelectorAll('[data-eid]'), function (g) {
-          return g.getAttribute('data-eid');
+          // strip the highlight class: which elements a step lights is not a redraw
+          return g.getAttribute('data-eid') + ':' + g.getAttribute('class').replace(/ *\bhl\b/, '') +
+            ':' + g.textContent;
         }).sort().join(',');
       }
       function walk(steps, c, label) {
         var st = Stepper(StepKit.extend(box, { svg: svg }));
         st.load(steps, c);
-        var seen = {}, guard = 0;
+        var seen = {}, frames = {}, guard = 0;
         while (guard++ < 600) {
           var cur = st.current(), hl = cur.view.hl || {};
           var where = label + ' step ' + cur.step.n + (cur.sub ? ' detail ' + cur.sub : '');
@@ -520,10 +529,15 @@
             var t = svg.querySelector('[data-nlabel="' + id + '"]');
             assert(t && t.classList.contains('show'), where + ' never reveals the letter at ' + id);
           });
-          seen[drawnIds()] = 1;
+          seen[canvasNow()] = 1;
+          // the anti-jump guarantee: one frame for the whole walk, so the scale and position of
+          // the drawing never change from the first view to the last
+          frames[svg.getAttribute('viewBox')] = 1;
           if (cur.index === cur.total - 1 && cur.sub === cur.subTotal) break;
           box.subNext.click();
         }
+        assert(Object.keys(frames).length === 1,
+          label + ': the drawing is re-framed mid-walk (' + Object.keys(frames).length + ' viewBoxes)');
         return Object.keys(seen).length;
       }
       Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
