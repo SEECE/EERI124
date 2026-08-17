@@ -441,16 +441,40 @@
        Single-source circuits only. With more than one source, "the resistance the source sees"
        is not V/I at all: EquivResistance removes the FIRST source and reduces the resistor
        network between its terminals, while the others go on pushing current through it. That is
-       a known limit of the technique, not a slip in the reduction. */
+       a known limit of the technique, not a slip in the reduction.
+
+       The reduction is now expected to FINISH on every generator — the Y→Δ transform opens the
+       bridges that used to stall it — so `reduced` (what the moves themselves landed on) is
+       checked against `req` (nodal). That equality is what proves the transform's arithmetic:
+       one wrong divisor and the two part company. */
     check('equivalent resistance agrees with V/I', function () {
       Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
         for (var i = 0; i < 8; i++) {
           var c = g.generate(), st = EquivResistance(c);
           noNaN(st, 'Req/' + g.name);
+          st.forEach(function (s) {
+            assert(/mini-circuit/.test(s.board || ''), g.name + ' step ' + s.n + ' pins no picture of the network');
+          });
           if (c.edges.filter(function (e) { return e.type === 'V'; }).length !== 1) continue;
           assert(near(st.req, reqOf(c)), g.name + ': Req ' + st.req + ' ≠ V/I ' + reqOf(c));
+          assert(!st.stuck, g.name + ': the reduction stalled');
+          assert(near(st.reduced, st.req, 1e-6 * (1 + st.req)),
+            g.name + ': the reduction landed on ' + st.reduced + ', not Req ' + st.req);
         }
       });
+    });
+
+    /* ---- the Y→Δ move: a bridge is the whole reason it exists ---- */
+    check('a bridge is opened by a Y→Δ transform', function () {
+      for (var i = 0; i < 8; i++) {
+        var st = EquivResistance(Circuit.get('Wheatstone bridge').generate());
+        var t = st.filter(function (s) { return /Y→Δ/.test(s.title); })[0];
+        assert(t, 'no Y→Δ step on a Wheatstone bridge');
+        // why it stalled → spot the Y → the rule → the numbers → the redraw
+        assert(t.subs.length === 5, 'the Y→Δ step walks ' + t.subs.length + ' details, expected 5');
+        assert(/mini-circuit/.test(t.subs[4].board || ''), 'the Y→Δ step never redraws the network');
+        assert(t.subs[4].board !== t.board, 'the Y→Δ redraw shows the network unchanged');
+      }
     });
 
     document.getElementById('out').textContent = out.join('\n');

@@ -102,7 +102,8 @@ so, rather than dividing by zero.
 | **Kit** | `js/techniques/kit.js` | `StepKit` — the presentation and small-algebra layer both techniques share: fraction/subscript fragments, the status and board tables, number formatting that never prints `-12` or `− -5`, and the `{ c, t }` expression objects (`cleanT`, `resolveSelf`, `snap`, `settle`, `fmtExpr`) their solve steps substitute into one another. Knows nothing about circuits. |
 | **Controls** | `js/techniques/controls.js` | `ControlVars` — everything a step list says about a dependent source (type names, symbol, gain label, sign-aware term text, marker key) plus `Lin`, the key-agnostic linear form. |
 | **Engine** | `js/solve.js` | `si` (SI/engineering value formatting), `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (**MNA**, any number of sources), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
-| **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — states the convention in step 4, sets up equations in step 7, hand-works the solve in step 9), `mesh-current` (KVL), `equivalent-resistance`. Each self-registers a global (`window.NodeVoltage`, …). |
+| **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — states the convention in step 4, sets up equations in step 7, hand-works the solve in step 9), `mesh-current` (KVL), `equivalent-resistance` (reduction moves + the Y→Δ transform, each move a
+step with its own why/rule/numbers details and a redrawn network on the board). Each self-registers a global (`window.NodeVoltage`, …). |
 | **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view and highlights the circuit via `Circuit.highlight`. |
 | **Page wiring** | `js/solver-page.js` | shared by every solver page: fills the topology dropdown from the registry, maps the technique dropdown to a builder, renders the circuit + drives the stepper. |
 | **Page** | `topics/<slug>/index.html` | picks generator files, the registry filter(s) and the technique options, then calls `SolverPage({ filter })` or, for a page with more than one topology set, `SolverPage({ sets })`. No logic of its own. |
@@ -327,17 +328,45 @@ same algebra — so a student who learned one reads the other for free:
 
 ## Equivalent resistance
 
-Repeated **series / parallel / dead-end-prune / self-loop** reduction to a single `Req`, one move
-per step, over the **source**: remove it, reduce between its terminals → also gives `I = V/Req`,
+Repeated **series / parallel / dead-end-prune / self-loop / Y→Δ** reduction to a single `Req`, one
+move per step, over the **source**: remove it, reduce between its terminals → also gives `I = V/Req`,
 `P = V²/Req`. One port, always the source's — the old "between two chosen nodes" mode (and the
 rail's terminal pickers) is gone; it asked the student to pick a port before they could see why a
-port matters, and taught nothing the source's own port does not. Edge cases: hanging/dead-end branches carry no current and are pruned; no path
-→ `Req = ∞` (open); a **bridge** (non-series-parallel) can't be collapsed by hand → the step says so
-and gives `Req` from nodal analysis (`topics/delta-wye/` is the tutorial that teaches the transform).
-The **authoritative `Req` is the nodal value**; the reduction is the pedagogy and is verified to
-match `V/I` for every **single-source** generator.
+port matters, and taught nothing the source's own port does not.
 
-**Known limit — more than one source.** `over: 'source'` removes the *first* voltage source and
+Every move is a **step with substeps**, the same deep dive KCL and KVL give their algebra: one view
+says *why* the move is available (KCL at the shared node for series; equal voltage across shared
+endpoints for parallel; no return path for a dead end), the next does the arithmetic — rule,
+numbers substituted, answer. Working resistors carry **symbols** — originals `R₁…Rₙ` in model
+order, each combination taking the next free number — so a later step can say `R₉ = R₃ + R₄` and be
+followed.
+
+**The pinned board is a picture, not a table.** Each step redraws the working network *as it
+stands* — `js/circuit.js`'s own renderer over a throwaway model of the surviving node groups at
+their real coordinates, source excluded — with the participating resistors lit; the step's last
+substep swaps in the network the move leaves behind, so the drawing changes exactly when the
+arithmetic does. A second resistor across the same node pair is bowed through a bend node so
+parallel twins don't draw on top of each other. Its CSS (`.mini-circuit`) lives in
+`css/workbench.css`, deliberately **not** with `.stage`/`.figure` in `circuit.css` — those two hide
+pre-drawn letters at opacity 0 for a step to reveal, and this drawing wants everything visible.
+
+**Y→Δ.** When no series, parallel or dead-end move is left, an interior node carrying exactly three
+resistors *is* a Y whatever the drawing looks like. The step names the star, says what ran out and
+why a bridge cannot be reduced, gives `Σ = RaRb + RbRc + RcRa` with each Δ side `Σ / (opposite
+arm)`, does the arithmetic and ends on a **Redraw it** view — the transform's whole point is that
+the new picture has pairs the old one hid. Eliminating the centre always removes a node, so the
+reduction always progresses and now **finishes on every generator**, bridges and 2×2 grids
+included. Only this direction: a Δ cannot occur in a generated circuit (every generator lays
+elements on an orthogonal grid, where three nodes are never pairwise adjacent), so a Δ→Y move would
+be untestable code — `topics/delta-wye/` is where a student meets the other direction.
+
+Edge cases: hanging/dead-end branches carry no current and are pruned; no path → `Req = ∞` (open);
+a network the transforms still cannot open stops the walk and reports the nodal value rather than
+transforming forever. The **authoritative `Req` is the nodal value**; the reduction is the pedagogy,
+and `steps.reduced` (what the moves themselves landed on) is checked against it for every
+**single-source** generator — that equality is what proves the Y→Δ arithmetic.
+
+**Known limit — more than one source.** The technique removes the *first* voltage source and
 reduces the resistor network between its terminals, while the other sources go on pushing current
 through it. So on a multi-source topology the reported `Req` is not `V/I` at the source, and the
 self-check deliberately skips those. Fixing it is a pedagogy decision (deactivate every source, or
@@ -351,7 +380,10 @@ VCCS), then sweeps **every generator**: node-voltage solves, mesh agrees (Euler 
 per-resistor current), and power balances. It then walks both techniques' step lists and asserts
 the narration invariants — the mesh loops never blink out, no view says `undefined`/`NaN`, the
 board is never baked into the body text, and, whatever route the derivation took, **the final
-board shows every node voltage and mesh current the engine found**. That last one is the check
+board shows every node voltage and mesh current the engine found**. For equivalent resistance it
+asserts the reduction **finishes** (no stall), that its own answer equals the nodal one, that every
+step pins a redrawn network, and that a Wheatstone bridge really is opened by a Y→Δ step whose last
+detail redraws the circuit. That last one is the check
 that matters most for a new element type; a new technique or element type is only done when it
 has a case here.
 
