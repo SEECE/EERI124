@@ -71,8 +71,9 @@
       title: 'Goal — resistance seen by the source',
       body: 'Find the resistance the ' + Vsrc + ' V source sees. Remove the source and reduce the resistor ' +
         'network between its terminals (nodes <b>' + nm(portA) + '</b> and <b>' + nm(portB) + '</b>) to one resistor. ' +
-        'Then I = V/R<sub>eq</sub> and P = V²/R<sub>eq</sub>. Each step below combines exactly two resistors, ' +
-        'and the detail row shows why that pair qualifies before it does the arithmetic.',
+        'Then I = V/R<sub>eq</sub> and P = V²/R<sub>eq</sub>. Each step below makes one move — combine a pair, ' +
+        'drop what carries no current, or, when neither is left, turn a Y into a Δ — and the detail row shows ' +
+        'why that move is available before it does the arithmetic.',
       hl: { edges: rIds.concat([src.id]) },
     });
 
@@ -93,9 +94,10 @@
         ? ' With the source back in, I = ' + S.si(Vsrc / Req, 'A') + ' and P = ' + S.si(Vsrc * Vsrc / Req, 'W') + '.'
         : '';
       push({
-        title: 'Result — needs a Y-Δ transform',
-        body: 'Series-parallel reduction stalls here: this is a bridge network, not series-parallel. ' +
-          'By nodal analysis R<sub>eq</sub> = <b>' + fmtR(Req) + '</b>. Finishing by hand would need a Y-Δ (wye-delta) transform.' + extra,
+        title: 'Result — reduction could not finish',
+        body: 'This network is still not series-parallel, and the Y-Δ transforms available here did not open it up ' +
+          '(the walk stops rather than transform forever). By nodal analysis R<sub>eq</sub> = <b>' + fmtR(Req) +
+          '</b>, which is the answer — it just was not reached by reduction.' + extra,
         eq: ['R<sub>eq</sub> = ' + fmtR(Req)],
         hl: { edges: rIds },
       });
@@ -144,7 +146,15 @@
     /* The reduction itself. One finder per legal move; each mutates W and returns the step
        material for what it did (title + one-line overview + the substeps that derive it).
        Order matters: throw away what carries no current first (self-loops, dead ends are cheap
-       to see), then parallel, then series. */
+       to see), then parallel, then series, and only when all three fail reach for a Y-Δ
+       transform — the expensive move, and the one the student is meant to notice is expensive.
+
+       Only the Y→Δ direction is here, and that is deliberate. Eliminating a star's centre always
+       removes a node, so it always makes progress, whereas Δ→Y adds one and the two would undo
+       each other. A Δ cannot appear in a generated circuit anyway: every generator lays elements
+       on an orthogonal grid, where three nodes are never pairwise adjacent — the first triangle
+       in a walk is the one a Y→Δ just made. The other direction is taught on topics/delta-wye/,
+       which is where a student meets it. */
     function reduce(W, A, B) {
       var moves = [], guard = 0;
       function edgesAt(x) { return W.filter(function (e) { return e.a === x || e.b === x; }); }
@@ -154,9 +164,17 @@
         var args = Array.prototype.slice.call(arguments);
         args.forEach(function (e) { W.splice(W.indexOf(e), 1); });
       }
+      // said once, on the first transform: what exactly ran out
+      function stalled() {
+        return 'Look for the usual two moves and neither is there. No node joins exactly two resistors, ' +
+          'so nothing is in series; no two resistors share both of their endpoints, so nothing is in parallel. ' +
+          'That is the signature of a <b>bridge</b> network — a resistor across the middle ties the two halves ' +
+          'together, and no amount of series/parallel work will separate them. The way out is a Y-Δ transform: ' +
+          'swap a three-terminal group for the other three-terminal group that behaves identically at its terminals.';
+      }
 
       while (guard++ < 400) {
-        var m = selfLoop() || deadEnd() || parallelPair() || seriesPair();
+        var m = selfLoop() || deadEnd() || parallelPair() || seriesPair() || starToDelta();
         if (!m) break;
         moves.push(m);
       }
@@ -278,6 +296,78 @@
           ],
         };
       }
+
+      /* Y → Δ. An interior node with exactly three resistors on it IS a Y, whatever the drawing
+         looks like: three arms to a private centre. Replacing it by the Δ across the three outer
+         nodes deletes the centre — the only move here that can break a bridge open. */
+      function starToDelta() {
+        var ns = nodes(), pick = null;
+        for (var i = 0; i < ns.length && !pick; i++) {
+          var c = ns[i];
+          if (c === A || c === B) continue;
+          var es = edgesAt(c);
+          if (es.length !== 3) continue;
+          var o = es.map(function (e) { return other(e, c); });
+          if (o[0] !== o[1] && o[1] !== o[2] && o[0] !== o[2]) pick = { c: c, es: es, o: o };
+        }
+        if (!pick) return null;
+
+        var c = pick.c, arm = pick.es, o = pick.o;
+        var P = arm[0].value * arm[1].value + arm[1].value * arm[2].value + arm[2].value * arm[0].value;
+        // each Δ side spans two outer nodes, and is Σ divided by the arm running to the third
+        var made = [
+          { a: o[0], b: o[1], value: P / arm[2].value, opp: arm[2], far: o[2] },
+          { a: o[1], b: o[2], value: P / arm[0].value, opp: arm[0], far: o[0] },
+          { a: o[2], b: o[0], value: P / arm[1].value, opp: arm[1], far: o[1] },
+        ];
+        var orig = arm[0].orig.concat(arm[1].orig, arm[2].orig);
+        drop(arm[0], arm[1], arm[2]);
+        made.forEach(function (r) { r.orig = orig.slice(); r.sym = symbol(); W.push(r); });
+
+        var sigma = arm[0].sym + '·' + arm[1].sym + ' + ' + arm[1].sym + '·' + arm[2].sym + ' + ' + arm[2].sym + '·' + arm[0].sym;
+        var subs = [];
+        if (!moves.some(function (m) { return m.transform; })) subs.push({ title: 'Why the reduction stalled', body: stalled() });
+        subs.push({
+          title: 'Spot the Y',
+          body: 'A <b>Y</b> (a star — a T when it is drawn flat) is three resistors meeting at one private node. ' +
+            'Node <b>' + nm(c) + '</b> is exactly that: ' + named(arm[0]) + ' to <b>' + nm(o[0]) + '</b>, ' +
+            named(arm[1]) + ' to <b>' + nm(o[1]) + '</b>, ' + named(arm[2]) + ' to <b>' + nm(o[2]) + '</b>, and ' +
+            'nothing else touches it. The rest of the circuit can only see the three outer nodes, so any ' +
+            'three-terminal network that behaves the same at <b>' + nm(o[0]) + '</b>, <b>' + nm(o[1]) + '</b> and <b>' +
+            nm(o[2]) + '</b> may be swapped in — and the <b>Δ</b> (a triangle, a π when drawn flat) is that network.',
+        });
+        subs.push({
+          title: 'The Y→Δ rule',
+          body: 'Every side of the Δ gets the <em>same</em> numerator Σ — the sum of the three products of arms ' +
+            'taken in pairs — divided by the arm <em>opposite</em> it, the one running to the node that side does ' +
+            'not touch. (Larger resistors come out: a Δ carries the same currents through longer paths.)',
+          eq: ['Σ = ' + sigma].concat(made.map(function (r) {
+            return r.sym + ' = ' + K.frac('Σ', r.opp.sym) + '  (between ' + nm(r.a) + ' and ' + nm(r.b) +
+              ', opposite the arm to ' + nm(r.far) + ')';
+          })),
+        });
+        subs.push({
+          title: 'The numbers',
+          body: 'Work out Σ once, then divide it by each arm in turn.',
+          eq: ['Σ = ' + fmt(arm[0].value) + '·' + fmt(arm[1].value) + ' + ' + fmt(arm[1].value) + '·' + fmt(arm[2].value) +
+            ' + ' + fmt(arm[2].value) + '·' + fmt(arm[0].value) + ' = ' + fmt(P)].concat(made.map(function (r) {
+              return r.sym + ' = ' + K.frac(fmt(P), fmt(r.opp.value)) + ' = ' + fmtR(r.value);
+            })),
+        });
+
+        return {
+          transform: true,
+          title: 'Y→Δ transform — the star at node ' + nm(c),
+          body: 'Nothing is in series or parallel any more, but node <b>' + nm(c) + '</b> is the centre of a Y: ' +
+            'three arms and nothing else. Swap that Y for the Δ joining <b>' + nm(o[0]) + '</b>, <b>' + nm(o[1]) +
+            '</b> and <b>' + nm(o[2]) + '</b> directly — node <b>' + nm(c) + '</b> disappears with it, and the ' +
+            'reduction can carry on.',
+          hl: orig.slice(),
+          eq: made.map(function (r) { return r.sym + ' = ' + fmtR(r.value) + ' (' + nm(r.a) + '–' + nm(r.b) + ')'; }),
+          subs: subs,
+        };
+      }
+
     }
   };
 })(window.Solve);
