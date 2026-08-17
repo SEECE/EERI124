@@ -95,7 +95,7 @@ freely — but the ids themselves cannot change without changing the script that
 | Ids | Read by |
 |---|---|
 | `[data-nav]` with `data-base` / `data-current` | `js/ui/nav.js` |
-| `#technique` `#topology` `#generate` `#canvas` `#circuit-set` | `js/solver-page.js` |
+| `#technique` `#topology` `#generate` `#canvas` `#circuit-set` | `js/solver-page.js` — `#canvas` is handed to `js/stepper.js`, which draws the circuit and any model a step brings of its own (see [SOLVER.md](SOLVER.md)) |
 | `#step-count` `#step-subcount` `#step-title` `#step-body` `#step-eq` `#step-board` `#step-prev` `#step-next` `#sub-prev` `#sub-next` | `js/stepper.js`, wired by `solver-page.js` |
 | everything in the `CircuitBuilder({…})` call | `js/builder.js` |
 

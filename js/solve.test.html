@@ -22,6 +22,7 @@
   <script src="techniques/mesh-current.js"></script>
   <script src="techniques/node-voltage.js"></script>
   <script src="techniques/equivalent-resistance.js"></script>
+  <script src="stepper.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
@@ -452,8 +453,18 @@
         for (var i = 0; i < 8; i++) {
           var c = g.generate(), st = EquivResistance(c);
           noNaN(st, 'Req/' + g.name);
+          // every step past the goal puts its own network on the canvas, and highlights ids that
+          // exist in the model it drew — a stale id would light nothing at all
           st.forEach(function (s) {
-            assert(/mini-circuit/.test(s.board || ''), g.name + ' step ' + s.n + ' pins no picture of the network');
+            [s].concat(s.subs || []).forEach(function (view) {
+              var model = view.draw || s.draw;
+              if (s.n === 1 && !model) return;                 // the goal step shows the circuit itself
+              assert(model && model.nodes.length, g.name + ' step ' + s.n + ' draws no network');
+              var ids = model.edges.map(function (e) { return e.id; });
+              (((view.hl || s.hl || {}).edges) || []).forEach(function (id) {
+                assert(ids.indexOf(id) >= 0, g.name + ' step ' + s.n + ' highlights ' + id + ', not on its drawing');
+              });
+            });
           });
           if (c.edges.filter(function (e) { return e.type === 'V'; }).length !== 1) continue;
           assert(near(st.req, reqOf(c)), g.name + ': Req ' + st.req + ' ≠ V/I ' + reqOf(c));
@@ -472,9 +483,59 @@
         assert(t, 'no Y→Δ step on a Wheatstone bridge');
         // why it stalled → spot the Y → the rule → the numbers → the redraw
         assert(t.subs.length === 5, 'the Y→Δ step walks ' + t.subs.length + ' details, expected 5');
-        assert(/mini-circuit/.test(t.subs[4].board || ''), 'the Y→Δ step never redraws the network');
-        assert(t.subs[4].board !== t.board, 'the Y→Δ redraw shows the network unchanged');
+        assert(t.subs[4].draw, 'the Y→Δ step never redraws the network');
+        // one real node fewer — the star's centre. (Bend nodes are drawing scaffolding for the
+        // parallel pairs the Δ just created, so they don't count.)
+        function real(m) { return m.nodes.filter(function (nd) { return nd.id.indexOf('bend-') !== 0; }).length; }
+        assert(real(t.subs[4].draw) === real(t.draw) - 1, 'the Y→Δ redraw did not lose the star centre');
       }
+    });
+
+    /* ---- the canvas follows the walk (js/stepper.js `draw`) ----
+       Equivalent resistance is the one technique whose steps change the network, so it hands the
+       stepper a model per step and the canvas is redrawn. KCL and KVL bring none, so their canvas
+       must stay the page's circuit from the first view to the last. Either way, a view may only
+       highlight ids that are actually on the drawing in front of the student. */
+    check('the stepper draws whatever network the step brought', function () {
+      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      var box = {};
+      ['count', 'subcount', 'title', 'body', 'eq', 'board'].forEach(function (k) { box[k] = document.createElement('div'); });
+      ['prev', 'next', 'subPrev', 'subNext'].forEach(function (k) { box[k] = document.createElement('button'); });
+      function drawnIds() {
+        return Array.prototype.map.call(svg.querySelectorAll('[data-eid]'), function (g) {
+          return g.getAttribute('data-eid');
+        }).sort().join(',');
+      }
+      function walk(steps, c, label) {
+        var st = Stepper(StepKit.extend(box, { svg: svg }));
+        st.load(steps, c);
+        var seen = {}, guard = 0;
+        while (guard++ < 600) {
+          var cur = st.current(), hl = cur.view.hl || {};
+          var where = label + ' step ' + cur.step.n + (cur.sub ? ' detail ' + cur.sub : '');
+          (hl.edges || []).forEach(function (id) {
+            assert(svg.querySelector('[data-eid="' + id + '"]'), where + ' highlights ' + id + ', not on the canvas');
+          });
+          (hl.labels || []).forEach(function (id) {
+            var t = svg.querySelector('[data-nlabel="' + id + '"]');
+            assert(t && t.classList.contains('show'), where + ' never reveals the letter at ' + id);
+          });
+          seen[drawnIds()] = 1;
+          if (cur.index === cur.total - 1 && cur.sub === cur.subTotal) break;
+          box.subNext.click();
+        }
+        return Object.keys(seen).length;
+      }
+      Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
+        var c = g.generate();
+        c.nodes.forEach(function (n) { delete n.label; });
+        var req = EquivResistance(c);
+        assert(walk(req, c, g.name + '/Req') > 1, g.name + ': the Req walk never redrew the network');
+        c.nodes.forEach(function (n) { delete n.label; });
+        assert(walk(NodeVoltage(c), c, g.name + '/KCL') === 1, g.name + ': KCL redrew the canvas');
+        c.nodes.forEach(function (n) { delete n.label; });
+        assert(walk(MeshCurrent(c), c, g.name + '/KVL') === 1, g.name + ': KVL redrew the canvas');
+      });
     });
 
     document.getElementById('out').textContent = out.join('\n');

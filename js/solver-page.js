@@ -92,9 +92,11 @@
     function runTechnique() {
       if (!circuit) return;
       circuit.nodes.forEach(function (n) { delete n.label; }); // each technique sets its own labels
-      var steps = buildSteps();
-      Circuit.render(circuit, svg);   // render draws the labels the technique set, then
-      stepper.load(steps);            // step 1 highlights on the rendered svg
+      // the stepper owns the canvas: it draws this circuit (with the labels the technique just
+      // set) and swaps in a step's own model where one asks for it — equivalent resistance
+      // redraws the network it is reducing. `circuit` here stays the real one, so Open/Save,
+      // the Ask-Midnjoy prompt and the next technique all still work on the untouched circuit.
+      stepper.load(buildSteps(), circuit);
     }
 
     function generate() {

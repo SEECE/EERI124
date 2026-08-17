@@ -3,8 +3,13 @@
    it renders one view at a time and highlights the circuit via Circuit.highlight. Plain
    script, one global `Stepper`. No ES modules (file://).
 
-   A step: { n, title, body(html), eq?[html lines], todo?, hl?, subs?[substep] }.
-   A substep: { title?, body?(html), eq?[html], hl? } — a drill-down inside a step.
+   A step: { n, title, body(html), eq?[html lines], todo?, hl?, draw?, subs?[substep] }.
+   A substep: { title?, body?(html), eq?[html], hl?, draw? } — a drill-down inside a step.
+
+   `draw` is a circuit model to put on the canvas IN PLACE of the page's own circuit, for a
+   technique whose steps change the network itself (equivalent resistance redraws what is left
+   after every move). The view's `hl` then names ids in THAT model. Nothing else is affected:
+   the page still owns the real circuit, so Open/Save keep working on it.
 
    Two button rows (o.prev/o.next walk whole steps; o.subPrev/o.subNext walk the substeps
    of the current step). Entering a step lands on its overview (sub 0); the sub row is
@@ -20,7 +25,7 @@
   'use strict';
 
   window.Stepper = function (o) {
-    var steps = [], i = 0, sub = 0, peekOpen = false;
+    var steps = [], i = 0, sub = 0, peekOpen = false, base = null, drawn = null;
     function html(el, s) { if (el) el.innerHTML = s; }
     function subsOf(s) { return (s && s.subs) || []; }
     function lines(a) { return a.map(function (l) { return '<div class="eq-line">' + l + '</div>'; }).join(''); }
@@ -36,7 +41,7 @@
       // the results arrive on the substeps (each its own line, the last one recapping the set).
       // It is not thrown away, though: it rides as `peek`, folded away behind a disclosure the
       // student opens when they want the result without walking the derivation for it.
-      if (sub === 0 || !subs.length) return { title: s.title, body: s.body, eq: subs.length ? null : s.eq, peek: subs.length ? s.eq : null, todo: s.todo, hl: s.hl, board: s.board, label: null };
+      if (sub === 0 || !subs.length) return { title: s.title, body: s.body, eq: subs.length ? null : s.eq, peek: subs.length ? s.eq : null, todo: s.todo, hl: s.hl, board: s.board, draw: s.draw, label: null };
       var ss = subs[sub - 1];
       return {
         title: s.title,
@@ -45,6 +50,7 @@
         todo: false,
         hl: ss.hl != null ? ss.hl : s.hl,
         board: ss.board != null ? ss.board : s.board,
+        draw: ss.draw != null ? ss.draw : s.draw,
         label: ss.title || null,
       };
     }
@@ -73,7 +79,14 @@
         o.board.style.display = v.board ? '' : 'none';
         o.board.innerHTML = v.board || '';
       }
-      if (o.svg && window.Circuit) window.Circuit.highlight(o.svg, v.hl || {});
+      // the canvas carries whichever model this view asks for — the page's circuit unless the
+      // step brought its own. Re-drawn only when it actually changes, so stepping inside one
+      // model is still just a highlight.
+      if (o.svg && window.Circuit) {
+        var model = v.draw || base;
+        if (model && model !== drawn) { window.Circuit.render(model, o.svg); drawn = model; }
+        window.Circuit.highlight(o.svg, v.hl || {});
+      }
       if (o.prev) o.prev.disabled = i <= 0;
       if (o.next) o.next.disabled = i >= steps.length - 1;
       if (o.subPrev) o.subPrev.disabled = i <= 0 && sub <= 0;
@@ -101,7 +114,10 @@
     if (o.subNext) o.subNext.addEventListener('click', subNext);
 
     return {
-      load: function (s) { steps = s || []; i = 0; sub = 0; render(); },
+      /* load(steps, circuit) — `circuit` is the model the canvas shows for any view that does
+         not bring its own `draw`. Re-rendered on load, since the technique may have relabelled
+         its nodes. */
+      load: function (s, c) { steps = s || []; base = c || base; drawn = null; i = 0; sub = 0; render(); },
       go: go,
       /* The resolved view the student is looking at right now, plus where it sits in the walk.
          Anything that wants to act on "this step" (js/ui/step-prompt.js) reads it from here

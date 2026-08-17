@@ -61,11 +61,12 @@
 
     /* ---------- the working network, redrawn ----------
        Every move changes what is left, and a student cannot follow "R₉ from B to E" on a drawing
-       that still shows the original resistors. So each step pins a picture of the network AS IT
-       STANDS to the board: the same renderer the stage uses (js/circuit.js — no second drawing
-       code), fed a throwaway model whose nodes are the surviving groups at the coordinates the
-       real circuit put them, and whose edges are the working resistors. The source is not in it;
-       "remove the source" is the first thing the goal step asks for. */
+       that still shows the original resistors. So each step hands the stepper its own model to
+       put on the stage — the real canvas, full size — instead of the page's circuit: a throwaway
+       whose nodes are the surviving groups at the coordinates the real circuit put them, and
+       whose edges are the working resistors. The page's circuit is never touched, so Open/Save
+       still work on it. The source is left out until the last step; "remove the source" is the
+       first thing the goal step asks for. */
     var pos = {};
     ln.groups.forEach(function (g) {
       var ms = circuit.nodes.filter(function (n) { return ln.of[n.id] === g; });
@@ -74,27 +75,36 @@
       pos[g] = { x: sx / ms.length, y: sy / ms.length };     // a wired-together group draws as one node
     });
 
-    function snapshot(W, lit) {
+    // → { draw: <circuit model>, hl: <highlight spec> }, ready to hang on a step. `lit` is the
+    // working resistors to emphasise; `withSource` puts the source back across the port, which
+    // only the closing picture wants.
+    function snapshot(W, lit, withSource) {
       var used = {}; used[portA] = 1; used[portB] = 1;
       W.forEach(function (r) { used[r.a] = 1; used[r.b] = 1; });
       var nodes = Object.keys(used).map(function (g) {
         return { id: g, x: pos[g].x, y: pos[g].y, label: nm(g) };
       });
       var edges = [], hl = [], seen = {}, k = 0;
+      function key(a, b) { return a < b ? a + '|' + b : b + '|' + a; }
+      if (withSource) {
+        seen[key(portA, portB)] = 1;
+        edges.push({ id: 'src', type: 'V', a: portA, b: portB, value: Vsrc });   // + at portB, as in the model
+        hl.push('src');
+      }
       W.forEach(function (r) {
-        var key = r.a < r.b ? r.a + '|' + r.b : r.b + '|' + r.a;
-        seen[key] = (seen[key] || 0) + 1;
+        var kk = key(r.a, r.b);
+        seen[kk] = (seen[kk] || 0) + 1;
         var id = 'm' + (k++);
-        if (seen[key] === 1) {
+        if (seen[kk] === 1) {
           edges.push({ id: id, type: 'R', a: r.a, b: r.b, value: Math.round(r.value * 1000) / 1000 });
         } else {
-          // a second resistor across the same pair of nodes would draw straight on top of the
+          // a second element across the same pair of nodes would draw straight on top of the
           // first, so bow it out through a bend node and a wire — how a parallel pair is drawn
           // by hand. ponytail: the bend node draws as a junction dot; harmless, and cheaper than
           // teaching the renderer about curved branches.
           var p = pos[r.a], q = pos[r.b];
           var dx = q.x - p.x, dy = q.y - p.y, L = Math.hypot(dx, dy) || 1;
-          var off = 0.5 * Math.ceil((seen[key] - 1) / 2) * (seen[key] % 2 ? 1 : -1);
+          var off = 0.9 * Math.ceil((seen[kk] - 1) / 2) * (seen[kk] % 2 ? 1 : -1);
           var bend = 'bend-' + id;
           nodes.push({ id: bend, x: (p.x + q.x) / 2 - dy / L * off, y: (p.y + q.y) / 2 + dx / L * off });
           edges.push({ id: id, type: 'R', a: r.a, b: bend, value: Math.round(r.value * 1000) / 1000 });
@@ -102,12 +112,15 @@
         }
         if (lit && lit.indexOf(r) >= 0) hl.push(id);
       });
-      var host = document.createElement('div');
-      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      host.appendChild(svg);
-      Circuit.render({ nodes: nodes, edges: edges }, svg);
-      Circuit.highlight(svg, { edges: hl });
-      return '<div class="mini-circuit">' + host.innerHTML + '</div>';
+      return {
+        draw: { nodes: nodes, edges: edges },
+        // the stage hides node letters until a step reveals them; this drawing is all letters
+        // (bar the bend nodes, which are scaffolding and carry none)
+        hl: {
+          edges: hl,
+          labels: nodes.filter(function (n) { return n.label; }).map(function (n) { return n.id; }),
+        },
+      };
     }
 
     var Req = reqNumeric(makeW(), portA, portB);            // authoritative
@@ -126,17 +139,17 @@
         'drop what carries no current, or, when neither is left, turn a Y into a Δ — and the detail row shows ' +
         'why that move is available before it does the arithmetic.',
       hl: { edges: rIds.concat([src.id]) },
-      board: reduction.opening,
     });
 
-    // The board carries the network the step is looking at; its last detail — the one that lands
-    // the answer — swaps in the network the move leaves behind, so the picture changes exactly
-    // when the arithmetic does.
+    /* From here the canvas shows the working network, not the page's circuit: the step draws
+       what it is looking at with the participants lit, and its last detail — the one that lands
+       the answer — swaps in what the move left behind, so the drawing changes exactly when the
+       arithmetic does. */
     reduction.moves.forEach(function (m) {
       var subs = (m.subs || []).map(function (s, i) {
-        return i === m.subs.length - 1 ? K.extend(s, { board: m.after }) : s;
+        return i === m.subs.length - 1 ? K.extend(s, { draw: m.after.draw, hl: m.after.hl }) : s;
       });
-      push({ title: m.title, body: m.body, eq: m.eq, subs: subs, hl: { edges: m.hl }, board: m.before });
+      push({ title: m.title, body: m.body, eq: m.eq, subs: subs, draw: m.before.draw, hl: m.before.hl });
     });
 
     // ---------- result ----------
@@ -145,8 +158,7 @@
         title: 'Result — open circuit',
         body: 'R<sub>eq</sub> = ∞. There is no closed conducting path between the terminals, so no current can flow — ' +
           'the network only senses voltage (a hanging resistor net).',
-        hl: { nodes: nodesOfPort(portA).concat(nodesOfPort(portB)) },
-        board: reduction.closing,
+        draw: reduction.closing.draw, hl: reduction.closing.hl,
       });
     } else if (stuck) {
       var extra = Req > 0
@@ -158,8 +170,7 @@
           '(the walk stops rather than transform forever). By nodal analysis R<sub>eq</sub> = <b>' + fmtR(Req) +
           '</b>, which is the answer — it just was not reached by reduction.' + extra,
         eq: ['R<sub>eq</sub> = ' + fmtR(Req)],
-        hl: { edges: rIds },
-        board: reduction.closing,
+        draw: reduction.closing.draw, hl: reduction.closing.hl,
       });
     } else {
       push({
@@ -171,14 +182,14 @@
           'I = V / R<sub>eq</sub> = ' + Vsrc + ' / ' + fmt(Req) + ' = ' + S.si(Vsrc / Req, 'A'),
           'P = V·I = ' + S.si(Vsrc * Vsrc / Req, 'W'),
         ],
-        hl: { edges: [src.id] },
-        board: reduction.closing,
+        draw: reduction.finished.draw, hl: reduction.finished.hl,
       });
     }
 
-    // the goal step already names the terminal letters, so reveal all letters throughout
+    // the goal step already names the terminal letters, so reveal all of them on the circuit
+    // itself. A step that draws its own network already carries that model's label ids.
     var labelledIds = circuit.nodes.filter(function (n) { return n.label; }).map(function (n) { return n.id; });
-    steps.forEach(function (s) { s.hl = s.hl || {}; s.hl.labels = labelledIds; });
+    steps.forEach(function (s) { if (!s.draw) { s.hl = s.hl || {}; s.hl.labels = labelledIds; } });
 
     steps.req = Req; steps.stuck = stuck; steps.terminals = [nm(portA), nm(portB)];
     steps.reduced = reduction.last && !stuck ? reduction.last.value : null;   // what the reduction itself got to
@@ -234,7 +245,6 @@
           'swap a three-terminal group for the other three-terminal group that behaves identically at its terminals.';
       }
 
-      var opening = snapshot(W, []);
       while (guard++ < 400) {
         var pre = W.slice();                 // finders add/remove, never mutate, so a copy is enough
         var m = selfLoop() || deadEnd() || parallelPair() || seriesPair() || starToDelta();
@@ -248,7 +258,8 @@
       var interior = false;
       W.forEach(function (e) { if (e.a !== A && e.a !== B) interior = true; if (e.b !== A && e.b !== B) interior = true; });
       return { moves: moves, interior: interior, last: W.length === 1 ? W[0] : null,
-        opening: opening, closing: snapshot(W, []) };
+        closing: snapshot(W, []),
+        finished: snapshot(W, W, true) };   // the payoff picture: the source back across R_eq
 
       function selfLoop() {
         var r = W.filter(function (e) { return e.a === e.b; })[0];
@@ -426,7 +437,7 @@
         });
         subs.push({
           title: 'Redraw it',
-          body: 'The picture below is the network with the Y gone and the Δ in its place — node <b>' + nm(c) +
+          body: 'The circuit now shows the network with the Y gone and the Δ in its place — node <b>' + nm(c) +
             '</b> is no longer on it, and the three new resistors close a triangle on <b>' + nm(o[0]) + '</b>, <b>' +
             nm(o[1]) + '</b>, <b>' + nm(o[2]) + '</b>. Redraw it on paper too before carrying on: the pairs that ' +
             'are now in series or in parallel are hard to see in the old drawing and obvious in this one.',

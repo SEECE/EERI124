@@ -12,7 +12,7 @@ offers whichever techniques make sense for its circuits, through the same **Tech
 
 | Page | Circuits | Techniques |
 |---|---|---|
-| `topics/simple-resistive-circuits/` (§3) | resistors + one or more independent **voltage** sources | KCL, KVL, equivalent resistance (over the source / over 2 points) |
+| `topics/simple-resistive-circuits/` (§3) | resistors + one or more independent **voltage** sources | KCL, KVL, equivalent resistance (over the source) |
 | `topics/current-sources/` (§4) | the above **plus independent current sources** | KCL, KVL only |
 | `topics/dependent-sources/` (§4) | the above **plus the four controlled sources** | KCL, KVL only |
 
@@ -139,6 +139,13 @@ A technique returns an array of steps:
   solved reading — and **a node can carry those two plus its letter at once**, so the renderer
   spreads them over the node's open gaps (`data-gaps`) instead of each picking a spot on its own.
   That is placement logic, not decoration: getting it wrong prints the reading over the letter.
+- `draw` (optional) → a **circuit model to put on the canvas instead of the page's circuit**, for
+  a technique whose steps change the network itself (equivalent resistance redraws what is left
+  after every move). The view's `hl` then names ids in *that* model, letters included — the stage
+  hides node letters until a step reveals them, so a drawn model lists its own nodes in
+  `hl.labels`. The stepper re-renders only when the model changes, so stepping inside one picture
+  is still just a highlight, and the page keeps owning the real circuit: **Open/Save, the
+  Ask-Midnjoy prompt and the next technique all still work on the untouched original.**
 - `board` (optional) → the **running board** html (KCL: node voltages, KVL: mesh currents). The
   stepper renders it into its own element (`#step-board`), **pinned to the bottom of the panel**
   (its own grid row in the workbench — see [FRONTEND.md](FRONTEND.md)), so it stays in one place
@@ -341,14 +348,14 @@ numbers substituted, answer. Working resistors carry **symbols** — originals `
 order, each combination taking the next free number — so a later step can say `R₉ = R₃ + R₄` and be
 followed.
 
-**The pinned board is a picture, not a table.** Each step redraws the working network *as it
-stands* — `js/circuit.js`'s own renderer over a throwaway model of the surviving node groups at
-their real coordinates, source excluded — with the participating resistors lit; the step's last
-substep swaps in the network the move leaves behind, so the drawing changes exactly when the
-arithmetic does. A second resistor across the same node pair is bowed through a bend node so
-parallel twins don't draw on top of each other. Its CSS (`.mini-circuit`) lives in
-`css/workbench.css`, deliberately **not** with `.stage`/`.figure` in `circuit.css` — those two hide
-pre-drawn letters at opacity 0 for a step to reveal, and this drawing wants everything visible.
+**The canvas shows the working network, not the original.** This is the one technique whose steps
+change the circuit, so each step hands the stepper its own model (`draw`, above) and the stage
+redraws the network *as it stands* — a throwaway model of the surviving node groups at their real
+coordinates, source excluded — with the participating resistors lit; the step's last substep swaps
+in what the move left behind, so the drawing changes exactly when the arithmetic does. The last
+step puts the source back across the single remaining resistor. A second element across the same
+node pair is bowed through a bend node so parallel twins don't draw on top of each other. The
+page's circuit is never touched — Open/Save still write the original.
 
 **Y→Δ.** When no series, parallel or dead-end move is left, an interior node carrying exactly three
 resistors *is* a Y whatever the drawing looks like. The step names the star, says what ran out and
