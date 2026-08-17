@@ -1,10 +1,20 @@
 /* Equivalent-resistance technique — the resistor speciality. Reduces the network to a single
-   resistor by repeated series / parallel / dead-end moves, one step at a time, and reports Req,
+   resistor by repeated series / parallel / dead-end moves, one move per step, and reports Req,
    the resulting source current and power.
 
    One mode: the resistance the source sees — remove the source, reduce the resistor network
    between its terminals. (There used to be a second, "between two chosen nodes", with terminal
    pickers in the rail. It taught nothing the source port does not, so it is gone.)
+
+   Every move is a step with SUBSTEPS, the same deep dive KCL and KVL give their algebra: one
+   view says WHY these two resistors qualify (what "in series" / "in parallel" actually means on
+   this circuit), the next does the arithmetic — rule, numbers substituted, answer. A student who
+   only wants the answer opens the step's folded result; one who wants the reasoning walks the
+   detail row. See structure/SOLVER.md.
+
+   Every resistor in the working network carries a symbol: the originals are R₁…Rₙ in model
+   order, and each combination takes the next free number, so a step can say "R₉ = R₃ + R₄" and
+   the reader can follow that R₉ where it goes next.
 
    Edge cases handled: dead-end / hanging branches carry no current and are pruned; an open
    between the terminals gives Req = ∞; a non-series-parallel network (e.g. a bridge) can't be
@@ -14,6 +24,8 @@
    nodal-analysis value, so it is right even when the reduction stalls. */
 (function (S) {
   'use strict';
+
+  var K = window.StepKit;
 
   function fmt(x) { return String(Math.round(x * 1000) / 1000); }
   function fmtR(v) {
@@ -33,16 +45,21 @@
     var Vsrc = src.value, portA = ln.of[src.a], portB = ln.of[src.b];
 
     var rIds = circuit.edges.filter(function (e) { return e.type === 'R'; }).map(function (e) { return e.id; });
+    var nextIdx = 0;
+    function symbol() { return K.sub('R', ++nextIdx); }
     function makeW() {
+      nextIdx = 0;
       return circuit.edges.filter(function (e) { return e.type === 'R'; }).map(function (e) {
-        return { a: ln.of[e.a], b: ln.of[e.b], value: e.value, orig: [e.id] };
+        return { a: ln.of[e.a], b: ln.of[e.b], value: e.value, orig: [e.id], sym: symbol() };
       }).filter(function (r) { return r.a !== r.b; }); // a resistor wired across itself carries no current
     }
     function nodesOfPort(g) {
       return circuit.nodes.filter(function (n) { return ln.of[n.id] === g; }).map(function (n) { return n.id; });
     }
+    // "R₃ (22 Ω)" — the symbol the narration tracks next to the value drawn on the circuit
+    function named(r) { return r.sym + ' (' + fmtR(r.value) + ')'; }
 
-    var Req = reqNumeric(makeW(), portA, portB);           // authoritative
+    var Req = reqNumeric(makeW(), portA, portB);            // authoritative
     var reduction = reduce(makeW(), portA, portB);          // pedagogy (mutates its own copy)
     var stuck = reduction.interior;                         // interior node left ⇒ not series-parallel
 
@@ -54,13 +71,13 @@
       title: 'Goal — resistance seen by the source',
       body: 'Find the resistance the ' + Vsrc + ' V source sees. Remove the source and reduce the resistor ' +
         'network between its terminals (nodes <b>' + nm(portA) + '</b> and <b>' + nm(portB) + '</b>) to one resistor. ' +
-        'Then I = V/R<sub>eq</sub> and P = V²/R<sub>eq</sub>.',
+        'Then I = V/R<sub>eq</sub> and P = V²/R<sub>eq</sub>. Each step below combines exactly two resistors, ' +
+        'and the detail row shows why that pair qualifies before it does the arithmetic.',
       hl: { edges: rIds.concat([src.id]) },
     });
 
-    reduction.steps.forEach(function (r) {
-      var titles = { series: 'Series combination', parallel: 'Parallel combination', dangling: 'Remove dead-end resistor', self: 'Remove self-loop' };
-      push({ title: titles[r.kind], body: r.text, hl: { edges: r.hl } });
+    reduction.moves.forEach(function (m) {
+      push({ title: m.title, body: m.body, eq: m.eq, subs: m.subs, hl: { edges: m.hl } });
     });
 
     // ---------- result ----------
@@ -85,7 +102,8 @@
     } else {
       push({
         title: 'Result',
-        body: 'The whole network collapses to a single resistor across the source.',
+        body: 'The whole network collapses to a single resistor across the source' +
+          (reduction.last ? ' — ' + reduction.last.sym + '.' : '.'),
         eq: [
           'R<sub>eq</sub> = ' + fmtR(Req),
           'I = V / R<sub>eq</sub> = ' + Vsrc + ' / ' + fmt(Req) + ' = ' + S.si(Vsrc / Req, 'A'),
@@ -100,6 +118,7 @@
     steps.forEach(function (s) { s.hl = s.hl || {}; s.hl.labels = labelledIds; });
 
     steps.req = Req; steps.stuck = stuck; steps.terminals = [nm(portA), nm(portB)];
+    steps.reduced = reduction.last && !stuck ? reduction.last.value : null;   // what the reduction itself got to
     return steps;
 
     // ---------- helpers (closures over nm/fmtR) ----------
@@ -122,54 +141,143 @@
       } catch (e) { return Infinity; }
     }
 
+    /* The reduction itself. One finder per legal move; each mutates W and returns the step
+       material for what it did (title + one-line overview + the substeps that derive it).
+       Order matters: throw away what carries no current first (self-loops, dead ends are cheap
+       to see), then parallel, then series. */
     function reduce(W, A, B) {
-      var out = [], guard = 0;
+      var moves = [], guard = 0;
       function edgesAt(x) { return W.filter(function (e) { return e.a === x || e.b === x; }); }
       function nodes() { var s = {}; W.forEach(function (e) { s[e.a] = 1; s[e.b] = 1; }); return Object.keys(s); }
-      while (guard++ < 1000) {
-        var i, a, b;
-        // self-loop
-        for (i = 0; i < W.length; i++) if (W[i].a === W[i].b) break;
-        if (i < W.length) { var sr = W.splice(i, 1)[0]; out.push({ kind: 'self', hl: sr.orig.slice(), text: fmtR(sr.value) + ' loops from node ' + nm(sr.a) + ' to itself — no current flows, so remove it.' }); continue; }
-        // parallel: identical endpoints
-        var pa = -1, pb = -1;
+      function other(e, x) { return e.a === x ? e.b : e.a; }
+      function drop() {
+        var args = Array.prototype.slice.call(arguments);
+        args.forEach(function (e) { W.splice(W.indexOf(e), 1); });
+      }
+
+      while (guard++ < 400) {
+        var m = selfLoop() || deadEnd() || parallelPair() || seriesPair();
+        if (!m) break;
+        moves.push(m);
+      }
+
+      // an interior node still present ⇒ series/parallel alone cannot finish this network
+      var interior = false;
+      W.forEach(function (e) { if (e.a !== A && e.a !== B) interior = true; if (e.b !== A && e.b !== B) interior = true; });
+      return { moves: moves, interior: interior, last: W.length === 1 ? W[0] : null };
+
+      function selfLoop() {
+        var r = W.filter(function (e) { return e.a === e.b; })[0];
+        if (!r) return null;
+        drop(r);
+        return {
+          title: 'Remove a self-loop — ' + r.sym,
+          body: named(r) + ' leaves node <b>' + nm(r.a) + '</b> and comes straight back to it.',
+          hl: r.orig.slice(),
+          subs: [{
+            title: 'Both ends sit at the same voltage',
+            body: 'A resistor whose two terminals are the same electrical node has 0 V across it, so by Ohm\'s law ' +
+              'it carries no current. It cannot change what the terminals see — drop it.',
+          }],
+        };
+      }
+
+      function deadEnd() {
+        var ns = nodes(), x = null;
+        for (var i = 0; i < ns.length && !x; i++) if (ns[i] !== A && ns[i] !== B && edgesAt(ns[i]).length === 1) x = ns[i];
+        if (!x) return null;
+        var r = edgesAt(x)[0];
+        drop(r);
+        return {
+          title: 'Prune a dead end — ' + r.sym,
+          body: 'Node <b>' + nm(x) + '</b> has only ' + named(r) + ' attached, and it is not a terminal.',
+          hl: r.orig.slice(),
+          subs: [{
+            title: 'No return path, no current',
+            body: 'Current that went into ' + r.sym + ' would have to come back out of node <b>' + nm(x) + '</b>, ' +
+              'and there is nothing else there to carry it. So ' + r.sym + ' carries no current, drops no voltage, ' +
+              'and takes no part in R<sub>eq</sub>. Delete it and node <b>' + nm(x) + '</b> with it.',
+          }],
+        };
+      }
+
+      function parallelPair() {
+        var pa = -1, pb = -1, a, b;
         for (a = 0; a < W.length && pa < 0; a++) for (b = a + 1; b < W.length; b++) {
           if ((W[a].a === W[b].a && W[a].b === W[b].b) || (W[a].a === W[b].b && W[a].b === W[b].a)) { pa = a; pb = b; break; }
         }
-        if (pa >= 0) {
-          var r1 = W[pa], r2 = W[pb], val = (r1.value * r2.value) / (r1.value + r2.value);
-          var nr = { a: r1.a, b: r1.b, value: val, orig: r1.orig.concat(r2.orig) };
-          W.splice(pb, 1); W.splice(pa, 1); W.push(nr);
-          out.push({ kind: 'parallel', hl: nr.orig.slice(), text: 'Parallel between ' + nm(nr.a) + ' and ' + nm(nr.b) + ':  ' + fmtR(r1.value) + ' ∥ ' + fmtR(r2.value) + ' = ' + fmtR(val) + '.' });
-          continue;
-        }
-        // series: interior node with exactly two resistors to two distinct nodes
+        if (pa < 0) return null;
+        var r1 = W[pa], r2 = W[pb];
+        var val = (r1.value * r2.value) / (r1.value + r2.value);
+        var nr = { a: r1.a, b: r1.b, value: val, orig: r1.orig.concat(r2.orig), sym: symbol() };
+        drop(r1, r2); W.push(nr);
+        return {
+          title: 'Parallel combination — ' + r1.sym + ' ∥ ' + r2.sym,
+          body: named(r1) + ' and ' + named(r2) + ' both run from node <b>' + nm(nr.a) + '</b> to node <b>' +
+            nm(nr.b) + '</b>. Replace the pair with ' + nr.sym + '.',
+          hl: nr.orig.slice(),
+          eq: [nr.sym + ' = ' + fmtR(val)],
+          subs: [
+            {
+              title: 'Why they are in parallel',
+              body: 'Both resistors start at <b>' + nm(nr.a) + '</b> and end at <b>' + nm(nr.b) + '</b>. Same two ' +
+                'nodes means the <em>same voltage</em> sits across both — that is what "in parallel" means. The ' +
+                'current arriving at <b>' + nm(nr.a) + '</b> splits between them, more of it down the smaller resistor.',
+            },
+            {
+              title: 'Conductances add',
+              body: 'Equal voltage, added currents: ' + K.frac('1', nr.sym) + ' = ' + K.frac('1', r1.sym) + ' + ' +
+                K.frac('1', r2.sym) + '. For exactly two resistors that rearranges into product-over-sum.',
+              eq: [
+                nr.sym + ' = ' + K.frac(r1.sym + ' · ' + r2.sym, r1.sym + ' + ' + r2.sym),
+                '= ' + K.frac(fmt(r1.value) + ' · ' + fmt(r2.value), fmt(r1.value) + ' + ' + fmt(r2.value)) +
+                  ' = ' + K.frac(fmt(r1.value * r2.value), fmt(r1.value + r2.value)),
+                nr.sym + ' = ' + fmtR(val) + (val < Math.min(r1.value, r2.value)
+                  ? '  — smaller than either, as a parallel pair always is' : ''),
+              ],
+            },
+          ],
+        };
+      }
+
+      function seriesPair() {
         var found = null, ns = nodes();
         for (var k = 0; k < ns.length && !found; k++) {
-          var x = ns[k]; if (x === A || x === B) continue;
-          var es = edgesAt(x);
-          if (es.length === 2) {
-            var o1 = es[0].a === x ? es[0].b : es[0].a, o2 = es[1].a === x ? es[1].b : es[1].a;
-            if (o1 !== o2) found = { x: x, es: es, o1: o1, o2: o2 };
-          }
+          var mid = ns[k]; if (mid === A || mid === B) continue;
+          var es = edgesAt(mid);
+          if (es.length === 2 && other(es[0], mid) !== other(es[1], mid)) found = { x: mid, es: es };
         }
-        if (found) {
-          var v = found.es[0].value + found.es[1].value;
-          var m = { a: found.o1, b: found.o2, value: v, orig: found.es[0].orig.concat(found.es[1].orig) };
-          W.splice(W.indexOf(found.es[0]), 1); W.splice(W.indexOf(found.es[1]), 1); W.push(m);
-          out.push({ kind: 'series', hl: m.orig.slice(), text: 'Series through node ' + nm(found.x) + ':  ' + fmtR(found.es[0].value) + ' + ' + fmtR(found.es[1].value) + ' = ' + fmtR(v) + '.' });
-          continue;
-        }
-        // dead-end: interior node with a single resistor
-        var dx = null;
-        for (var j = 0; j < ns.length && !dx; j++) { var y = ns[j]; if (y === A || y === B) continue; if (edgesAt(y).length === 1) dx = y; }
-        if (dx) { var de = edgesAt(dx)[0]; W.splice(W.indexOf(de), 1); out.push({ kind: 'dangling', hl: de.orig.slice(), text: 'Node ' + nm(dx) + ' is a dead end — ' + fmtR(de.value) + ' carries no current and is removed.' }); continue; }
-        break;
+        if (!found) return null;
+        var r1 = found.es[0], r2 = found.es[1], x = found.x;
+        var val = r1.value + r2.value;
+        var nr = { a: other(r1, x), b: other(r2, x), value: val, orig: r1.orig.concat(r2.orig), sym: symbol() };
+        drop(r1, r2); W.push(nr);
+        return {
+          title: 'Series combination — ' + r1.sym + ' + ' + r2.sym,
+          body: named(r1) + ' and ' + named(r2) + ' meet at node <b>' + nm(x) + '</b> and nothing else is attached ' +
+            'there. Replace the pair with ' + nr.sym + ', running from <b>' + nm(nr.a) + '</b> to <b>' + nm(nr.b) + '</b>.',
+          hl: nr.orig.slice(),
+          eq: [nr.sym + ' = ' + fmtR(val)],
+          subs: [
+            {
+              title: 'Why they are in series',
+              body: 'Node <b>' + nm(x) + '</b> joins exactly these two resistors — no third branch, and it is not a ' +
+                'terminal. KCL at that node then says the current out of ' + r1.sym + ' is the current into ' + r2.sym +
+                ': one current through both, which is what "in series" means.',
+            },
+            {
+              title: 'Resistances add',
+              body: 'Same current I through both, so the drops stack: I·' + r1.sym + ' + I·' + r2.sym + ' = I·(' +
+                r1.sym + ' + ' + r2.sym + '). The pair behaves as one resistor of that size.',
+              eq: [
+                nr.sym + ' = ' + r1.sym + ' + ' + r2.sym,
+                '= ' + fmtR(r1.value) + ' + ' + fmtR(r2.value),
+                nr.sym + ' = ' + fmtR(val),
+              ],
+            },
+          ],
+        };
       }
-      // interior node still present ⇒ not series-parallel
-      var interior = false;
-      W.forEach(function (e) { if (e.a !== A && e.a !== B) interior = true; if (e.b !== A && e.b !== B) interior = true; });
-      return { steps: out, interior: interior };
     }
   };
 })(window.Solve);
