@@ -72,58 +72,56 @@
          · a merged resistor keeps the PATH it was merged along. R₁ + R₂ through a corner draws
            as the combined resistor on the first leg and plain wire on the second, so the corner
            is still a corner — not a new diagonal between the two far ends;
-         · only a Y→Δ product is a genuinely new branch, drawn straight between the two outer
-           nodes, and only the three arms it replaces disappear.
+         · only a Y→Δ product is a genuinely new branch. It goes between the same two outer nodes,
+           straight through the space the deleted centre held when the way is clear — and when the
+           pair already has a branch, as a staple beside it (stub, resistor parallel to the one
+           already there, stub), the way a second parallel resistor is drawn by hand. Only the
+           three arms it replaces disappear.
 
        Each working resistor therefore carries `segs`: the ordered branch it occupies, as
        { id, a, b } segments over REAL node ids, reusing the original edge ids so a highlight
-       means the same thing in every drawing. */
+       means the same thing in every drawing. A routed side's segments bring their own corner
+       nodes (`corner: true` — drawn without a junction dot) and mark which leg carries the
+       resistor (`body`). A node nothing reaches any more leaves the drawing; the pinned frame,
+       not the node, is what keeps the scale still. */
     var byId = {};
     circuit.nodes.forEach(function (n) { byId[n.id] = n; });
-    var labelled = circuit.nodes.filter(function (n) { return n.label; }).map(function (n) { return n.id; });
-    var mid = { x: 0, y: 0 };            // middle of the drawing — which way a bowed branch bends
-    circuit.nodes.forEach(function (n) { mid.x += n.x / circuit.nodes.length; mid.y += n.y / circuit.nodes.length; });
     var synth = 0, shots = [];
 
     // → { draw: <circuit model>, hl: <highlight spec> }, ready to hang on a step. `lit` is the
     // working resistors to emphasise — the whole branch of each lights up.
     function snapshot(W, lit) {
       var nodes = circuit.nodes.map(function (n) { return { id: n.id, x: n.x, y: n.y, label: n.label }; });
-      var edges = [], hl = [], seen = {}, bends = 0;
-      function key(a, b) { return a < b ? a + '|' + b : b + '|' + a; }
-      function emit(e) {
-        var kk = key(e.a, e.b), n = (seen[kk] = (seen[kk] || 0) + 1);
-        if (n === 1) { edges.push(e); return [e.id]; }
-        // a second element across the same two nodes would draw on top of the first, so bow this
-        // one out through a bend node — how a parallel pair is drawn by hand.
-        // ponytail: the bend draws as a junction dot; cheaper than curved branches in the renderer.
-        var p = byId[e.a], q = byId[e.b];
-        var dx = q.x - p.x, dy = q.y - p.y, L = Math.hypot(dx, dy) || 1;
-        var mx = (p.x + q.x) / 2, my = (p.y + q.y) / 2;
-        // bow towards the middle of the drawing, so the bend cannot push the bounding box out —
-        // a wider box means a smaller scale, and the whole circuit appears to jump on that step
-        var inward = (mid.x - mx) * -dy + (mid.y - my) * dx >= 0 ? 1 : -1;
-        var off = 0.55 * Math.ceil((n - 1) / 2) * (n % 2 ? inward : -inward);
-        var bend = 'bend' + (++bends);
-        nodes.push({ id: bend, x: mx - dy / L * off, y: my + dx / L * off });
-        edges.push(K.extend(e, { b: bend }));
-        edges.push({ id: 'w-' + e.id, type: 'W', a: bend, b: e.b });
-        return [e.id, 'w-' + e.id];
-      }
-      circuit.edges.forEach(function (e) { if (e.type !== 'R') emit(e); });   // source + wires, untouched
+      var edges = [], hl = [];
+      circuit.edges.forEach(function (e) { if (e.type !== 'R') edges.push(e); });   // source + wires, untouched
       W.forEach(function (r) {
         var mine = [];
-        r.segs.forEach(function (seg, i) {
-          // the first leg carries the resistor symbol and the combined value; the rest of the
-          // branch it swallowed becomes plain wire, so every corner stays where it was
-          mine = mine.concat(emit(i
-            ? { id: seg.id, type: 'W', a: seg.a, b: seg.b }
-            : { id: seg.id, type: 'R', a: seg.a, b: seg.b, value: Math.round(r.value * 1000) / 1000 }));
+        // the resistor symbol goes on the leg marked `body` (a Δ side's parallel middle leg) or,
+        // for a plain merged branch, on the first leg; the rest of the branch it swallowed becomes
+        // plain wire, so every corner stays where it was
+        var body = r.segs.filter(function (sg) { return sg.body; })[0] || r.segs[0];
+        r.segs.forEach(function (seg) {
+          if (seg.node) nodes.push(seg.node);      // a routed branch brings its corners with it
+          edges.push(seg === body
+            ? { id: seg.id, type: 'R', a: seg.a, b: seg.b, value: r.value }
+            : { id: seg.id, type: 'W', a: seg.a, b: seg.b });
+          mine.push(seg.id);
         });
         if (lit && lit.indexOf(r) >= 0) hl = hl.concat(mine);
       });
+      // A node nothing reaches any more (a pruned dead end, a star centre a Y→Δ just eliminated,
+      // the far end of a parallel branch that was absorbed) leaves the drawing rather than sitting
+      // there as a lettered dot with no wire on it. The pinned frame below keeps the scale, so
+      // dropping it costs nothing — it used to be the only reason to keep it.
+      var live = {};
+      edges.forEach(function (e) { live[e.a] = 1; live[e.b] = 1; });
+      live[ln.rep[portA]] = 1; live[ln.rep[portB]] = 1;
+      nodes = nodes.filter(function (n) { return live[n.id]; });
       // the stage hides node letters until a step reveals them, and this walk names them all
-      var shot = { draw: { nodes: nodes, edges: edges }, hl: { edges: hl, labels: labelled } };
+      var shot = {
+        draw: { nodes: nodes, edges: edges },
+        hl: { edges: hl, labels: nodes.filter(function (n) { return n.label; }).map(function (n) { return n.id; }) },
+      };
       shots.push(shot);
       return shot;
     }
@@ -164,7 +162,7 @@
         'move (combine a pair, drop what carries no current, or turn a Y into a Δ when neither is left) and ' +
         'redraws the circuit with just that move done; the detail row says why the move is available first.',
       draw: opening.draw,
-      hl: { edges: rIds.concat([src.id]), labels: labelled },
+      hl: { edges: rIds.concat([src.id]), labels: opening.hl.labels },
     });
 
     /* From here the canvas shows the working network, not the page's circuit: the step draws
@@ -271,6 +269,61 @@
           'swap a three-terminal group for the other three-terminal group that behaves identically at its terminals.';
       }
 
+      /* Where a Δ side goes on the paper. It belongs between its two outer nodes — the Δ has to
+         appear in the space the Y occupied, on the same terminals — so a side whose way is clear
+         is one straight resistor between them, passing through the spot the deleted centre used
+         to hold. Most sides are not clear, though: on a grid the two outer nodes usually already
+         have a branch between them, and a straight side would draw on top of it. Those are drawn
+         the way the second of two parallel resistors is drawn by hand — a staple: a short stub
+         out of each node, then the resistor running parallel to the branch already there, offset
+         towards the node the transform deletes. The three sides take different offsets (longest
+         furthest out, since it spans the other two), so they never land on each other. */
+      function route(pg, qg, thirdg, cg, off) {
+        var id = 'yd' + (++synth);
+        var p = byId[ln.rep[pg]], q = byId[ln.rep[qg]], t = byId[ln.rep[thirdg]], C = byId[ln.rep[cg]];
+        if (!occupied(pg, qg) && !blocked(p, q)) return [{ id: id, a: p.id, b: q.id }];
+        var ux = -(q.y - p.y), uy = q.x - p.x, L = Math.hypot(ux, uy) || 1;
+        ux /= L; uy /= L;
+        // offset towards the node being deleted; if that sits ON this side, away from the third
+        // terminal instead, so the three sides fan out around the old centre rather than overlap
+        var toC = (C.x - p.x) * ux + (C.y - p.y) * uy;
+        if (Math.abs(toC) < 0.2) {
+          if ((t.x - p.x) * ux + (t.y - p.y) * uy > 0) { ux = -ux; uy = -uy; }
+        } else if (toC < 0) { ux = -ux; uy = -uy; }
+        var c1 = { id: id + 'p', x: p.x + ux * off, y: p.y + uy * off, corner: true };
+        var c2 = { id: id + 'q', x: q.x + ux * off, y: q.y + uy * off, corner: true };
+        return [
+          { id: id + 'i', a: p.id, b: c1.id, node: c1 },
+          { id: id, a: c1.id, b: c2.id, node: c2, body: true },
+          { id: id + 'o', a: c2.id, b: q.id },
+        ];
+      }
+      // the nodes still on the drawing: everything a wire, a source or a working branch reaches
+      function live() {
+        var on = {};
+        circuit.edges.forEach(function (e) { if (e.type !== 'R') { on[e.a] = 1; on[e.b] = 1; } });
+        W.forEach(function (r) { r.segs.forEach(function (sg) { on[sg.a] = 1; on[sg.b] = 1; }); });
+        return on;
+      }
+      // is there already a branch between these two groups for a straight side to land on top of?
+      function occupied(x, y) {
+        return W.some(function (r) { return (r.a === x && r.b === y) || (r.a === y && r.b === x); }) ||
+          circuit.edges.some(function (e) {
+            return e.type !== 'R' &&
+              ((ln.of[e.a] === x && ln.of[e.b] === y) || (ln.of[e.a] === y && ln.of[e.b] === x));
+          });
+      }
+      // would a straight side run through a node that is still drawn?
+      function blocked(p, q) {
+        var on = live(), dx = q.x - p.x, dy = q.y - p.y, L2 = dx * dx + dy * dy || 1;
+        return circuit.nodes.some(function (n) {
+          if (n.id === p.id || n.id === q.id || !on[n.id]) return false;
+          var u = ((n.x - p.x) * dx + (n.y - p.y) * dy) / L2;
+          if (u <= 0.05 || u >= 0.95) return false;
+          return Math.hypot(p.x + dx * u - n.x, p.y + dy * u - n.y) < 0.3;
+        });
+      }
+
       while (guard++ < 400) {
         var pre = W.slice();                 // finders add/remove, never mutate, so a copy is enough
         var m = selfLoop() || deadEnd() || parallelPair() || seriesPair() || starToDelta();
@@ -330,9 +383,12 @@
         if (pa < 0) return null;
         var r1 = W[pa], r2 = W[pb];
         var val = (r1.value * r2.value) / (r1.value + r2.value);
-        // the merged resistor stays on r1's branch; r2's leaves the drawing, which is exactly
-        // what happens on paper when two parallel branches are written as one
-        var nr = { a: r1.a, b: r1.b, value: val, sym: symbol(), segs: r1.segs };
+        // the merged resistor stays on ONE of the two branches and the other leaves the drawing,
+        // which is what happens on paper when a parallel pair is written as one. Keep the simpler
+        // branch: a straight resistor beats a swallowed path or a stapled Δ side, so the picture
+        // gets tidier as the reduction goes on instead of accumulating detours.
+        var keep = r2.segs.length < r1.segs.length ? r2 : r1;
+        var nr = { a: r1.a, b: r1.b, value: val, sym: symbol(), segs: keep.segs };
         drop(r1, r2); W.push(nr);
         return {
           parts: [r1, r2], made: [nr],
@@ -427,9 +483,18 @@
           { a: o[2], b: o[0], value: P / arm[1].value, opp: arm[1], far: o[1] },
         ];
         drop(arm[0], arm[1], arm[2]);
-        made.forEach(function (r) {
+        // the longest side is offset furthest: it spans the other two, so it has to clear them
+        var lens = made.map(function (r) {
+          var p = byId[ln.rep[r.a]], q = byId[ln.rep[r.b]];
+          return Math.hypot(q.x - p.x, q.y - p.y);
+        });
+        var off = [];
+        lens.map(function (_, i) { return i; })
+          .sort(function (i, j) { return lens[i] - lens[j]; })
+          .forEach(function (i, rank) { off[i] = [0.5, 0.85, 1.2][rank]; });
+        made.forEach(function (r, i) {
           r.sym = symbol();
-          r.segs = [{ id: 'yd' + (++synth), a: ln.rep[r.a], b: ln.rep[r.b] }];
+          r.segs = route(r.a, r.b, r.far, c, off[i]);
           W.push(r);
         });
 

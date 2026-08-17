@@ -364,10 +364,18 @@ a student who has to re-find the circuit each step is not following the reductio
   rather than becoming a new diagonal between the far ends. Each working resistor carries `segs`,
   the ordered branch it occupies, reusing the **original edge ids** so a highlight means the same
   thing in every drawing. A parallel merge keeps one branch and the other leaves the drawing.
-- Only a **Y→Δ product** is a genuinely new branch (drawn straight between two outer nodes), and
-  only the three arms it replaces disappear. The star's centre stays on the paper as a bare
-  junction. A new branch across a pair that already has one is bowed through a bend node, towards
-  the middle of the drawing so it cannot push the bounding box out.
+- Only a **Y→Δ product** is a genuinely new branch, and only the three arms it replaces disappear.
+  Each side goes between the same two outer nodes — straight through the space the deleted centre
+  held when the way is clear, which is the textbook redraw. When that pair *already* has a branch
+  (usually, on a grid), the side is drawn as a **staple** beside it: a stub out of each node, then
+  the resistor running parallel to the one already there, offset towards the node being deleted —
+  how a second parallel resistor is drawn by hand. The three sides take different offsets (longest
+  furthest out, since it spans the other two). Corners of a routed branch are `corner: true`
+  nodes, drawn without a junction dot, and a parallel merge keeps the **simpler** of the two
+  branches so the picture gets tidier as the walk goes on rather than accumulating detours.
+- A node nothing reaches any more (a pruned dead end, an eliminated star centre, the far end of an
+  absorbed branch) **leaves the drawing** instead of sitting there as a lettered dot. The pinned
+  frame below, not the node, is what holds the scale still.
 - **One frame for the whole walk.** `Circuit.render` honours a `frame` box on the model
   (`[minX, minY, maxX, maxY]`, the same units it reports back on the svg's `data-frame`) and never
   draws smaller than it. The technique renders every snapshot into a detached svg once, unions the

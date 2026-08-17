@@ -417,7 +417,12 @@
     parent.appendChild(e);
     return e;
   }
-  function fmtR(v) { return v >= 1000 ? (v / 1000) + ' kΩ' : v + ' Ω'; }
+  // rounded, because a drawn value is not always a generator's tidy E12 number: the
+  // equivalent-resistance walk redraws combined resistors, and 3986.522 Ω must read "3.99 kΩ"
+  // rather than the float's "3.986521999999998 kΩ"
+  function fmtR(v) {
+    return v >= 1000 ? (Math.round(v / 10) / 100) + ' kΩ' : (Math.round(v * 100) / 100) + ' Ω';
+  }
   function fmtI(v) { return v >= 1 ? v + ' A' : Math.round(v * 10000) / 10 + ' mA'; }
 
   function render(circuit, svg) {
@@ -626,7 +631,11 @@
     var circleOf = {};
     circuit.nodes.forEach(function (n) {
       var p = byId[n.id];
-      circleOf[n.id] = el('circle', { 'class': 'node', 'data-nid': n.id, cx: p.x, cy: p.y, r: 3.5, fill: 'var(--ink)' }, svg);
+      // `corner: true` marks a bend in a branch rather than a junction — no dot, the way a
+      // corner is drawn by hand. The circle is still created (highlight() reads its geometry to
+      // place letters and readings), just with no radius.
+      circleOf[n.id] = el('circle', { 'class': 'node', 'data-nid': n.id, cx: p.x, cy: p.y,
+        r: n.corner ? 0 : 3.5, fill: 'var(--ink)' }, svg);
       el('title', {}, circleOf[n.id]).textContent = nodeLabelOf[n.id];
     });
 

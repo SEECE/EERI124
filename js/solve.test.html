@@ -487,7 +487,11 @@
         // the redraw is the ONLY move that adds branches: three new Δ sides straight between the
         // outer nodes, and the three arms gone. The star's centre stays on the paper as a bare
         // junction — every original node keeps its place, which is what stops the picture jumping.
-        function ydSides(m) { return m.edges.filter(function (e) { return /^yd/.test(e.id); }).length; }
+        // one resistor per Δ side, whether it is drawn straight (`ydN`) or as a staple parallel to
+        // the branch already there (`ydNi` wire, `ydN` resistor, `ydNo` wire)
+        function ydSides(m) {
+          return m.edges.filter(function (e) { return e.type === 'R' && /^yd\d+$/.test(e.id); }).length;
+        }
         assert(ydSides(t.draw) === 0 && ydSides(t.subs[4].draw) === 3,
           'the Y→Δ redraw did not put a Δ on the circuit: ' + ydSides(t.subs[4].draw) + ' new sides');
         var armsBefore = t.draw.edges.filter(function (e) { return e.type === 'R'; }).length;
