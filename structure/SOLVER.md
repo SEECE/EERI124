@@ -373,11 +373,14 @@ transforming forever. The **authoritative `Req` is the nodal value**; the reduct
 and `steps.reduced` (what the moves themselves landed on) is checked against it for every
 **single-source** generator — that equality is what proves the Y→Δ arithmetic.
 
-**Known limit — more than one source.** The technique removes the *first* voltage source and
-reduces the resistor network between its terminals, while the other sources go on pushing current
-through it. So on a multi-source topology the reported `Req` is not `V/I` at the source, and the
-self-check deliberately skips those. Fixing it is a pedagogy decision (deactivate every source, or
-refuse the technique), not a bug fix — so it is written down here rather than quietly patched.
+**One source, enforced by the page.** "The resistance the source sees" only means anything when
+there is one source: with a second one pushing current through the same network, `Req` is not
+`V/I` at either. So the technique refuses to be put in that position rather than quietly reporting
+a number that is not the answer — `js/solver-page.js` greys out the `multi-source`-tagged
+topologies while equivalent resistance is selected (a barred selection falls back to **Random**),
+and re-rolls a generated circuit that came out with two sources anyway, which `Random` sometimes
+does. The check for that lives with the technique's own gate, not in the generators: a topology is
+free to have as many sources as it likes, and KCL/KVL still teach it.
 
 ## The self-check
 

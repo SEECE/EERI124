@@ -15,6 +15,11 @@
    some §3 resistors into current sources. Plain script, one global, no ES modules — the site
    must open over file://.
 
+   A technique can be pickier than the page: equivalent resistance needs a **single** source, so
+   while it is chosen the `multi-source`-tagged topologies are greyed out — a barred selection
+   falls back to Random — and a generated circuit that still came out with two sources (Random
+   can) is re-rolled. See structure/SOLVER.md's known limit.
+
    opts.elements — the full set of element types this page's techniques understand (e.g.
    ['R','V','I','W'] for current-sources). Only used to validate an imported file (see below);
    unrelated to opts.filter/sets, which pick generators, not imports.
@@ -49,16 +54,38 @@
       return s ? s.filter : opts.filter;
     }
 
+    /* Equivalent resistance only means anything with ONE source (structure/SOLVER.md's known
+       limit — with a second source pushing current through the network, "the resistance the
+       source sees" is not V/I). So while it is selected the multi-source topologies are greyed
+       out, and a generated circuit that came out with two sources anyway (Random can) is
+       re-rolled below. */
+    function singleSourceOnly() { return techSel.value === 'req-source'; }
+    function sources(c) {
+      return c.edges.filter(function (e) { return e.type === 'V'; }).length;
+    }
+
     // the topic's slice of the generator registry — the page's safety net: a generator loaded
     // by accident still cannot appear on a page that does not teach its elements
     function refreshTopology() {
+      var keep = topoSel.value;
       topoSel.innerHTML = '';
       Circuit.list(currentFilter()).forEach(function (g) {
         var o = document.createElement('option');
+        var barred = singleSourceOnly() && (g.tags || []).indexOf('multi-source') >= 0;
         o.value = g.name;
-        o.textContent = g.name;
+        o.textContent = g.name + (barred ? ' — needs one source' : '');
+        o.disabled = barred;
         topoSel.appendChild(o);
       });
+      // a selection the current technique cannot use falls back to Random — the one topology that
+      // is never about a particular shape — or to the first usable option if this page has none
+      if (keep) topoSel.value = keep;
+      if (!topoSel.value || topoSel.options[topoSel.selectedIndex].disabled) {
+        var usable = Array.prototype.filter.call(topoSel.options, function (o) { return !o.disabled; });
+        var random = usable.filter(function (o) { return /^Random/.test(o.value); })[0];
+        if (random || usable.length) topoSel.value = (random || usable[0]).value;
+      }
+      return topoSel.value !== keep;      // did the fallback move us?
     }
     refreshTopology();
 
@@ -100,9 +127,15 @@
     }
 
     function generate() {
-      circuit = Circuit.get(topoSel.value).generate();
-      var s = currentSet();
-      if (s && s.transform) circuit = s.transform(circuit);
+      var gen = Circuit.get(topoSel.value), s = currentSet();
+      // a technique that needs a single source re-rolls a circuit that came out with more; the
+      // generators that always do are already greyed out, so this terminates in a try or two
+      for (var i = 0; i < 40; i++) {
+        var c = gen.generate();
+        if (s && s.transform) c = s.transform(c);
+        circuit = c;
+        if (!singleSourceOnly() || sources(c) === 1) break;
+      }
       runTechnique();
     }
 
@@ -135,7 +168,13 @@
 
     document.getElementById('generate').addEventListener('click', generate);
     topoSel.addEventListener('change', generate);
-    techSel.addEventListener('change', runTechnique); // re-analyse the same circuit
+    techSel.addEventListener('change', function () {
+      // switching technique re-analyses the same circuit — unless this one cannot take it, in
+      // which case the topology list is re-gated and a fresh circuit generated
+      var moved = refreshTopology();
+      if (moved || (singleSourceOnly() && circuit && sources(circuit) !== 1)) generate();
+      else runTechnique();
+    });
     if (setSel) setSel.addEventListener('change', function () { refreshTopology(); generate(); });
     generate();
   };
