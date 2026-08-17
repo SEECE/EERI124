@@ -328,9 +328,10 @@ same algebra — so a student who learned one reads the other for free:
 ## Equivalent resistance
 
 Repeated **series / parallel / dead-end-prune / self-loop** reduction to a single `Req`, one move
-per step, over the **source** (remove it, reduce between its terminals → also gives `I = V/Req`,
-`P = V²/Req`) or between **two chosen nodes** (deactivate the source — a voltage source becomes a
-short — then reduce). Edge cases: hanging/dead-end branches carry no current and are pruned; no path
+per step, over the **source**: remove it, reduce between its terminals → also gives `I = V/Req`,
+`P = V²/Req`. One port, always the source's — the old "between two chosen nodes" mode (and the
+rail's terminal pickers) is gone; it asked the student to pick a port before they could see why a
+port matters, and taught nothing the source's own port does not. Edge cases: hanging/dead-end branches carry no current and are pruned; no path
 → `Req = ∞` (open); a **bridge** (non-series-parallel) can't be collapsed by hand → the step says so
 and gives `Req` from nodal analysis (`topics/delta-wye/` is the tutorial that teaches the transform).
 The **authoritative `Req` is the nodal value**; the reduction is the pedagogy and is verified to

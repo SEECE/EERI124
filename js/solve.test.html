@@ -445,7 +445,7 @@
     check('equivalent resistance agrees with V/I', function () {
       Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) {
         for (var i = 0; i < 8; i++) {
-          var c = g.generate(), st = EquivResistance(c, { over: 'source' });
+          var c = g.generate(), st = EquivResistance(c);
           noNaN(st, 'Req/' + g.name);
           if (c.edges.filter(function (e) { return e.type === 'V'; }).length !== 1) continue;
           assert(near(st.req, reqOf(c)), g.name + ': Req ' + st.req + ' ≠ V/I ' + reqOf(c));

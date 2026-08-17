@@ -1,11 +1,10 @@
 /* Equivalent-resistance technique — the resistor speciality. Reduces the network to a single
-   resistor by repeated series / parallel / dead-end moves, one step at a time, and reports Req
-   (and, over the source, the resulting current and power).
+   resistor by repeated series / parallel / dead-end moves, one step at a time, and reports Req,
+   the resulting source current and power.
 
-   Two modes (opts.over):
-     'source'  — resistance the source sees: remove the source, reduce between its terminals.
-     'points'  — resistance between two chosen nodes (opts.a, opts.b as node letters):
-                 deactivate the source (a voltage source becomes a short), then reduce.
+   One mode: the resistance the source sees — remove the source, reduce the resistor network
+   between its terminals. (There used to be a second, "between two chosen nodes", with terminal
+   pickers in the rail. It taught nothing the source port does not, so it is gone.)
 
    Edge cases handled: dead-end / hanging branches carry no current and are pruned; an open
    between the terminals gives Req = ∞; a non-series-parallel network (e.g. a bridge) can't be
@@ -23,9 +22,7 @@
     return r >= 1000 ? (Math.round(r / 10) / 100) + ' kΩ' : r + ' Ω';
   }
 
-  window.EquivResistance = function (circuit, opts) {
-    opts = opts || {};
-    var over = opts.over === 'points' ? 'points' : 'source';
+  window.EquivResistance = function (circuit) {
     var ln = S.letterNodes(circuit);
     ln.groups.forEach(function (g) {
       circuit.nodes.forEach(function (n) { if (n.id === ln.rep[g]) n.label = ln.letter[g]; });
@@ -33,28 +30,16 @@
     var nm = function (g) { return ln.letter[g] || g; };
 
     var src = circuit.edges.filter(function (e) { return e.type === 'V'; })[0];
-    var Vsrc = src.value, srcA = ln.of[src.a], srcB = ln.of[src.b];
-    var byLetter = {}; ln.groups.forEach(function (g) { byLetter[ln.letter[g]] = g; });
-
-    // 'points' shorts the source, merging its two electrical nodes (srcB → srcA)
-    var short = over === 'points';
-    function R0(g) { return short && g === srcB ? srcA : g; }
-
-    var portA, portB;
-    if (over === 'source') { portA = srcA; portB = srcB; }
-    else {
-      portA = R0(byLetter[opts.a] !== undefined ? byLetter[opts.a] : ln.groups[0]);
-      portB = R0(byLetter[opts.b] !== undefined ? byLetter[opts.b] : ln.groups[ln.groups.length - 1]);
-    }
+    var Vsrc = src.value, portA = ln.of[src.a], portB = ln.of[src.b];
 
     var rIds = circuit.edges.filter(function (e) { return e.type === 'R'; }).map(function (e) { return e.id; });
     function makeW() {
       return circuit.edges.filter(function (e) { return e.type === 'R'; }).map(function (e) {
-        return { a: R0(ln.of[e.a]), b: R0(ln.of[e.b]), value: e.value, orig: [e.id] };
-      }).filter(function (r) { return r.a !== r.b; }); // self-loops from the short carry no current
+        return { a: ln.of[e.a], b: ln.of[e.b], value: e.value, orig: [e.id] };
+      }).filter(function (r) { return r.a !== r.b; }); // a resistor wired across itself carries no current
     }
     function nodesOfPort(g) {
-      return circuit.nodes.filter(function (n) { return R0(ln.of[n.id]) === g; }).map(function (n) { return n.id; });
+      return circuit.nodes.filter(function (n) { return ln.of[n.id] === g; }).map(function (n) { return n.id; });
     }
 
     var Req = reqNumeric(makeW(), portA, portB);           // authoritative
@@ -65,22 +50,13 @@
     var steps = [], n = 0;
     function push(s) { s.n = ++n; steps.push(s); }
 
-    if (over === 'source') {
-      push({
-        title: 'Goal — resistance seen by the source',
-        body: 'Find the resistance the ' + Vsrc + ' V source sees. Remove the source and reduce the resistor ' +
-          'network between its terminals (nodes <b>' + nm(srcA) + '</b> and <b>' + nm(srcB) + '</b>) to one resistor. ' +
-          'Then I = V/R<sub>eq</sub> and P = V²/R<sub>eq</sub>.',
-        hl: { edges: rIds.concat([src.id]) },
-      });
-    } else {
-      push({
-        title: 'Goal — resistance between ' + nm(portA) + ' and ' + nm(portB),
-        body: 'Find the equivalent resistance between nodes <b>' + nm(portA) + '</b> and <b>' + nm(portB) + '</b>. ' +
-          'First deactivate the source — a voltage source becomes a short — then reduce the resistor network between the two nodes.',
-        hl: { edges: rIds.concat([src.id]), nodes: nodesOfPort(portA).concat(nodesOfPort(portB)) },
-      });
-    }
+    push({
+      title: 'Goal — resistance seen by the source',
+      body: 'Find the resistance the ' + Vsrc + ' V source sees. Remove the source and reduce the resistor ' +
+        'network between its terminals (nodes <b>' + nm(portA) + '</b> and <b>' + nm(portB) + '</b>) to one resistor. ' +
+        'Then I = V/R<sub>eq</sub> and P = V²/R<sub>eq</sub>.',
+      hl: { edges: rIds.concat([src.id]) },
+    });
 
     reduction.steps.forEach(function (r) {
       var titles = { series: 'Series combination', parallel: 'Parallel combination', dangling: 'Remove dead-end resistor', self: 'Remove self-loop' };
@@ -96,7 +72,7 @@
         hl: { nodes: nodesOfPort(portA).concat(nodesOfPort(portB)) },
       });
     } else if (stuck) {
-      var extra = over === 'source' && Req > 0
+      var extra = Req > 0
         ? ' With the source back in, I = ' + S.si(Vsrc / Req, 'A') + ' and P = ' + S.si(Vsrc * Vsrc / Req, 'W') + '.'
         : '';
       push({
@@ -107,18 +83,15 @@
         hl: { edges: rIds },
       });
     } else {
-      var eq = ['R<sub>eq</sub> = ' + fmtR(Req)];
-      if (over === 'source') {
-        eq.push('I = V / R<sub>eq</sub> = ' + Vsrc + ' / ' + fmt(Req) + ' = ' + S.si(Vsrc / Req, 'A'));
-        eq.push('P = V·I = ' + S.si(Vsrc * Vsrc / Req, 'W'));
-      }
       push({
         title: 'Result',
-        body: over === 'source'
-          ? 'The whole network collapses to a single resistor across the source.'
-          : 'The network between ' + nm(portA) + ' and ' + nm(portB) + ' collapses to a single resistor.',
-        eq: eq,
-        hl: over === 'source' ? { edges: [src.id] } : { nodes: nodesOfPort(portA).concat(nodesOfPort(portB)) },
+        body: 'The whole network collapses to a single resistor across the source.',
+        eq: [
+          'R<sub>eq</sub> = ' + fmtR(Req),
+          'I = V / R<sub>eq</sub> = ' + Vsrc + ' / ' + fmt(Req) + ' = ' + S.si(Vsrc / Req, 'A'),
+          'P = V·I = ' + S.si(Vsrc * Vsrc / Req, 'W'),
+        ],
+        hl: { edges: [src.id] },
       });
     }
 
@@ -126,7 +99,7 @@
     var labelledIds = circuit.nodes.filter(function (n) { return n.label; }).map(function (n) { return n.id; });
     steps.forEach(function (s) { s.hl = s.hl || {}; s.hl.labels = labelledIds; });
 
-    steps.req = Req; steps.mode = over; steps.stuck = stuck; steps.terminals = [nm(portA), nm(portB)];
+    steps.req = Req; steps.stuck = stuck; steps.terminals = [nm(portA), nm(portB)];
     return steps;
 
     // ---------- helpers (closures over nm/fmtR) ----------

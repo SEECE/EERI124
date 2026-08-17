@@ -4,8 +4,7 @@
    techniques their dropdown lists; everything below is identical, so it lives here once.
 
    Expected DOM (see any solver page): #technique, #topology, #generate, #canvas, the step
-   controls (#step-count, #step-prev, …) and the workbench panel. #terminals is optional —
-   only the equivalent-resistance-over-two-points technique uses it.
+   controls (#step-count, #step-prev, …) and the workbench panel.
 
    Usage:  SolverPage({ filter: { elements: ['R', 'V', 'W'] } });
    filter goes straight to Circuit.list() (see structure/GENERATORS.md). A page that offers
@@ -32,9 +31,6 @@
     var topoSel = document.getElementById('topology');
     var techSel = document.getElementById('technique');
     var setSel = document.getElementById('circuit-set');
-    var termWrap = document.getElementById('terminals');
-    var termA = document.getElementById('termA');
-    var termB = document.getElementById('termB');
     var svg = document.getElementById('canvas');
     var circuit = null;
 
@@ -80,22 +76,6 @@
       subNext: document.getElementById('sub-next'),
     });
 
-    // fill the terminal pickers (equivalent resistance over 2 points) with the node letters
-    function refreshTerminals() {
-      var ln = Solve.letterNodes(circuit);
-      var letters = ln.groups.map(function (g) { return ln.letter[g]; });
-      [termA, termB].forEach(function (sel) {
-        var keep = sel.value;
-        sel.innerHTML = '';
-        letters.forEach(function (L) {
-          var o = document.createElement('option');
-          o.value = L; o.textContent = L; sel.appendChild(o);
-        });
-        if (letters.indexOf(keep) >= 0) sel.value = keep;
-      });
-      if (termA.value === termB.value && letters.length > 1) termB.value = letters[letters.length - 1];
-    }
-
     function buildSteps() {
       switch (techSel.value) {
         // Σ currents leaving = 0 is fixed — js/techniques/node-voltage.js still accepts a
@@ -104,8 +84,7 @@
         // is disabled, shown only so a student recognises it as the same equation.
         case 'kcl': return NodeVoltage(circuit);
         case 'kvl': return MeshCurrent(circuit);
-        case 'req-source': return EquivResistance(circuit, { over: 'source' });
-        case 'req-points': return EquivResistance(circuit, { over: 'points', a: termA.value, b: termB.value });
+        case 'req-source': return EquivResistance(circuit);
         default: return [{ n: 0, title: techSel.options[techSel.selectedIndex].text, body: 'Coming soon.' }];
       }
     }
@@ -113,9 +92,6 @@
     function runTechnique() {
       if (!circuit) return;
       circuit.nodes.forEach(function (n) { delete n.label; }); // each technique sets its own labels
-      var points = techSel.value === 'req-points';
-      if (termWrap) termWrap.style.display = points ? '' : 'none';
-      if (points) refreshTerminals();
       var steps = buildSteps();
       Circuit.render(circuit, svg);   // render draws the labels the technique set, then
       stepper.load(steps);            // step 1 highlights on the rendered svg
@@ -159,8 +135,6 @@
     topoSel.addEventListener('change', generate);
     techSel.addEventListener('change', runTechnique); // re-analyse the same circuit
     if (setSel) setSel.addEventListener('change', function () { refreshTopology(); generate(); });
-    if (termA) termA.addEventListener('change', runTechnique);
-    if (termB) termB.addEventListener('change', runTechnique);
     generate();
   };
 })();
