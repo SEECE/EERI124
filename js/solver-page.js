@@ -4,8 +4,7 @@
    techniques their dropdown lists; everything below is identical, so it lives here once.
 
    Expected DOM (see any solver page): #technique, #topology, #generate, #canvas, the step
-   controls (#step-count, #step-prev, …) and the workbench panel. #terminals is optional —
-   only the equivalent-resistance-over-two-points technique uses it.
+   controls (#step-count, #step-prev, …) and the workbench panel.
 
    Usage:  SolverPage({ filter: { elements: ['R', 'V', 'W'] } });
    filter goes straight to Circuit.list() (see structure/GENERATORS.md). A page that offers
@@ -15,6 +14,11 @@
    (optional) post-processes each generated circuit before it's solved/rendered — e.g. turning
    some §3 resistors into current sources. Plain script, one global, no ES modules — the site
    must open over file://.
+
+   A technique can be pickier than the page: equivalent resistance needs a **single** source, so
+   while it is chosen the `multi-source`-tagged topologies are greyed out — a barred selection
+   falls back to Random — and a generated circuit that still came out with two sources (Random
+   can) is re-rolled. See structure/SOLVER.md's known limit.
 
    opts.elements — the full set of element types this page's techniques understand (e.g.
    ['R','V','I','W'] for current-sources). Only used to validate an imported file (see below);
@@ -32,9 +36,6 @@
     var topoSel = document.getElementById('topology');
     var techSel = document.getElementById('technique');
     var setSel = document.getElementById('circuit-set');
-    var termWrap = document.getElementById('terminals');
-    var termA = document.getElementById('termA');
-    var termB = document.getElementById('termB');
     var svg = document.getElementById('canvas');
     var circuit = null;
 
@@ -53,16 +54,38 @@
       return s ? s.filter : opts.filter;
     }
 
+    /* Equivalent resistance only means anything with ONE source (structure/SOLVER.md's known
+       limit — with a second source pushing current through the network, "the resistance the
+       source sees" is not V/I). So while it is selected the multi-source topologies are greyed
+       out, and a generated circuit that came out with two sources anyway (Random can) is
+       re-rolled below. */
+    function singleSourceOnly() { return techSel.value === 'req-source'; }
+    function sources(c) {
+      return c.edges.filter(function (e) { return e.type === 'V'; }).length;
+    }
+
     // the topic's slice of the generator registry — the page's safety net: a generator loaded
     // by accident still cannot appear on a page that does not teach its elements
     function refreshTopology() {
+      var keep = topoSel.value;
       topoSel.innerHTML = '';
       Circuit.list(currentFilter()).forEach(function (g) {
         var o = document.createElement('option');
+        var barred = singleSourceOnly() && (g.tags || []).indexOf('multi-source') >= 0;
         o.value = g.name;
-        o.textContent = g.name;
+        o.textContent = g.name + (barred ? ' — needs one source' : '');
+        o.disabled = barred;
         topoSel.appendChild(o);
       });
+      // a selection the current technique cannot use falls back to Random — the one topology that
+      // is never about a particular shape — or to the first usable option if this page has none
+      if (keep) topoSel.value = keep;
+      if (!topoSel.value || topoSel.options[topoSel.selectedIndex].disabled) {
+        var usable = Array.prototype.filter.call(topoSel.options, function (o) { return !o.disabled; });
+        var random = usable.filter(function (o) { return /^Random/.test(o.value); })[0];
+        if (random || usable.length) topoSel.value = (random || usable[0]).value;
+      }
+      return topoSel.value !== keep;      // did the fallback move us?
     }
     refreshTopology();
 
@@ -80,22 +103,6 @@
       subNext: document.getElementById('sub-next'),
     });
 
-    // fill the terminal pickers (equivalent resistance over 2 points) with the node letters
-    function refreshTerminals() {
-      var ln = Solve.letterNodes(circuit);
-      var letters = ln.groups.map(function (g) { return ln.letter[g]; });
-      [termA, termB].forEach(function (sel) {
-        var keep = sel.value;
-        sel.innerHTML = '';
-        letters.forEach(function (L) {
-          var o = document.createElement('option');
-          o.value = L; o.textContent = L; sel.appendChild(o);
-        });
-        if (letters.indexOf(keep) >= 0) sel.value = keep;
-      });
-      if (termA.value === termB.value && letters.length > 1) termB.value = letters[letters.length - 1];
-    }
-
     function buildSteps() {
       switch (techSel.value) {
         // Σ currents leaving = 0 is fixed — js/techniques/node-voltage.js still accepts a
@@ -104,8 +111,7 @@
         // is disabled, shown only so a student recognises it as the same equation.
         case 'kcl': return NodeVoltage(circuit);
         case 'kvl': return MeshCurrent(circuit);
-        case 'req-source': return EquivResistance(circuit, { over: 'source' });
-        case 'req-points': return EquivResistance(circuit, { over: 'points', a: termA.value, b: termB.value });
+        case 'req-source': return EquivResistance(circuit);
         default: return [{ n: 0, title: techSel.options[techSel.selectedIndex].text, body: 'Coming soon.' }];
       }
     }
@@ -113,18 +119,23 @@
     function runTechnique() {
       if (!circuit) return;
       circuit.nodes.forEach(function (n) { delete n.label; }); // each technique sets its own labels
-      var points = techSel.value === 'req-points';
-      if (termWrap) termWrap.style.display = points ? '' : 'none';
-      if (points) refreshTerminals();
-      var steps = buildSteps();
-      Circuit.render(circuit, svg);   // render draws the labels the technique set, then
-      stepper.load(steps);            // step 1 highlights on the rendered svg
+      // the stepper owns the canvas: it draws this circuit (with the labels the technique just
+      // set) and swaps in a step's own model where one asks for it — equivalent resistance
+      // redraws the network it is reducing. `circuit` here stays the real one, so Open/Save,
+      // the Ask-Midnjoy prompt and the next technique all still work on the untouched circuit.
+      stepper.load(buildSteps(), circuit);
     }
 
     function generate() {
-      circuit = Circuit.get(topoSel.value).generate();
-      var s = currentSet();
-      if (s && s.transform) circuit = s.transform(circuit);
+      var gen = Circuit.get(topoSel.value), s = currentSet();
+      // a technique that needs a single source re-rolls a circuit that came out with more; the
+      // generators that always do are already greyed out, so this terminates in a try or two
+      for (var i = 0; i < 40; i++) {
+        var c = gen.generate();
+        if (s && s.transform) c = s.transform(c);
+        circuit = c;
+        if (!singleSourceOnly() || sources(c) === 1) break;
+      }
       runTechnique();
     }
 
@@ -157,10 +168,14 @@
 
     document.getElementById('generate').addEventListener('click', generate);
     topoSel.addEventListener('change', generate);
-    techSel.addEventListener('change', runTechnique); // re-analyse the same circuit
+    techSel.addEventListener('change', function () {
+      // switching technique re-analyses the same circuit — unless this one cannot take it, in
+      // which case the topology list is re-gated and a fresh circuit generated
+      var moved = refreshTopology();
+      if (moved || (singleSourceOnly() && circuit && sources(circuit) !== 1)) generate();
+      else runTechnique();
+    });
     if (setSel) setSel.addEventListener('change', function () { refreshTopology(); generate(); });
-    if (termA) termA.addEventListener('change', runTechnique);
-    if (termB) termB.addEventListener('change', runTechnique);
     generate();
   };
 })();
