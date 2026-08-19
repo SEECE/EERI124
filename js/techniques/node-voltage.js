@@ -967,6 +967,28 @@
       };
     }
 
+    // A supernode member other than the unit's lead, when the bridge is a CONTROLLED source:
+    // it has no KCL of its own (same reason the enclosure sum exists), and the numeric-offset
+    // fold (`memberOffset`/`foldMembers`) only works for a constant — gain·control is not one.
+    // Its own equation is the source that bridges it to the rest of the pair, rearranged the
+    // same way `pinEquation` rearranges a pin — except the far end may itself still be a
+    // letter (its partner), not always an already-known value.
+    function memberEquation(g, e, cset) {
+      var sign = of[e.b] === g ? 1 : -1, from = sign > 0 ? of[e.a] : of[e.b];
+      var vg = vsub(L(g));
+      var E = Lin.of(0);                                 // v_g − v_from − sign·(source) ≡ 0
+      Lin.bump(E, g, 1); Lin.bump(E, from, -1);
+      if (isDepV(e)) Lin.add(E, ctrlLin(e), -sign * e.value); else E.k -= sign * e.value;
+      foldMembers(E);
+      var R = solveFor(g, E, cset);
+      var fromTxt = letterFor(from, cset) ? vsub(L(from)) : round(V(from));
+      return {
+        e: e, from: from, expr: R.expr, degenerate: R.degenerate, vg: vg,
+        write: vg + ' = ' + fromTxt + (sign > 0 ? ' + ' : ' − ') + srcVolts(e),
+        substituted: isDepV(e) ? vg + ' = ' + fromTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlPair(e, cset, false)) : null,
+      };
+    }
+
     var solveSubs = [];
     var boardAtStart = boardHtml();                 // snapshot before solving narrows the board down
     var voltsAtStart = voltsFor(order.filter(function (g) { return P.fixed[g]; }));
@@ -1060,6 +1082,102 @@
         });
       }
 
+      // ---- a supernode member with no equation of its own (the bridge to it is a controlled
+      // source): read it straight off that source, same idea as `recoverMembers` except the
+      // offset is gain·control, not a number, so this seeds an `expr` entry that joins the
+      // ordinary substitution round instead of a one-line addition at the end. ----
+      function memberFromConstraint(u, h, cset, expr) {
+        var be = P.innerSrcs(u).filter(function (ie) { return of[ie.a] === h || of[ie.b] === h; })[0];
+        var M = memberEquation(h, be, cset);
+        var hHl = extend(unitHl({ groups: [h] }), { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks });
+        if (M.degenerate) { board[h] = si(V(h), 'V'); expr[h] = M.expr; return; }
+        solveSubs.push({
+          title: 'node ' + L(h) + ' — from its source',
+          body: 'Node <b>' + L(h) + '</b> gets no equation of its own here — the ' + (isDepV(be) ? CV.long(be) : srcVolts(be) + ' source') +
+            ' between it and <b>' + L(M.from) + '</b> is its equation instead' +
+            (M.substituted ? ', and step 8 already wrote its control variable in node voltages, so putting that in leaves ' +
+              vsub(L(h)) + ' in the same volts-plus-ratio shape every other node ends at.' : '.'),
+          board: boardHtml(), eq: [M.write].concat(M.substituted ? [M.substituted] : []).concat([vsub(L(h)) + ' = ' + fmtExpr(M.expr)]),
+          hl: hHl,
+        });
+        board[h] = vsub(L(h)) + ' = ' + fmtExpr(M.expr);
+        expr[h] = M.expr;
+      }
+
+      // ---- substitute a pool of "volts + ratio·neighbour" expressions into one another until
+      // one falls out as a number, then work back — shared by a lone controlled-bridge
+      // supernode (a 2-variable system on its own) and however many nodes step 9's coupled
+      // block holds, since the algebra does not care which unit an entry came from. ----
+      function eliminate(pool, expr, poolNodesFn) {
+        var cleanT = K.cleanT, resolveSelf = K.resolveSelf, stored = [];
+        while (pool.length > 1) {
+          var p = pool[0];
+          resolveSelf(expr[p], p); cleanT(expr[p]); K.settle(expr[p], V(p));
+          pool.slice(1).forEach(function (q) {
+            if (!(p in expr[q].t)) return;
+            var beforeLine = fmtExpr(expr[q]);
+            var coef = expr[q].t[p]; delete expr[q].t[p];
+            expr[q].c += coef * expr[p].c;
+            Object.keys(expr[p].t).forEach(function (n) { expr[q].t[n] = (expr[q].t[n] || 0) + coef * expr[p].t[n]; });
+            var selfTerm = q in expr[q].t;
+            var afterLine = fmtExpr(expr[q]);
+            board[q] = vsub(L(q)) + ' = ' + afterLine;
+            solveSubs.push({
+              title: 'substitute ' + vsub(L(p)) + ' into ' + vsub(L(q)),
+              body: 'Node <b>' + L(q) + '</b>’s equation used ' + vsub(L(p)) + '. Replace it with ' + vsub(L(p)) + ' = ' + fmtExpr(expr[p]) + ' and multiply out.', board: boardHtml(),
+              eq: [vsub(L(q)) + ' = ' + beforeLine, vsub(L(q)) + ' = ' + afterLine],
+              hl: extend(unitHl({ groups: [q] }), { volts: voltsFor(Object.keys(solvedNow)) }),
+            });
+            if (selfTerm) {
+              resolveSelf(expr[q], q); cleanT(expr[q]); K.settle(expr[q], V(q));
+              board[q] = vsub(L(q)) + ' = ' + fmtExpr(expr[q]);
+              solveSubs.push({
+                title: vsub(L(q)) + ' — collect and divide',
+                body: vsub(L(q)) + ' turned up on both sides after that substitution — collect it on the left, then divide, exactly like clearing any single-unknown equation.', board: boardHtml(),
+                eq: [vsub(L(q)) + ' = ' + afterLine, vsub(L(q)) + ' = ' + fmtExpr(expr[q])],
+                hl: extend(unitHl({ groups: [q] }), { volts: voltsFor(Object.keys(solvedNow)) }),
+              });
+            } else {
+              cleanT(expr[q]);
+            }
+          });
+          stored.push(p); pool.shift();
+          solveSubs.push({
+            title: pool.length + ' unknown' + (pool.length === 1 ? '' : 's') + ' left',
+            body: vsub(L(p)) + ' is now written from the others; we come back for its number at the end. Still to pin down:' + sysTable(poolNodesFn(pool)), board: boardHtml(),
+            hl: extend({ nodes: poolNodesFn(pool).reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) }, { volts: voltsFor(Object.keys(solvedNow)) }),
+          });
+        }
+        var last = pool[0]; resolveSelf(expr[last], last); cleanT(expr[last]); K.settle(expr[last], V(last));
+        K.snap(expr[last], V(last));
+        board[last] = si(V(last), 'V');
+        var known = {}; known[last] = V(last);
+        // when the last substitution already produced the number, this view would just repeat
+        // the line above it — skip it rather than print the same equation twice
+        var answerLine = vsub(L(last)) + ' = ' + si(V(last), 'V'), prevEq = null;
+        for (var pi = solveSubs.length - 1; pi >= 0 && !prevEq; pi--) {
+          if (solveSubs[pi].eq && solveSubs[pi].eq.length) prevEq = solveSubs[pi].eq[solveSubs[pi].eq.length - 1];
+        }
+        if (prevEq !== answerLine) solveSubs.push({
+          title: vsub(L(last)) + ' — falls out',
+          body: 'Node <b>' + L(last) + '</b>’s expression has no unknowns left on the right — it is just a number.', board: boardHtml(),
+          eq: [vsub(L(last)) + ' = ' + fmtExpr(expr[last]), answerLine],
+          hl: extend(unitHl({ groups: [last] }), { volts: voltsFor(Object.keys(solvedNow).concat(Object.keys(known))) }),
+        });
+        for (var si2 = stored.length - 1; si2 >= 0; si2--) {
+          var g2 = stored[si2];
+          board[g2] = si(V(g2), 'V');
+          known[g2] = V(g2);
+          solveSubs.push({
+            title: 'back to ' + vsub(L(g2)),
+            body: 'Every voltage on the right of ' + vsub(L(g2)) + '’s line is known now — put the numbers in.', board: boardHtml(),
+            eq: [vsub(L(g2)) + ' = ' + fmtExpr(expr[g2], function (n) { return known[n]; }), vsub(L(g2)) + ' = ' + si(V(g2), 'V')],
+            hl: extend(unitHl({ groups: [g2] }), { volts: voltsFor(Object.keys(solvedNow).concat(Object.keys(known))) }),
+          });
+        }
+        return known;
+      }
+
       // ---- a node with no KCL of its own: a controlled voltage source ties it to a node we
       // already know, so its value follows straight from the gain equation. ----
       function solvePinned(u, hl, tableBefore) {
@@ -1097,6 +1215,10 @@
           hl: extend(hl, { volts: voltsFor(Object.keys(solvedNow).concat([g])) }),
         });
         recoverMembers(u, hl, Object.keys(solvedNow).concat([g]));
+        if (u.depLink) {                          // pin's partner: its own bridge, not a KCL sum
+          var mExpr = {};
+          u.groups.filter(function (h) { return h !== g; }).forEach(function (h) { memberFromConstraint(u, h, {}, mExpr); });
+        }
       }
 
       P.open.forEach(function (u) {
@@ -1106,26 +1228,44 @@
         } else if (!u.supernode || !u.depLink) {
           solveOpenUnit(u, hl, tableBefore);       // a supernode walks the same moves, plus the constraint
         } else {
-          // a supernode bridged by a CONTROLLED source: the offset is gain·control, not a number,
-          // so the pair cannot be written in one symbol. Lay out the enclosure sum, the
-          // constraint and the control variable, and solve the two together.
-          var innerDep = P.innerSrcs(u).filter(isDepV)[0];
+          // a supernode bridged by a CONTROLLED source: the offset is gain·control, not a
+          // number, so the fold every plain supernode gets doesn't apply — neither member has a
+          // KCL row of its own for the pair either. Its enclosure equation (one equation, both
+          // members left as letters) and the bridging source's own constraint are the pair's
+          // two equations, and they solve with the same substitution machinery step 9's coupled
+          // block uses below (build an expression for each unknown, then substitute them into
+          // one another) — here on a system of exactly two.
+          var openHl = extend(hl, { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks });
+          var cset2 = {}; u.groups.forEach(function (h) { cset2[h] = true; });
+          var expr2 = {};
           solveSubs.push({
             title: 'supernode ' + unitName(u) + ' — set up',
-            body: 'A source floats between nodes ' + u.groups.map(L).join(' and ') + ', so solve them as a pair: the enclosure’s <i>one</i> current equation plus the source’s voltage constraint — two equations for the two unknowns.' +
-              (innerDep ? ' The source here is a <b>' + CV.long(innerDep) + '</b>, so the constraint carries ' + CV.sym(innerDep) +
-                ' rather than a fixed number of volts — step 8 already wrote it in node voltages, so the pair is still two equations in two unknowns, just not one you can collapse in a single line.' : '') + tableBefore, board: boardHtml(),
-            eq: [unitName(u) + ':  ' + unitNumeric(u), 'constraint:  ' + supernodeConstraint(u)]
-              .concat(innerDep ? ['with  ' + CV.sym(innerDep) + ' = ' + ctrlAsNodes(innerDep)] : []),
-            hl: extend(hl, { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }),
+            body: 'Supernode <b>' + unitName(u) + '</b>’s outside neighbours are all known now, but it carries two unknowns and no single KCL row pins either — its enclosure equation and its bridging source’s constraint are the two equations that do.' + tableBefore,
+            board: boardHtml(), hl: openHl,
           });
-          u.groups.forEach(function (g) { board[g] = si(V(g), 'V'); });
-          solveSubs.push({
-            title: 'supernode ' + unitName(u) + ' — solve',
-            body: 'Substitute the constraint into the enclosure equation to leave one unknown, solve it, then recover the other from the constraint.', board: boardHtml(),
-            eq: u.groups.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
-            hl: extend(hl, { volts: voltsFor(Object.keys(solvedNow).concat(u.groups)) }),
-          });
+          var Q2 = unitEquation(u, cset2), vg2 = Q2.vg, chain2 = [];
+          function step2(title, body, line) { chain2.push(line); solveSubs.push({ title: unitTitle(u) + ' — ' + title, body: body, board: boardHtml(), eq: chain2.slice(), hl: openHl }); }
+          step2('write the equation', unitTitle(u) + '’s enclosure equation from step 7, known neighbours filled in as numbers — the bridging source’s own branch current has already cancelled out of it.', Q2.write);
+          if (Q2.degenerate) {
+            board[u.lead] = si(V(u.lead), 'V'); expr2[u.lead] = Q2.expr;
+            solveSubs.push({
+              title: unitTitle(u) + ' — from the system', board: boardHtml(), hl: openHl,
+              body: 'The controlled source cancels ' + vg2 + '’s own coefficient exactly, so this line relates the pair’s other unknown instead of giving ' + vg2 + ' on its own.',
+            });
+          } else {
+            if (Q2.substituted) step2('put the control variable in',
+              'Replace ' + Q2.deps.map(function (e) { return CV.sym(e); }).join(' and ') + ' with what step 8 said it is.', Q2.substituted);
+            step2('clear the fractions', Q2.clearNote + '; each division cancels.', Q2.clear);
+            step2('multiply out', 'Multiply each bracket out.', Q2.mult);
+            step2('collect ' + vg2, 'Collect the ' + vg2 + ' terms on the left and everything else on the right.', Q2.collect);
+            step2(Q2.Cg === 1 ? 'read it off' : 'divide',
+              (Q2.Cg === 1 ? 'The coefficient is already 1, so there is nothing to divide by: ' + vg2
+                : 'Divide both sides by ' + Q2.Cg + ' — ' + vg2) +
+              ' is now written in volts plus a ratio of its partner, still unknown.', vg2 + ' = ' + fmtExpr(Q2.expr));
+            expr2[u.lead] = Q2.expr;
+          }
+          u.groups.filter(function (h) { return h !== u.lead; }).forEach(function (h) { memberFromConstraint(u, h, cset2, expr2); });
+          eliminate(u.groups.slice(), expr2, function (p) { return p; });
         }
         u.groups.forEach(function (g) { solvedNow[g] = true; remaining.splice(remaining.indexOf(g), 1); });
       });
@@ -1133,52 +1273,61 @@
       if (P.coupled.length) {
         var cHl = { nodes: P.coupled.reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) };
         var cn = P.coupled.length, cU = P.coupledUnits, cset = {};
-        // one letter per UNIT: a supernode's members are written through their lead's symbol
-        // (v_member = v_lead + δ), so only the lead is carried as an unknown
+        // one letter per UNIT for a plain supernode: its member folds into the lead's symbol
+        // via a numeric delta. A CONTROLLED bridge cannot fold that way — gain·control is not a
+        // number — so every member of a depLink unit stays its own letter and gets its own
+        // equation (the enclosure sum for the lead, the bridging source's own constraint for
+        // each other member), joining the same substitution round as an equal, not a special
+        // case handed to a matrix.
         cU.forEach(function (u) { if (u.depLink) u.groups.forEach(function (g) { cset[g] = true; }); else cset[u.lead] = true; });
-        // A CONTROLLED source bridging two coupled nodes is the one case a per-unit expression
-        // cannot carry: the offset between the pair is gain·control, not a number, so the two
-        // cannot be collapsed into one symbol. Fall back to an honest simultaneous setup there.
-        // An INDEPENDENT bridge is fine — that is what the constraint substitution is for — and
-        // so is a PINNED node, whose gain equation is already an expression of the same shape.
-        var pureCoupled = !cU.some(function (u) { return u.depLink; });
 
-        if (pureCoupled) {
-          // For each coupled unit, clear its equation and solve for its lead as an expression in
-          // the other coupled leads: v = (volts) + Σ (ratio)·v_neighbour. Ratios are dimensionless
-          // (like a voltage divider), constants are volts — no siemens anywhere. A dependent
-          // current source contributes to the same expression: its control variable is node
-          // voltages, so it lands in `c` if it reads solved nodes and in `t` if it reads coupled
-          // ones — nothing about the substitution round below has to change.
-          var expr = {};   // expr[lead] = { c: volts, t: { neighbour: ratio } }
-          cU.forEach(function (u) {
-            var g = u.lead;
-            expr[g] = (P.pinnedOf[g] ? pinEquation(g, cset) : unitEquation(u, cset)).expr;
+        // For each coupled unit, clear its equation and solve for its lead as an expression in
+        // the other coupled leads: v = (volts) + Σ (ratio)·v_neighbour. Ratios are dimensionless
+        // (like a voltage divider), constants are volts — no siemens anywhere. A dependent
+        // current source contributes to the same expression: its control variable is node
+        // voltages, so it lands in `c` if it reads solved nodes and in `t` if it reads coupled
+        // ones — nothing about the substitution round below has to change. A depLink unit's
+        // OTHER members get their own expression too, from `memberEquation`.
+        var expr = {};   // expr[node] = { c: volts, t: { neighbour: ratio } }
+        cU.forEach(function (u) {
+          var g = u.lead;
+          expr[g] = (P.pinnedOf[g] ? pinEquation(g, cset) : unitEquation(u, cset)).expr;
+          if (u.depLink) u.groups.filter(function (h) { return h !== g; }).forEach(function (h) {
+            var be = P.innerSrcs(u).filter(function (ie) { return of[ie.a] === h || of[ie.b] === h; })[0];
+            expr[h] = memberEquation(h, be, cset).expr;
           });
-          var cleanT = K.cleanT, resolveSelf = K.resolveSelf;
-          function poolNodes(pool) {                 // leads back out to every node they speak for
-            return pool.reduce(function (a, g) { return a.concat(P.uOf[g].groups); }, []);
-          }
+        });
+        var cleanT = K.cleanT, resolveSelf = K.resolveSelf;
+        function poolNodes(pool) {                 // every node a pool entry speaks for, de-duplicated
+          var seen = {}, out = [];
+          pool.forEach(function (g) { P.uOf[g].groups.forEach(function (h) { if (!seen[h]) { seen[h] = 1; out.push(h); } }); });
+          return out;
+        }
 
-          solveSubs.push({
-            title: 'coupled ' + P.coupled.map(L).join(', ') + ' — a linked system',
-            body: 'These <b>' + cn + '</b> nodes are linked — each equation still mentions another unknown, so none solves in one shot. From each equation write its node’s voltage in terms of its neighbours, then substitute those into one another until one falls out as a number.' +
-              (cU.some(function (u) { return u.supernode; }) ? ' A supernode counts as one equation and one unknown here: its constraint writes the second node in terms of the first, so the pair takes up no more room in the system than a single node.' : '') +
-              sysTable(P.coupled), board: boardHtml(),
-            hl: extend(cHl, { volts: voltsFor(Object.keys(solvedNow)) }),
-          });
+        solveSubs.push({
+          title: 'coupled ' + P.coupled.map(L).join(', ') + ' — a linked system',
+          body: 'These <b>' + cn + '</b> nodes are linked — each equation still mentions another unknown, so none solves in one shot. From each equation write its node’s voltage in terms of its neighbours, then substitute those into one another until one falls out as a number.' +
+            (cU.some(function (u) { return u.supernode && !u.depLink; }) ? ' A plain supernode counts as one equation and one unknown here: its constraint writes the second node in terms of the first, so the pair takes up no more room in the system than a single node.' : '') +
+            (cU.some(function (u) { return u.depLink; }) ? ' A supernode bridged by a controlled source counts as two: its enclosure equation and its bridging source’s constraint join the system as their own two equations, one per unknown.' : '') +
+            sysTable(P.coupled), board: boardHtml(),
+          hl: extend(cHl, { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }),
+        });
 
-          // Derive EVERY coupled unit's own cleared equation first — same clear-the-fractions
-          // moves as an open one (solveOpenUnit above), except a still-coupled neighbour stays
-          // a letter instead of being plugged in as a number. Each ends at the ratio-form line
-          // fmtExpr(expr[g]) already stored in expr — nothing here is recomputed, just narrated.
-          cU.forEach(function (u) {
-            var g = u.lead;
-            var gHl = extend(unitHl(u), { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks });
-            var chainG = [];
-            function stepG(title, body, line) { chainG.push(line); solveSubs.push({ title: unitTitle(u) + ' — ' + title, body: body, board: boardHtml(), eq: chainG.slice(), hl: gHl }); }
+        // Derive EVERY coupled unit's own cleared equation first — same clear-the-fractions
+        // moves as an open one (solveOpenUnit above), except a still-coupled neighbour stays
+        // a letter instead of being plugged in as a number. Each ends at the ratio-form line
+        // fmtExpr(expr[g]) already stored in expr — nothing here is recomputed, just narrated. A
+        // depLink unit's other members have no equation of their own to clear — their line comes
+        // straight from `memberFromConstraint`, off the source that bridges them.
+        cU.forEach(function (u) {
+          var g = u.lead;
+          var gHl = extend(unitHl(u), { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks });
+          var chainG = [];
+          function stepG(title, body, line) { chainG.push(line); solveSubs.push({ title: unitTitle(u) + ' — ' + title, body: body, board: boardHtml(), eq: chainG.slice(), hl: gHl }); }
 
-            if (P.pinnedOf[g]) {
+          if (u.depLink) u.groups.filter(function (h) { return h !== g; }).forEach(function (h) { memberFromConstraint(u, h, cset, expr); });
+
+          if (P.pinnedOf[g]) {
               // no KCL to clear — the source's gain equation already IS this node's expression,
               // it just needs its control variable written out
               var Pq = pinEquation(g, cset), pvg = vsub(L(g));
@@ -1238,125 +1387,16 @@
           });
 
           // Now substitute those expressions into one another until one node falls out as a
-          // number. Each substitution is shown as: the line before, the line right after the
-          // swap (still possibly containing the target's own letter, if the swap looped back
-          // on it), then — when it does loop back — a collect-and-divide step, same algebra as
-          // any single-unknown node, just with a letter on the right instead of zero.
-          var pool = cU.map(function (u) { return u.lead; }), stored = [];
-          while (pool.length > 1) {
-            var p = pool[0];
-            resolveSelf(expr[p], p); cleanT(expr[p]); K.settle(expr[p], V(p));
-            pool.slice(1).forEach(function (q) {
-              if (!(p in expr[q].t)) return;
-              var beforeLine = fmtExpr(expr[q]);
-              var coef = expr[q].t[p]; delete expr[q].t[p];
-              expr[q].c += coef * expr[p].c;
-              Object.keys(expr[p].t).forEach(function (n) { expr[q].t[n] = (expr[q].t[n] || 0) + coef * expr[p].t[n]; });
-              var selfTerm = q in expr[q].t;
-              var afterLine = fmtExpr(expr[q]);
-              board[q] = vsub(L(q)) + ' = ' + afterLine;
-              solveSubs.push({
-                title: 'substitute ' + vsub(L(p)) + ' into ' + vsub(L(q)),
-                body: 'Node <b>' + L(q) + '</b>’s equation used ' + vsub(L(p)) + '. Replace it with ' + vsub(L(p)) + ' = ' + fmtExpr(expr[p]) + ' and multiply out.', board: boardHtml(),
-                eq: [vsub(L(q)) + ' = ' + beforeLine, vsub(L(q)) + ' = ' + afterLine],
-                hl: extend(unitHl({ groups: [q] }), { volts: voltsFor(Object.keys(solvedNow)) }),
-              });
-              if (selfTerm) {
-                resolveSelf(expr[q], q); cleanT(expr[q]); K.settle(expr[q], V(q));
-                board[q] = vsub(L(q)) + ' = ' + fmtExpr(expr[q]);
-                solveSubs.push({
-                  title: vsub(L(q)) + ' — collect and divide',
-                  body: vsub(L(q)) + ' turned up on both sides after that substitution — collect it on the left, then divide, exactly like clearing any single-unknown equation.', board: boardHtml(),
-                  eq: [vsub(L(q)) + ' = ' + afterLine, vsub(L(q)) + ' = ' + fmtExpr(expr[q])],
-                  hl: extend(unitHl({ groups: [q] }), { volts: voltsFor(Object.keys(solvedNow)) }),
-                });
-              } else {
-                cleanT(expr[q]);
-              }
-            });
-            stored.push(p); pool.shift();
-            solveSubs.push({
-              title: pool.length + ' unknown' + (pool.length === 1 ? '' : 's') + ' left',
-              body: vsub(L(p)) + ' is now written from the others; we come back for its number at the end. Still to pin down:' + sysTable(poolNodes(pool)), board: boardHtml(),
-              hl: extend({ nodes: poolNodes(pool).reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) }, { volts: voltsFor(Object.keys(solvedNow)) }),
-            });
-          }
-          var last = pool[0]; resolveSelf(expr[last], last); cleanT(expr[last]); K.settle(expr[last], V(last));
-          K.snap(expr[last], V(last));
-          board[last] = si(V(last), 'V');
-          var known = {}; known[last] = V(last);
-          // when the last substitution already produced the number, this view would just repeat
-          // the line above it — skip it rather than print the same equation twice
-          var answerLine = vsub(L(last)) + ' = ' + si(V(last), 'V'), prevEq = null;
-          for (var pi = solveSubs.length - 1; pi >= 0 && !prevEq; pi--) {
-            if (solveSubs[pi].eq && solveSubs[pi].eq.length) prevEq = solveSubs[pi].eq[solveSubs[pi].eq.length - 1];
-          }
-          if (prevEq !== answerLine) solveSubs.push({
-            title: vsub(L(last)) + ' — falls out',
-            body: 'Node <b>' + L(last) + '</b>’s expression has no unknowns left on the right — it is just a number.', board: boardHtml(),
-            eq: [vsub(L(last)) + ' = ' + fmtExpr(expr[last]), answerLine],
-            hl: extend(unitHl({ groups: [last] }), { volts: voltsFor(Object.keys(solvedNow).concat(Object.keys(known))) }),
-          });
-          for (var si2 = stored.length - 1; si2 >= 0; si2--) {
-            var g2 = stored[si2];
-            board[g2] = si(V(g2), 'V');
-            known[g2] = V(g2);
-            solveSubs.push({
-              title: 'back to ' + vsub(L(g2)),
-              body: 'Every voltage on the right of ' + vsub(L(g2)) + '’s line is known now — put the numbers in.', board: boardHtml(),
-              eq: [vsub(L(g2)) + ' = ' + fmtExpr(expr[g2], function (n) { return known[n]; }), vsub(L(g2)) + ' = ' + si(V(g2), 'V')],
-              hl: extend(unitHl({ groups: [g2] }), { volts: voltsFor(Object.keys(solvedNow).concat(Object.keys(known))) }),
-            });
-          }
-          // every supernode in this block still owes its second node — one addition each, from
-          // the constraint that has been carrying it all along
+          // number, then work back — the same round `eliminate` runs for a lone controlled-bridge
+          // supernode above, just over however many entries this block holds.
+          var pool = [];
+          cU.forEach(function (u) { if (u.depLink) u.groups.forEach(function (g) { pool.push(g); }); else pool.push(u.lead); });
+          var known = eliminate(pool, expr, poolNodes);
+
+          // every PLAIN supernode in this block still owes its second node — one addition each,
+          // from the constraint that has been carrying it all along. A depLink one already came
+          // out of the elimination round above, member by member.
           cU.forEach(function (u) { recoverMembers(u, unitHl(u), Object.keys(solvedNow).concat(Object.keys(known))); });
-        } else {
-          // Source-bridged coupled block (supernode), or one holding a node a controlled source
-          // pins: a per-node expression cannot see those sources' own branch currents, so don't
-          // fake it — lay out the equations + constraints and hand to a matrix solve, which is
-          // what the lecture slides do at this point too.
-          var innerSrc = circuit.edges.filter(function (e) { return (e.type === 'V' || isDepV(e)) && cset[of[e.a]] && cset[of[e.b]]; });
-          var innerPins = P.coupled.map(function (g) { return P.pinnedOf[g]; }).filter(Boolean);
-          solveSubs.push({
-            title: 'coupled ' + P.coupled.map(L).join(', ') + ' — a system with a source',
-            body: 'These <b>' + cn + '</b> nodes are linked, and a source sits between two of them (a supernode) — that adds a voltage constraint. This one is a genuine simultaneous system; lay it out and finish with a matrix or calculator, then read off each node.' + sysTable(P.coupled), board: boardHtml(),
-            hl: extend(cHl, { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }),
-          });
-          P.coupledUnits.forEach(function (u) {
-            if (u.pins.length) return;                   // no KCL at a pinned unit — its source is its equation
-            solveSubs.push({ title: 'equation for ' + unitName(u),
-              body: (u.supernode
-                ? 'The enclosure KCL for supernode <b>' + unitName(u) + '</b> — one equation for the pair, with the source’s own branch current cancelled out'
-                : 'KCL at node <b>' + L(u.groups[0]) + '</b>') + ', coupled neighbours left as letters.',
-              board: boardHtml(), eq: [unitEq(u)],
-              hl: extend(unitHl(u), { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }) });
-          });
-          innerSrc.concat(innerPins.map(function (p) { return p.e; })).forEach(function (e) {
-            solveSubs.push({
-              title: 'constraint ' + L(of[e.a]) + '–' + L(of[e.b]),
-              body: 'The ' + srcVolts(e) + ' source between these two nodes fixes the difference between their voltages.' +
-                (isDepV(e) ? ' It is controlled, so ' + CV.sym(e) + ' goes in as step 8 wrote it.' : ''), board: boardHtml(),
-              eq: [vsub(L(of[e.b])) + ' − ' + vsub(L(of[e.a])) + ' = ' + srcVolts(e)]
-                .concat(isDepV(e) ? [CV.sym(e) + ' = ' + ctrlAsNodes(e)] : []),
-              hl: extend({ edges: [e.id] }, { volts: voltsFor(Object.keys(solvedNow)), marks: CV.marks }),
-            });
-          });
-          CV.current.filter(function (e) { return cset[of[e.a]] || cset[of[e.b]]; }).forEach(function (e) {
-            solveSubs.push({
-              title: 'constraint for ' + CV.sym(e), board: boardHtml(),
-              body: 'The controlled current source in this block is worth ' + CV.gain(e) + ', and step 8 wrote ' + CV.sym(e) + ' in node voltages — so it is one more ordinary term in the system.',
-              eq: [CV.sym(e) + ' = ' + ctrlAsNodes(e)],
-              hl: extend({ edges: [e.id, CV.ctrlEdge(e).id] }, { volts: voltsFor(Object.keys(solvedNow)), marks: [CV.markKey(e)] }),
-            });
-          });
-          solveSubs.push({ title: 'solve the system', body: 'That is ' + cn + ' equations plus the constraint' + (innerSrc.length + innerPins.length > 1 ? 's' : '') + ' — solve together (matrix / calculator). Results follow, node by node.', board: boardHtml(), hl: extend(cHl, { volts: voltsFor(Object.keys(solvedNow)) }) });
-          var answered = [];
-          P.coupled.forEach(function (g) {
-            board[g] = si(V(g), 'V'); answered.push(g);
-            solveSubs.push({ title: 'answer for ' + L(g), body: 'Node ' + L(g) + '’s voltage from the simultaneous solution.', board: boardHtml(), eq: [vsub(L(g)) + ' = ' + si(V(g), 'V')], hl: extend(unitHl({ groups: [g] }), { volts: voltsFor(Object.keys(solvedNow).concat(answered)) }) });
-          });
-        }
         P.coupled.forEach(function (g) { solvedNow[g] = true; });
       }
 
