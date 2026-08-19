@@ -154,23 +154,32 @@
     return out;
   }
 
-  /* The whole file: a document that compiles on its own, and a picture that survives being
-     lifted out of it. The three package options are style, and they are all set the way the
-     rest of the site draws: `europeanresistors` is the boxed resistor, `americancurrents` the
-     circle with the arrow through it, `americanvoltages` the + and − on the source, which is
-     the half of the drawing the sign conventions are about. They are PACKAGE options, not
-     circuitikz environment keys — as environment keys they are silently ignored. */
+  /* The whole file: a document that compiles on its own, and a figure that survives being
+     lifted out of it. The three circuitikz package options are style, and they are all set the
+     way the rest of the site draws: `europeanresistors` is the boxed resistor,
+     `americancurrents` the circle with the arrow through it, `americanvoltages` the + and − on
+     the source, which is the half of the drawing the sign conventions are about. They are
+     PACKAGE options, not circuitikz environment keys — as environment keys they are silently
+     ignored. The picture itself is a `figure` wrapped in `\resizebox{\textwidth}{!}{…}`, the
+     same shape tikzmaker.com's own export uses — one width to change resizes the whole circuit
+     without touching a single coordinate. */
   function document_(circuit, title) {
     return ['% ' + (title || 'EERI 124 circuit'),
       '% Exported from the EERI 124 visualiser — needs circuitikz, and compiles as it stands.',
       '\\documentclass{article}',
       '\\usepackage[europeanresistors, americancurrents, americanvoltages]{circuitikz}',
+      '\\usepackage{graphicx}',
       '\\pagestyle{empty}',
       '\\begin{document}',
       '% ---- the circuit: everything between these two lines drops into your own document ----',
+      '\\begin{figure}[!ht]',
+      '\\centering',
+      '\\resizebox{1\\textwidth}{!}{%',
       '\\begin{circuitikz}',
     ].concat(picture(circuit), [
       '\\end{circuitikz}',
+      '}%',
+      '\\end{figure}',
       '% ---- end of the circuit ----',
       '\\end{document}',
       '',

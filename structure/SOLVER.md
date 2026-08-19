@@ -273,9 +273,15 @@ at this stage know only V = IR). Everything is worked by *clearing fractions*, n
     numeric offset from the unit's **lead** (`u.lead`, `u.delta`), so `foldMembers` rewrites the
     pair in the lead's symbol and the unit takes up **one** unknown in the system, exactly like a
     lone node. The partner comes back at the end with one addition.
-  - **A CONTROLLED source bridging the block** is the one case that cannot be folded: the offset is
-    `gain·control`, not a number. Don't fake it — lay out the enclosure equation plus the
-    constraint, hand off to a matrix/calculator solve, reveal each answer on its own view.
+  - **A CONTROLLED source bridging the block** cannot fold that way — the offset is `gain·control`,
+    not a number — but it is not a hand-off either: the lead's enclosure equation (`unitEquation`,
+    both members left as letters) is one equation, and every OTHER member gets its own equation
+    straight off the source that bridges it (`memberEquation` — the same move `pinEquation` makes
+    for a pin, except the far end may itself still be a letter). Each of those joins the pool as
+    its own entry — a depLink pair costs the system **two** unknowns and two equations, not one —
+    and the shared `eliminate` substitution round (used for the coupled block and for a lone
+    controlled-bridge supernode solved on its own in `P.open`) resolves them exactly like any other
+    coupled node. Nothing in step 9 is handed to a matrix or calculator any more.
 
 This ordering is pedagogy — the displayed values always come from `nodeVoltages`.
 

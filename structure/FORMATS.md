@@ -96,9 +96,12 @@ the zigzags here would be a second renderer to keep in step with `js/circuit.js`
 The File menu's "Copy LaTeX Diagram" writes no file — `js/ui/filemenu.js` puts
 `Tikz.document()`'s text straight on the clipboard (`navigator.clipboard.writeText`), because
 the only place this ever goes is pasted into a report the student already has open. `Tikz` still
-builds a whole `article` document that compiles with `pdflatex` untouched, with the
-`circuitikz` environment fenced by two comment lines so the pasted block also lifts straight out
-again. No `standalone` — it is not in every TeX install; `article` is.
+builds a whole `article` document that compiles with `pdflatex` untouched, with the picture
+fenced by two comment lines so the pasted block also lifts straight out again. No `standalone`
+— it is not in every TeX install; `article` is. The fenced block is a `figure` wrapping the
+`circuitikz` environment in `\resizebox{1\textwidth}{!}{…}` (needs `graphicx`, also pulled in),
+the same shape tikzmaker.com's own export uses — one width to edit resizes the whole circuit
+without touching a single coordinate in the picture.
 
 Four things are settled and should not be re-derived by guessing:
 
