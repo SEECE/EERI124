@@ -145,6 +145,25 @@
       assert(line.indexOf(vc) < 0 && line.indexOf(va + ' + 5') > 0, 'constraint not actually substituted: ' + line);
     });
 
+    /* ---- the same grid, but the floating bridge is a CONTROLLED source ----
+       gain·control is not a number, so the pair can't fold into one symbol the way the
+       independent case above does — that used to mean step 9 gave up and handed the whole
+       block to "a matrix or calculator" with no further working. Now the lead's enclosure
+       equation and the partner's own constraint join the same substitution round as two
+       ordinary entries, so the walk never stops short. */
+    check('depLink supernode inside a coupled block never hands off to a matrix', function () {
+      var c = C(10, [['R', 0, 1, 100], ['R', 0, 3, 2200], ['R', 1, 2, 470], ['R', 1, 4, 1000],
+        ['R', 2, 5, 330], ['R', 3, 4, 220], ['R', 4, 5, 470], ['W', 3, 6], ['V', 6, 7, 9],
+        ['W', 7, 5], ['W', 0, 8], ['H', 8, 9, 2], ['W', 9, 2]]);
+      c.edges[11].control = 'e0';
+      var sol = Solve.nodeVoltages(c);
+      assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+      var steps = NodeVoltage(c);
+      var titles = (steps[8].subs || []).map(function (s) { return s.title; }).join(' | ');
+      assert(!/solve the system/i.test(titles), 'a controlled-bridge coupled block was handed to a matrix: ' + titles);
+      assert(/from its source/.test(titles), 'the bridged member never got its own derivation: ' + titles);
+    });
+
     // ---- current source into two parallel 100 Ω: v = 0.1 × 50 = 5 V, 0.5 W generated ----
     check('current source (parallel)', function () {
       var c = C(2, [['I', 0, 1, 0.1], ['R', 0, 1, 100], ['R', 0, 1, 100]]);
