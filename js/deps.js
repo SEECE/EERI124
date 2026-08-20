@@ -101,7 +101,17 @@
       'tutorial/philosophy/lab.js',
       'tutorial/philosophy/index.js',
     ],
-    'tutorial-conventions': ['tutorial', 'tutorial/conventions.js'],
+    'tutorial-conventions': ['tutorial',
+      'tutorial/conventions/circuit-basic.js', 'tutorial/conventions/circuit-split.js',
+      'tutorial/conventions/circuit-grid.js', 'tutorial/conventions/catalog.js',
+      'tutorial/conventions/context.js', 'tutorial/conventions/layer.js',
+      'tutorial/conventions/kcl.js', 'tutorial/conventions/kvl.js',
+      'tutorial/conventions/faults.js', 'tutorial/conventions/figure.js',
+      'tutorial/conventions/choices.js', 'tutorial/conventions/readouts.js',
+      'tutorial/conventions/guide-kit.js', 'tutorial/conventions/guide-basic.js',
+      'tutorial/conventions/guide-split.js', 'tutorial/conventions/guide-grid.js',
+      'tutorial/conventions/lab.js', 'tutorial/conventions/index.js',
+    ],
   };
 
   var me = document.currentScript;
