@@ -67,6 +67,10 @@
       'techniques/equivalent-resistance/moves-star.js',
       'techniques/equivalent-resistance/steps.js', 'techniques/equivalent-resistance/index.js',
     ],
+    'tests-solve': [
+      'tests/kit.js', 'tests/solve-engine.js', 'tests/solve-sources.js',
+      'tests/solve-sweep.js', 'tests/solve-req.js',
+    ],
     formats: ['formats/native.js', 'formats/ltspice.js', 'formats/tikz.js'],
     tutorial: ['circuit', 'solve', 'tutorial/draw.js', 'tutorial/lesson.js'],
 
