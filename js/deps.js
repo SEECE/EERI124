@@ -18,7 +18,13 @@
 
   var BUNDLES = {
     /* --- subsystems --- */
-    circuit: ['circuit.js'],
+    circuit: [
+      'core/values.js', 'core/model.js', 'core/quality.js', 'core/transform.js',
+      'core/controls.js', 'core/io.js', 'core/registry.js',
+      'core/render/paper.js', 'core/render/elements.js', 'core/render/marks.js',
+      'core/render/nodes.js', 'core/render/place.js', 'core/render/overlays.js',
+      'core/render/highlight.js', 'core/render/render.js',
+    ],
     generators: [
       'generators/random-grid.js', 'generators/basic.js', 'generators/bridge-ladder.js',
       'generators/grid.js', 'generators/multi-source.js', 'generators/current-source.js',
