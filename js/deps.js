@@ -82,7 +82,12 @@
     ],
 
     /* --- tutorial pages: the shared lab stack plus the page's own script --- */
-    'tutorial-wheatstone': ['tutorial', 'tutorial/wheatstone.js'],
+    'tutorial-wheatstone': ['tutorial',
+      'tutorial/wheatstone/model.js', 'tutorial/wheatstone/context.js',
+      'tutorial/wheatstone/figure.js', 'tutorial/wheatstone/panels.js',
+      'tutorial/wheatstone/guide-theory.js', 'tutorial/wheatstone/guide-lab.js',
+      'tutorial/wheatstone/lab.js', 'tutorial/wheatstone/index.js',
+    ],
     'tutorial-delta-wye': ['tutorial', 'tutorial/delta-wye.js'],
     'tutorial-philosophy': ['tutorial', 'tutorial/philosophy.js'],
     'tutorial-conventions': ['tutorial', 'tutorial/conventions.js'],
