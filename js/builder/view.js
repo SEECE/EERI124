@@ -24,33 +24,10 @@
     if (parent) parent.appendChild(e);
     return e;
   }
-  function clamp(lo, x, hi) { return Math.max(lo, Math.min(hi, x)); }
+  var clamp = window.BuilderSymbols.clamp;    // both shared with js/builder/symbols.js
+  var names = window.BuilderSymbols.names;
 
   // compact engineering-ish label; the builder does not load js/solve.js just for si()
-  function fmt(e) {
-    var v = e.value;
-    if (e.type === 'R') return v >= 1000 ? +(v / 1000).toFixed(3) + ' kΩ' : v + ' Ω';
-    if (e.type === 'V') return v + ' V';
-    if (e.type === 'I') return Math.abs(v) < 1 ? +(v * 1000).toFixed(3) + ' mA' : v + ' A';
-    return String(v);
-  }
-  // instance names, LTspice style, so a dependent source can say which resistor it reads
-  function names(edges) {
-    var n = {}, count = {};
-    edges.forEach(function (e) {
-      if (e.type === 'W') return;
-      var p = e.type === 'R' ? 'R' : e.type === 'V' ? 'V' : e.type === 'I' ? 'I' : e.type;
-      count[p] = (count[p] || 0) + 1;
-      n[e.id] = p + count[p];
-    });
-    return n;
-  }
-  function depLabel(e, nm) {
-    var reads = (e.type === 'E' || e.type === 'G') ? 'v' : 'i';
-    var who = nm[e.control] || '?';
-    if (e.type === 'G') return reads + '(' + who + ')/' + +(1 / e.value).toFixed(4);
-    return +e.value.toFixed(4) + '·' + reads + '(' + who + ')';
-  }
 
   window.BuilderView = function (svg) {
     var vp = { pitch: DEFAULT_PITCH, ox: 0, oy: 0 };
@@ -109,57 +86,6 @@
     }
 
     /* ---------- one element ---------- */
-    function drawEdge(parent, e, A, B, nm, cls) {
-      var p = vp.pitch;
-      var g = el('g', { class: cls || 'builder-edge', 'data-eid': e.id }, parent);
-      var dx = B.x - A.x, dy = B.y - A.y, len = Math.hypot(dx, dy) || 1;
-      var ux = dx / len, uy = dy / len, vx = -uy, vy = ux;
-      var mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
-      el('line', { x1: A.x, y1: A.y, x2: B.x, y2: B.y, class: 'be-wire' }, g);
-      if (e.type === 'W') return g;
-
-      var dep = window.Circuit.isDependent(e.type);
-      var half = Math.max(14, p * 0.25), font = clamp(11, p * 0.185, 17);
-      if (e.type === 'R') {
-        var hw = Math.max(16, p * 0.26), hh = Math.max(7, p * 0.115);
-        el('polygon', { points: [[mx + ux * hw + vx * hh, my + uy * hw + vy * hh],
-          [mx + ux * hw - vx * hh, my + uy * hw - vy * hh],
-          [mx - ux * hw - vx * hh, my - uy * hw - vy * hh],
-          [mx - ux * hw + vx * hh, my - uy * hw + vy * hh]].map(function (q) { return q[0] + ',' + q[1]; }).join(' '),
-          class: 'be-body' }, g);
-      } else if (dep) {
-        el('polygon', { points: [[mx + ux * half, my + uy * half], [mx + vx * half, my + vy * half],
-          [mx - ux * half, my - uy * half], [mx - vx * half, my - vy * half]]
-          .map(function (q) { return q[0] + ',' + q[1]; }).join(' '), class: 'be-body be-dep' }, g);
-      } else {
-        el('circle', { cx: mx, cy: my, r: half, class: 'be-body' }, g);
-      }
-
-      // what the source does, drawn inside its own body: b is + for a voltage source, and a
-      // current source pushes a → b
-      if (e.type === 'V' || e.type === 'E' || e.type === 'H') {
-        var s = half * 0.52;
-        el('text', { x: mx - ux * s, y: my - uy * s, class: 'be-pole', 'font-size': font }, g).textContent = '−';
-        el('text', { x: mx + ux * s, y: my + uy * s, class: 'be-pole', 'font-size': font }, g).textContent = '+';
-      } else if (e.type === 'I' || e.type === 'F' || e.type === 'G') {
-        var t = half * 0.62, hd = half * 0.34;
-        el('line', { x1: mx - ux * t, y1: my - uy * t, x2: mx + ux * t, y2: my + uy * t, class: 'be-arrow' }, g);
-        el('polygon', { points: (mx + ux * t) + ',' + (my + uy * t) + ' ' +
-          (mx + ux * (t - hd) + vx * hd * 0.7) + ',' + (my + uy * (t - hd) + vy * hd * 0.7) + ' ' +
-          (mx + ux * (t - hd) - vx * hd * 0.7) + ',' + (my + uy * (t - hd) - vy * hd * 0.7),
-          class: 'be-arrow-head' }, g);
-      }
-
-      var off = Math.max(22, p * 0.33);
-      var lx = mx + vx * off, ly = my + vy * off;
-      el('text', { x: lx, y: ly, class: 'be-label', 'font-size': font }, g)
-        .textContent = dep ? depLabel(e, nm) : fmt(e);
-      if (p >= 64) {
-        el('text', { x: lx, y: ly - font * 1.15, class: 'be-name', 'font-size': font * 0.85 }, g)
-          .textContent = nm[e.id] || '';
-      }
-      return g;
-    }
 
     function clear(layer) { while (layer.firstChild) layer.removeChild(layer.firstChild); }
 
@@ -168,7 +94,7 @@
       clear(gEdges); clear(gNodes);
       c.edges.forEach(function (e) {
         var A = screen(model.cellOf(e.a)), B = screen(model.cellOf(e.b));
-        var g = drawEdge(gEdges, e, A, B, nm);
+        var g = BuilderSymbols.edge(gEdges, e, A, B, nm, null, vp.pitch);
         if (e.id === selectedId) g.setAttribute('class', 'builder-edge is-selected');
       });
       c.nodes.forEach(function (n) {
@@ -189,7 +115,8 @@
         el('circle', { cx: a.x, cy: a.y, r: Math.max(7, vp.pitch * 0.1), class: 'grid-dot is-anchor' }, gOver);
       }
       if (o.ghost) {
-        drawEdge(gOver, o.ghost.edge, screen(o.ghost.from), screen(o.ghost.to), o.ghost.names, 'builder-edge is-ghost');
+        BuilderSymbols.edge(gOver, o.ghost.edge, screen(o.ghost.from), screen(o.ghost.to),
+          o.ghost.names, 'builder-edge is-ghost', vp.pitch);
       }
     }
 

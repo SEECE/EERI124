@@ -88,7 +88,7 @@
     ],
     builder: [
       'circuit', 'formats', 'ui/filemenu.js',
-      'builder/model.js', 'builder/view.js', 'builder/editor.js', 'builder/panel.js',
+      'builder/model.js', 'builder/symbols.js', 'builder/view.js', 'builder/editor.js', 'builder/panel.js',
       'builder.js', 'ui/shell.js',
     ],
 
