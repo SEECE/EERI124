@@ -36,7 +36,7 @@
     ],
     techniques: [
       'techniques/kit.js', 'techniques/controls.js', 'node-voltage',
-      'techniques/mesh-current.js', 'techniques/equivalent-resistance.js',
+      'mesh-current', 'techniques/equivalent-resistance.js',
     ],
     'node-voltage': [
       'techniques/node-voltage/context.js', 'techniques/node-voltage/plan.js',
@@ -48,6 +48,16 @@
       'techniques/node-voltage/solve-coupled.js', 'techniques/node-voltage/steps-solve.js',
       'techniques/node-voltage/steps-power.js', 'techniques/node-voltage/reveal.js',
       'techniques/node-voltage/index.js',
+    ],
+    'mesh-current': [
+      'techniques/mesh-current/context.js', 'techniques/mesh-current/groups.js',
+      'techniques/mesh-current/board.js', 'techniques/mesh-current/steps-setup.js',
+      'techniques/mesh-current/steps-polarity.js', 'techniques/mesh-current/steps-equations.js',
+      'techniques/mesh-current/solve-expr.js', 'techniques/mesh-current/solve-group.js',
+      'techniques/mesh-current/solve-walk.js', 'techniques/mesh-current/solve-substitute.js',
+      'techniques/mesh-current/steps-solve.js', 'techniques/mesh-current/steps-branch.js',
+      'techniques/mesh-current/steps-power.js', 'techniques/mesh-current/reveal.js',
+      'techniques/mesh-current/index.js',
     ],
     formats: ['formats/native.js', 'formats/ltspice.js', 'formats/tikz.js'],
     tutorial: ['circuit', 'solve', 'tutorial/draw.js', 'tutorial/lesson.js'],
