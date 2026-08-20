@@ -8,21 +8,7 @@
 
 <body>
   <pre id="out"></pre>
-  <script src="circuit.js"></script>
-  <script src="generators/random-grid.js"></script>
-  <script src="generators/basic.js"></script>
-  <script src="generators/bridge-ladder.js"></script>
-  <script src="generators/grid.js"></script>
-  <script src="generators/multi-source.js"></script>
-  <script src="generators/current-source.js"></script>
-  <script src="generators/dependent.js"></script>
-  <script src="solve.js"></script>
-  <script src="techniques/kit.js"></script>
-  <script src="techniques/controls.js"></script>
-  <script src="techniques/mesh-current.js"></script>
-  <script src="techniques/node-voltage.js"></script>
-  <script src="techniques/equivalent-resistance.js"></script>
-  <script src="stepper.js"></script>
+  <script src="deps.js" data-load="circuit generators solve techniques stepper.js"></script>
   <script>
     var out = [];
     function check(label, fn) {
