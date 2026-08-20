@@ -1,6 +1,6 @@
 # Circuit solvers — structure and how to extend it
 
-Stepwise solving layered on the model + generators. **Read this before touching `js/solve.js`,
+Stepwise solving layered on the model + generators. **Read this before touching `js/solve/`,
 anything in `js/techniques/`, `js/stepper.js`, or a page that solves a circuit.** The generation
 side is [GENERATORS.md](GENERATORS.md); this is the analysis side that consumes the same
 `{nodes, edges}` model.
@@ -101,14 +101,20 @@ so, rather than dividing by zero.
 |---|---|---|
 | **Kit** | `js/techniques/kit.js` | `StepKit` — the presentation and small-algebra layer both techniques share: fraction/subscript fragments, the status and board tables, number formatting that never prints `-12` or `− -5`, and the `{ c, t }` expression objects (`cleanT`, `resolveSelf`, `snap`, `settle`, `fmtExpr`) their solve steps substitute into one another. Knows nothing about circuits. |
 | **Controls** | `js/techniques/controls.js` | `ControlVars` — everything a step list says about a dependent source (type names, symbol, gain label, sign-aware term text, marker key) plus `Lin`, the key-agnostic linear form. |
-| **Engine** | `js/solve.js` | `si` (SI/engineering value formatting), `linsolve` (Gaussian elim), `electricalNodes`, `letterNodes`, `nodeVoltages` (**MNA**, any number of sources), `faces` + `meshCurrents` (KVL), `branches`, `powerCheck`. Generator-agnostic; **stores no solving state on the circuit**. |
-| **Techniques** | `js/techniques/*.js` | one file per technique; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — states the convention in step 4, sets up equations in step 7, hand-works the solve in step 9), `mesh-current` (KVL), `equivalent-resistance` (reduction moves + the Y→Δ transform, each move a
+| **Engine** | `js/solve/` | one file per job behind the `Solve` global: `format.js` (`si`), `linear.js` (`linsolve`, Gaussian elim), `nodes.js` (`electricalNodes`, `letterNodes`), `nodal.js` (`nodeVoltages` — **MNA**, any number of sources), `faces.js` + `mesh.js` (KVL), `branches.js` (`branches`, `powerCheck`). Generator-agnostic; **stores no solving state on the circuit**. |
+| **Techniques** | `js/techniques/<name>/` | one FOLDER per technique, split by phase over a shared context object `X` — `context.js` builds it, `index.js` is the phase order and the only file that touches `window`, and the step builders and the solving narration get a file each; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — states the convention in step 4, sets up equations in step 7, hand-works the solve in step 9), `mesh-current` (KVL), `equivalent-resistance` (reduction moves + the Y→Δ transform, each move a
 step with its own why/rule/numbers details and a redrawn network on the board). Each self-registers a global (`window.NodeVoltage`, …). |
 | **Stepper** | `js/stepper.js` | generic two-row Prev/Next walk-through: `prev`/`next` walk whole steps, `subPrev`/`subNext` walk a step's **substeps** and roll over into the neighbouring step at either end (so the substep row alone can walk an entire technique); renders one view and highlights the circuit via `Circuit.highlight`. |
 | **Page wiring** | `js/solver-page.js` | shared by every solver page: fills the topology dropdown from the registry, maps the technique dropdown to a builder, renders the circuit + drives the stepper. |
-| **Page** | `topics/<slug>/index.html` | picks generator files, the registry filter(s) and the technique options, then calls `SolverPage({ filter })` or, for a page with more than one topology set, `SolverPage({ sets })`. No logic of its own. |
+| **Page** | `topics/<slug>/index.html` | names the `solver` bundle in `js/deps.js`, picks the registry filter(s) and the technique options, then calls `SolverPage({ filter })` inside a `load` listener or, for a page with more than one topology set, `SolverPage({ sets })`. No logic of its own. |
 
-No ES modules (site opens over `file://`) — plain `<script>` globals, same as `circuit.js`.
+No ES modules (site opens over `file://`) — plain scripts adding to one global per subsystem,
+same as `js/core/`. No page lists them: `js/deps.js` holds the bundle map, so splitting a
+technique file is an edit there and nowhere else.
+
+**Every file stays under 200 lines.** A technique that outgrows it splits by phase, never by
+"utils": each new file is one job (the plan, the phrasing, one group of steps, one move of the
+algebra), takes `X`, and puts back what the next phase needs.
 
 ## The step model
 
@@ -416,7 +422,10 @@ free to have as many sources as it likes, and KCL/KVL still teach it.
 
 ## The self-check
 
-`js/solve.test.html` — open in a browser, every line must read `PASS`. It runs hand-computed
+`js/solve.test.html` — open in a browser, every line must read `PASS`. Its checks live in
+`js/tests/`, one file per subject (`solve-engine`, `solve-sources`, `solve-sweep`, `solve-req`)
+over the shared runner `js/tests/kit.js`; a new technique adds a file there and an entry in the
+`tests-solve` bundle in `js/deps.js`. It runs hand-computed
 series/parallel/divider circuits and one hand-worked case per controlled type (CCVS, VCVS, CCCS,
 VCCS), then sweeps **every generator**: node-voltage solves, mesh agrees (Euler face count +
 per-resistor current), and power balances. It then walks both techniques' step lists and asserts
@@ -431,10 +440,10 @@ has a case here.
 
 ## Verifying without a browser
 
-There is no headless browser in CI/dev here. The plain scripts run in **node** under a small
-`window` + `document` (`createElementNS`/`getElementById`) shim — enough to exercise the solver
-math, the renderer's grouping/highlight, and the full step pipeline. With `addEventListener` and
-`<option>` support added to that shim, a whole **page** can be driven the same way: load its
-`<script src>` list plus its inline script, then click through every topology × technique and
-assert no view renders "undefined"/"NaN". Do that for any new solver page. It does **not** check
-CSS layout; flag real-browser visual QA to the user.
+The self-check pages are ordinary pages: markup, one `js/deps.js` load, and `Tests.report()` in a
+`load` listener. Nothing is written during parsing, so they also run **headlessly** — under jsdom
+(`JSDOM.fromFile(page, { runScripts: 'dangerously', resources: 'usable' })`, then read
+`#out`), or under a small `window` + `document` shim in plain node when only the solver math and
+the step pipeline are of interest. Do that for any new solver page: click through every topology
+× technique and assert no view renders "undefined"/"NaN". Neither checks CSS layout; flag
+real-browser visual QA to the user.

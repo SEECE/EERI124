@@ -48,7 +48,8 @@ topology dropdown or a Technique dropdown to any of these four pages.**
 ## The shell: two regions, not three
 
 `body.app` and the ribbon are unchanged — same page frame, same tokens, same nav. Below the
-ribbon, `main.lab` is a two-column grid (`css/tutorial.css`):
+ribbon, `main.lab` is a two-column grid (`css/tutorial.css`, an `@import` index over
+`tutorial-lab` · `-board` · `-lesson` · `-figure` · `-narrow`):
 
 | Region | Owns |
 |---|---|
@@ -67,7 +68,7 @@ arbitrary segment, `dot`, `text` with subscripts, `arrow`. Each page builds its 
 them and **throws the whole thing away and rebuilds on every change**; twenty-odd elements is
 cheaper to redraw than to diff, and a rebuilt figure cannot go stale.
 
-This does **not** replace `js/circuit.js`'s renderer. That renderer draws the `{nodes, edges}`
+This does **not** replace `js/core/`'s renderer. That renderer draws the `{nodes, edges}`
 model on an orthogonal grid, which is exactly right for an ordinary circuit and exactly wrong
 for the two deep dives: a Δ is a triangle, a Y is a star and a bridge is a diamond, and **the
 shape is the lesson**. Drawing a Δ as a grid rectangle would teach the wrong picture.
@@ -77,7 +78,7 @@ arrows, a reference marker, a probe tip), and every one of them has to be placed
 element it belongs to.
 
 **`topics/philosophy/` is the exception and uses the real renderer**, because its specimens are
-ordinary circuits — precisely what `js/circuit.js` draws well — and reusing it also gets the
+ordinary circuits — precisely what `js/core/` draws well — and reusing it also gets the
 node letters and the mesh loop-arrows for free, which are the two things that page needs the
 student to count. That is why `css/circuit.css` names `.figure` alongside `.stage` on every
 rule, and why `css/tutorial.css`'s SVG vocabulary is scoped to **`.figure--drawn`**: those
@@ -92,6 +93,26 @@ FRONTEND.md pins down, so it matches the solver pages' stage.
 **Label positions are hand-placed constants** (`TAGPOS`), not computed offsets. The figures are
 fixed, and a label landing on a wire is the one thing that makes a circuit diagram unreadable.
 There is a geometry check for this — see *Verifying*, below.
+
+## One folder per page, split by phase
+
+Each lab is a folder — `js/tutorial/<page>/` — not a file, and none of its files is over 200
+lines. The split is by JOB, and every file takes the same context object `X` that `context.js`
+builds:
+
+| File | Owns |
+|---|---|
+| `model.js` | the physics or the data, with no DOM at all — the part a self-check can assert without mounting a page |
+| `context.js` | the page's state and the small readers everything else is written in terms of |
+| `figure.js` | the drawing |
+| `panels.js` / `tally.js` / `choices.js` / `readouts.js` | the controls beside the figure, and what comes back out |
+| `guide-*.js` | the chapters, one file per guide when a page has several |
+| `lab.js` | the wiring: the guide walker, the switches, and what a change redraws |
+| `index.js` | the phase order, and the only file that touches `window` |
+
+Anything one file mutates and another reads lives on `X` (`X.lit`, `X.mode`, …), never as a
+file-local `var` — that is the one thing the split can get quietly wrong. The files are listed in
+the page's bundle in `js/deps.js`; a page's markup names the bundle and nothing else.
 
 ## The lesson is chapters, not steps
 
@@ -122,7 +143,7 @@ reveal: new numbers mean a revealed answer is no longer the answer.
 
 ## `topics/delta-wye/` — Δ ↔ Y
 
-`js/tutorial/delta-wye.js` (`DeltaWyeLab`). A Δ and a Y drawn side by side on one sheet,
+`js/tutorial/delta-wye/` (`DeltaWyeLab`). A Δ and a Y drawn side by side on one sheet,
 sharing terminals A, B and C, with the transform running live between them.
 
 - **The given side is whichever side you are converting from**, and flipping the direction
@@ -141,12 +162,12 @@ for; keep it.
 
 ## `topics/wheatstone-bridge/` — the bridge
 
-`js/tutorial/wheatstone.js` (`WheatstoneLab`). The bridge drawn as a diamond: supply across the
+`js/tutorial/wheatstone/` (`WheatstoneLab`). The bridge drawn as a diamond: supply across the
 vertical diagonal, detector across the horizontal one, arms named the way the balance condition
 is written — `R₁ = S–P`, `R₂ = S–Q`, `R₃ = P–T`, `Rx = Q–T` — so `R₁·Rx = R₂·R₃` pairs up
 *opposite* arms and the products read straight off the picture.
 
-- **The numbers come from the real engine.** Every reading is `js/solve.js` solving a real
+- **The numbers come from the real engine.** Every reading is `js/solve/` solving a real
   four-node `{nodes, edges}` model by modified nodal analysis — the same solve the solver pages
   run. The two-divider formulas the guide derives are shown **beside** the engine's answer,
   never in place of it. That is what makes the trap chapter land: load the bridge with a real
@@ -177,7 +198,7 @@ chapter points back. Keep both links alive.
 
 ## `topics/philosophy/` — which method, and why
 
-`js/tutorial/philosophy.js` (`PhilosophyLab`). Prof Holm's slides settle the choice in a
+`js/tutorial/philosophy/` (`PhilosophyLab`). Prof Holm's slides settle the choice in a
 parenthesis on step 1 — *"select to use node-voltage — least no of eq's"* — and this page makes
 that count visible.
 
@@ -209,7 +230,7 @@ it. Keep that grounded in the slides rather than in invention.
 
 ## `topics/conventions/` — signs, references and ground
 
-`js/tutorial/conventions.js` (`ConventionsLab`). **Three** fixed circuits, marked up whichever
+`js/tutorial/conventions/` (`ConventionsLab`). **Three** fixed circuits, marked up whichever
 way the student asks for. The dials are not component values but **agreements**: which way
 charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phrased.
 
@@ -225,7 +246,7 @@ charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phr
   A habit that survives the first two and dies on the third is the whole argument. Never
   "simplify" the page back to one circuit — the smallest one cannot break anything, which is
   exactly why it is the wrong place to test a convention and the right place to introduce one.
-- **Every level is data, and each is solved once** by `js/solve.js` before any choice is
+- **Every level is data, and each is solved once** by `js/solve/` before any choice is
   applied. The model, the sheet layout, the electrical nodes, the meshes and the `roles` map
   all live in the `LEVELS` table; `solved(L)` caches the one solve. Every choice is then a
   presentation layer over that answer. If a choice could change a solve, it would not be a
@@ -265,7 +286,7 @@ charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phr
   flow or as electron drift. Do not re-introduce a separate arrows picker: it made the marking
   and the polarity look like two independent decisions, which is the misconception.
 - **KCL draws no per-node bookkeeping arrows.** It used to put one on every lead at every node
-  in `kclAt`, the same marks `js/circuit.js` puts on a solver page — and that was a second set
+  in `kclAt`, the same marks `js/core/` puts on a solver page — and that was a second set
   of arrows over a figure that already carries one marking arrow per element, which is what the
   student reads. The phrasing is shown where it is actually compared: the node equations in the
   lesson column. Do not put them back.
@@ -329,9 +350,9 @@ charge is drawn moving, which node is 0 V, where the + mark goes, how KCL is phr
 - **A source's ± is printed, not chosen.** Only its arrow is free, which is why P = −V·I there
   and why the page can show a source delivering without calling the marking a mistake.
 - **Reset restores the conventions the rest of the site uses** — reference at the first source's
-  − terminal (`js/solve.js`), + where the current enters, KCL as Σ leaving = 0
-  (`js/techniques/node-voltage.js`) and every mesh walked clockwise adding drops
-  (`js/techniques/mesh-current.js`). Those are pinned in the self-check, so none of those files
+  − terminal (`js/solve/`), + where the current enters, KCL as Σ leaving = 0
+  (`js/techniques/node-voltage/`) and every mesh walked clockwise adding drops
+  (`js/techniques/mesh-current/`). Those are pinned in the self-check, so none of those files
   can drift away from what this page teaches without a failure.
 - **Switching circuits has two fallbacks**, both pinned: a reference node the new circuit has
   not got drops to that circuit's default, and KVL on a circuit with no meshes drops to KCL.
@@ -359,7 +380,10 @@ mesh currents and the KCL half reads it off the solve, so they agree to about 1e
 
 ## Verifying
 
-`js/tutorial.test.html` — open in a browser, every line must read `PASS`. It mounts both pages'
+`js/tutorial.test.html` — open in a browser, every line must read `PASS`. Its checks live in
+`js/tests/` (one file per page, plus three for the conventions lab) over the shared runner
+`js/tests/kit.js`, and because the page writes nothing during parsing it also runs headlessly
+under jsdom. It mounts both pages'
 **real markup** off-screen and drives the real labs rather than re-implementing their
 arithmetic. (The ids there carry a `dy-` / `wb-` prefix only because two pages that each own
 `#figure` and `#lesson-body` cannot both be mounted in one document — hence `opts.prefix`,
@@ -391,7 +415,7 @@ which each real page leaves unset.) It covers:
   branch subtracting when the loops agree and exactly the two that mesh 2 touches adding when
   it is reversed, "mine minus theirs" then breaking one branch on the split circuit and two on
   the grid with one bad sign reaching several mesh equations *and* KCL, the reference fallback,
-  reset agreeing with `js/solve.js` and both technique files, all six guides rendering on their
+  reset agreeing with `js/solve/` and both technique files, all six guides rendering on their
   own circuit with the defaults and with every mistake switched on at once, no chapter moving
   the board walking either direction, and pressing a circuit or a law restarting that guide at
   chapter 1.
