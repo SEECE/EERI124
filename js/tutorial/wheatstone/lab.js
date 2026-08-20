@@ -23,6 +23,7 @@
     });
 
     /* ---------- wiring ---------- */
+    X.changed = changed;
     function changed(skip) {
       syncDials(skip);
       drawFigure();

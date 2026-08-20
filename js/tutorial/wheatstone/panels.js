@@ -44,13 +44,13 @@
         rng.addEventListener('input', function () {
           var v = Math.round(Number(rng.value) / d.snap) * d.snap;
           S[d.k] = Math.max(d.min, v);
-          changed();
+          X.changed();
         });
         num.addEventListener('input', function () {
           var v = Number(num.value);
           if (!(v > 0)) return;
           S[d.k] = v;
-          changed(num);
+          X.changed(num);
         });
       });
       syncDials();

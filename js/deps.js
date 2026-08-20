@@ -88,7 +88,12 @@
       'tutorial/wheatstone/guide-theory.js', 'tutorial/wheatstone/guide-lab.js',
       'tutorial/wheatstone/lab.js', 'tutorial/wheatstone/index.js',
     ],
-    'tutorial-delta-wye': ['tutorial', 'tutorial/delta-wye.js'],
+    'tutorial-delta-wye': ['tutorial',
+      'tutorial/delta-wye/model.js', 'tutorial/delta-wye/context.js',
+      'tutorial/delta-wye/figure.js', 'tutorial/delta-wye/panels.js',
+      'tutorial/delta-wye/guide.js', 'tutorial/delta-wye/lab.js',
+      'tutorial/delta-wye/index.js',
+    ],
     'tutorial-philosophy': ['tutorial', 'tutorial/philosophy.js'],
     'tutorial-conventions': ['tutorial', 'tutorial/conventions.js'],
   };

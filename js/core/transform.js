@@ -61,8 +61,6 @@
      control resistor is never a dead-end branch — its current would be zero and the controlled
      source with it. Works on a copy per attempt and returns the first candidate that solves;
      if none does, the original circuit comes back untouched. */
-  function pickDepType(out) { return out === 'v' ? pick(['E', 'H']) : pick(['F', 'G']); }
-
   function dependify(circuit, opts) {
     opts = opts || {};
     var want = opts.count || (Math.random() < 0.3 ? 2 : 1);
