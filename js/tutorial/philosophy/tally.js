@@ -6,7 +6,7 @@
   var isV = PL.isV, isI = PL.isI, essentials = PL.essentials,
     tally = PL.tally, SPECS = PL.SPECS;
 
-  PL.tally = function (X) {
+  PL.tallyPanel = function (X) {
     var badge = X.badge, circuit = X.circuit, meshCol = X.meshCol, nodeCol = X.nodeCol;
     /* ---------- the tally ---------- */
     function row(label, value, cls) {

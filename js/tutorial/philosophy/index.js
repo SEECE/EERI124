@@ -34,7 +34,7 @@
   window.PhilosophyLab = function (opts) {
     var X = PL.context(opts);
     PL.figure(X);
-    PL.tally(X);
+    PL.tallyPanel(X);
     X.chapters = function () { return PL.guideCount(X).concat(PL.guideChoose(X)); };
     return PL.lab(X);
   };

@@ -37,12 +37,29 @@
     });
   }
 
+  function rnd(hi) { return 1 + Math.random() * (hi || 900); }
+  function $(id) { return document.getElementById(id); }
+  function text(id) { return $(id).textContent; }
+
+  /* Every chapter is re-rendered from the LIVE values on each refresh, so a chapter that
+     captured a stale number prints it here, and a missing one prints "undefined". */
+  function walkChapters(lab, prefix, label, min) {
+    var dots = $(prefix + 'lesson-dots').children.length;
+    assert(dots >= (min || 8), label + ': only ' + dots + ' chapters');
+    for (var i = 0; i < dots; i++) {
+      lab.lesson.go(i);
+      var t = text(prefix + 'lesson-title') + ' ' + text(prefix + 'lesson-body');
+      assert(!/undefined|NaN|\[object/.test(t), label + ' chapter ' + (i + 1) + ': ' + t);
+      assert(t.length > 100, label + ' chapter ' + (i + 1) + ' is empty');
+    }
+  }
+
   function report(id) {
     document.getElementById(id || 'out').textContent = out.join('\n');
     out.forEach(function (l) { console.assert(l.indexOf('PASS') === 0, l); });
   }
 
   window.Tests = { check: check, assert: assert, near: near, C: C, v: v, src: src,
-    noNaN: noNaN,
+    noNaN: noNaN, rnd: rnd, $: $, text: text, walkChapters: walkChapters,
     out: out, report: report };
 })();

@@ -115,8 +115,11 @@
 
   <script src="../../js/deps.js" data-load="solver"></script>
   <script>
-    // this topic covers independent voltage sources + resistors only
-    SolverPage({ filter: { elements: ['R', 'V', 'W'] }, elements: ['R', 'V', 'W'] });
+    // deps.js loads this page's scripts in order; `load` is when every one of them is in
+    window.addEventListener('load', function () {
+      // this topic covers independent voltage sources + resistors only
+      SolverPage({ filter: { elements: ['R', 'V', 'W'] }, elements: ['R', 'V', 'W'] });
+    });
   </script>
   <script src="../../js/ui/nav.js"></script>
 </body>

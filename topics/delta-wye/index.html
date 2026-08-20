@@ -84,11 +84,14 @@
 
   <script src="../../js/deps.js" data-load="tutorial-delta-wye"></script>
   <script>
-    // js/solve.js is loaded for Solve.si alone — every displayed quantity on the site goes
-    // through it, so "0.1 Ω" and "2.2 kΩ" read the same here as on a solver page. None of the
-    // rest of the solver is used: this page's arithmetic is the three transform formulas and
-    // two series/parallel readings, which IS the lesson and so is worked in the open.
-    DeltaWyeLab();
+    // deps.js loads this page's scripts in order; `load` is when every one of them is in
+    window.addEventListener('load', function () {
+      // js/solve.js is loaded for Solve.si alone — every displayed quantity on the site goes
+      // through it, so "0.1 Ω" and "2.2 kΩ" read the same here as on a solver page. None of the
+      // rest of the solver is used: this page's arithmetic is the three transform formulas and
+      // two series/parallel readings, which IS the lesson and so is worked in the open.
+      DeltaWyeLab();
+    });
   </script>
   <script src="../../js/ui/nav.js"></script>
 </body>

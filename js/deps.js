@@ -7,9 +7,10 @@
 
      <script src="../../js/deps.js" data-load="solver"></script>
 
-   Bundles are expanded in order, de-duplicated, and written out as ordinary <script> tags at
-   this tag's own position — so anything after it in the markup (a page's inline init call)
-   still runs after the whole bundle, exactly as a hand-written list did.
+   Bundles are expanded in order, de-duplicated, and appended as ordinary <script> elements
+   with `async = false`, which keeps them in order. A page's own init call therefore goes
+   inside a `load` listener rather than in a bare inline script — by then the whole bundle
+   has run.
 
    A bundle entry is either a path relative to js/ or the name of another bundle. Adding a file
    to a subsystem is an edit HERE and nowhere else. */
@@ -67,9 +68,15 @@
       'techniques/equivalent-resistance/moves-star.js',
       'techniques/equivalent-resistance/steps.js', 'techniques/equivalent-resistance/index.js',
     ],
+    'tests-circuit': ['tests/kit.js', 'tests/circuit-model.js'],
     'tests-solve': [
       'tests/kit.js', 'tests/solve-engine.js', 'tests/solve-sources.js',
       'tests/solve-sweep.js', 'tests/solve-req.js',
+    ],
+    'tests-tutorial': [
+      'tests/kit.js', 'tests/tutorial-delta-wye.js', 'tests/tutorial-wheatstone.js',
+      'tests/tutorial-philosophy.js', 'tests/conventions-circuits.js',
+      'tests/conventions-mistakes.js', 'tests/conventions-guides.js',
     ],
     formats: ['formats/native.js', 'formats/ltspice.js', 'formats/tikz.js'],
     tutorial: ['circuit', 'solve', 'tutorial/draw.js', 'tutorial/lesson.js'],
@@ -130,7 +137,10 @@
   }
   (me.getAttribute('data-load') || '').split(/[\s,]+/).filter(Boolean).forEach(add);
 
-  document.write(files.map(function (f) {
-    return '<script src="' + base + f + '"><\/script>';
-  }).join(''));
+  files.forEach(function (f) {
+    var s = document.createElement('script');
+    s.src = base + f;
+    s.async = false;                 // in order, and DOMContentLoaded waits for the lot
+    (document.head || document.documentElement).appendChild(s);
+  });
 })();
