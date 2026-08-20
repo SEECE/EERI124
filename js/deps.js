@@ -30,7 +30,10 @@
       'generators/grid.js', 'generators/multi-source.js', 'generators/current-source.js',
       'generators/dependent.js',
     ],
-    solve: ['solve.js'],
+    solve: [
+      'solve/format.js', 'solve/linear.js', 'solve/nodes.js', 'solve/nodal.js',
+      'solve/branches.js', 'solve/faces.js', 'solve/mesh.js',
+    ],
     techniques: [
       'techniques/kit.js', 'techniques/controls.js', 'techniques/node-voltage.js',
       'techniques/mesh-current.js', 'techniques/equivalent-resistance.js',
