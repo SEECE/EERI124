@@ -94,7 +94,13 @@
       'tutorial/delta-wye/guide.js', 'tutorial/delta-wye/lab.js',
       'tutorial/delta-wye/index.js',
     ],
-    'tutorial-philosophy': ['tutorial', 'tutorial/philosophy.js'],
+    'tutorial-philosophy': ['tutorial',
+      'tutorial/philosophy/model.js', 'tutorial/philosophy/context.js',
+      'tutorial/philosophy/figure.js', 'tutorial/philosophy/tally.js',
+      'tutorial/philosophy/guide-count.js', 'tutorial/philosophy/guide-choose.js',
+      'tutorial/philosophy/lab.js',
+      'tutorial/philosophy/index.js',
+    ],
     'tutorial-conventions': ['tutorial', 'tutorial/conventions.js'],
   };
 
