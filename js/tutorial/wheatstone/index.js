@@ -9,7 +9,7 @@
 
    Three decisions worth keeping:
 
-   1. THE NUMBERS COME FROM THE REAL ENGINE. Every reading is js/solve.js solving a real
+   1. THE NUMBERS COME FROM THE REAL ENGINE. Every reading is js/solve/ solving a real
       four-node {nodes, edges} model of the bridge — the same modified nodal analysis the
       solver pages use. The divider formulas the guide derives are shown BESIDE the engine's
       answer, never in place of it, which is what makes chapter 7's trap land: when a real

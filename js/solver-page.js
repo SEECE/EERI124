@@ -105,7 +105,7 @@
 
     function buildSteps() {
       switch (techSel.value) {
-        // Σ currents leaving = 0 is fixed — js/techniques/node-voltage.js still accepts a
+        // Σ currents leaving = 0 is fixed — js/techniques/node-voltage/ still accepts a
         // { kcl: 'inout' } override (the self-check uses it to prove both phrasings land on
         // the same board), but this page never offers the choice: step 4's Σ in = Σ out button
         // is disabled, shown only so a student recognises it as the same equation.

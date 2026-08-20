@@ -107,7 +107,7 @@
        the scale and position on screen are identical from the first step to the last: without it,
        the step where a branch (and the value label hanging off it) disappears re-fits the viewBox
        and the entire circuit jumps. Measured by rendering each snapshot into a detached SVG and
-       reading back the box the renderer chose (`data-frame`, see js/circuit.js). */
+       reading back the box the renderer chose (`data-frame`, see js/core/). */
     function pinFrame() {
       var probe = document.createElementNS('http://www.w3.org/2000/svg', 'svg'), box = null;
       shots.forEach(function (s) {

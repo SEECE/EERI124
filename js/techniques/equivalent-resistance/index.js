@@ -20,7 +20,7 @@
    between the terminals gives Req = ∞; a non-series-parallel network (e.g. a bridge) can't be
    collapsed by series/parallel alone — we say so and give Req from nodal analysis.
 
-   Reduction is verified against the linear engine (js/solve.js) — the reported Req is the
+   Reduction is verified against the linear engine (js/solve/) — the reported Req is the
    nodal-analysis value, so it is right even when the reduction stalls.
 
    The module is split by PHASE, one file each, all sharing a context object `X` built by

@@ -20,7 +20,7 @@
       registry would pick them up, and they are teaching specimens, not problems.
    3. THE FIGURE IS THE REAL RENDERER. Unlike the Δ-Y and bridge pages — where the SHAPE is
       the lesson and so is drawn by hand — these are ordinary circuits, exactly what
-      js/circuit.js draws well. Reusing it also gets node letters and mesh loop-arrows for
+      js/core/ draws well. Reusing it also gets node letters and mesh loop-arrows for
       free, which is precisely what has to be counted.
 
    The lab is split by PHASE, one file each, all sharing a context object `X` built by

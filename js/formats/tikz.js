@@ -5,7 +5,7 @@
    with the picture itself fenced by two comment lines so it can equally be pasted into a
    document that already exists. It is circuitikz and not raw TikZ because circuitikz already
    knows how to draw a resistor — hand-drawing the zigzags here would be a second renderer to
-   keep in step with js/circuit.js for no gain.
+   keep in step with js/core/ for no gain.
 
    Unlike the .asc writer this needs no orthogonal layout: circuitikz draws a bipole along any
    path at all, so every circuit on the site exports, diagonals included. Plain script, one

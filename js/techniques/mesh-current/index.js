@@ -1,6 +1,6 @@
 /* Mesh-current (KVL) technique — turns one circuit into the ordered step list of Prof Holm's
-   mesh-current method (Mesh-current PPT, EERI 212). Consumes the js/solve.js mesh engine;
-   returns steps for js/stepper.js. Deliberately built to mirror js/techniques/node-voltage.js
+   mesh-current method (Mesh-current PPT, EERI 212). Consumes the js/solve/ mesh engine;
+   returns steps for js/stepper.js. Deliberately built to mirror js/techniques/node-voltage/
    (KCL): same substep rhythm, same live board, same "clear it, collect it, divide it, then
    substitute" algebra — a student who learned one method reads the other for free.
 

@@ -27,7 +27,7 @@
   var clamp = window.BuilderSymbols.clamp;    // both shared with js/builder/symbols.js
   var names = window.BuilderSymbols.names;
 
-  // compact engineering-ish label; the builder does not load js/solve.js just for si()
+  // compact engineering-ish label; the builder does not load js/solve/ just for si()
 
   window.BuilderView = function (svg) {
     var vp = { pitch: DEFAULT_PITCH, ox: 0, oy: 0 };

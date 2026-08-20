@@ -14,7 +14,7 @@
     id: 'basic', name: 'One loop', view: '0 0 720 360',
     coords: [[0, 0], [2, 0], [0, 2], [2, 2]],
     edges: [
-      ['V', 2, 0, 12],   // e0 — a = n2 (−), b = n0 (+): js/solve.js reads edge.a as the − terminal
+      ['V', 2, 0, 12],   // e0 — a = n2 (−), b = n0 (+): js/solve/ reads edge.a as the − terminal
       ['R', 0, 1, 40],   // e1 — R₁ across the top
       ['R', 1, 3, 40],   // e2 — R₂ down the right
       ['W', 2, 3],

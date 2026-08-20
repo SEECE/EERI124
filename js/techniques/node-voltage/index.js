@@ -1,6 +1,6 @@
 /* Node-voltage (KCL) technique — turns one circuit into Prof Holm's node-voltage method
    (Node-voltage PPT, EERI 212), now built on modified nodal analysis so it handles any
-   number of voltage sources. Consumes the shared model + js/solve.js; returns steps for
+   number of voltage sources. Consumes the shared model + js/solve/; returns steps for
    js/stepper.js. Several steps carry substeps (see the stepper) so a student can drill each
    node / source / equation or skip the whole step.
 

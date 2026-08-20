@@ -62,7 +62,7 @@
                  'unmoved by anything you can press') +
               '<p>Choose <em>sensibly</em> and the algebra gets shorter: hang the reference on a ' +
               'voltage source\'s − terminal and that source hands you its other node for free. ' +
-              'That is node C here, and it is what js/solve.js does on every solver page on ' +
+              'That is node C here, and it is what js/solve/ does on every solver page on ' +
               'this site.</p>';
           } },
 

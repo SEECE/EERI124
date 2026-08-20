@@ -37,7 +37,7 @@
 
   /* ---------- electrical nets ----------
      Wires tie nodes into one SPICE node, and SPICE needs a reference called 0. The reference is
-     the first independent source's − terminal — the same choice js/solve.js makes, so the node
+     the first independent source's − terminal — the same choice js/solve/ makes, so the node
      voltages LTspice prints line up with the ones the workbench derived. */
   function nets(circuit) {
     var parent = {};
@@ -45,7 +45,7 @@
     circuit.nodes.forEach(function (n) { parent[n.id] = n.id; });
     circuit.edges.forEach(function (e) { if (e.type === 'W') parent[find(e.a)] = find(e.b); });
 
-    // Same reference js/solve.js picks — the first VOLTAGE source's − terminal, or, in a
+    // Same reference js/solve/ picks — the first VOLTAGE source's − terminal, or, in a
     // current-source-only circuit, the node the first one draws from. Both are the edge's `a`.
     // Matching it means LTspice's node voltages read the same as the workbench's.
     var src = circuit.edges.filter(function (e) { return e.type === 'V'; })[0]

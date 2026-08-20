@@ -49,11 +49,11 @@ check('conventions — reset restores exactly the conventions the rest of the si
   // the three defaults that are a promise about other files, not a preference
   var c = ConventionsLab.circuit('split'), s = Solve.nodeVoltages(c);
   assert(ConventionsLab.defaults.ref === 'C' && s.v[s.of.n3] === 0,
-    'js/solve.js no longer references the node this page calls C');
+    'js/solve/ no longer references the node this page calls C');
   assert(ConventionsLab.defaults.kcl === 'leaving',
-    'js/techniques/node-voltage.js writes Σ leaving = 0; this page must agree');
+    'js/techniques/node-voltage/ writes Σ leaving = 0; this page must agree');
   assert(ConventionsLab.defaults.loops === 'cw' && ConventionsLab.defaults.kvlsign === 'drops',
-    'js/techniques/mesh-current.js walks clockwise adding drops; this page must agree');
+    'js/techniques/mesh-current/ walks clockwise adding drops; this page must agree');
 });
 
 /* There is one guide per (circuit, law), and the BOARD is in charge of which one you are

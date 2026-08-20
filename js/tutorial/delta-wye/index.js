@@ -12,7 +12,7 @@
       hands the computed values back as the new givens. So Δ→Y→Δ lands exactly where it
       started — the round trip is a fact the student can perform, not one they are told.
       That only works because the stored values stay exact; rounding happens at display time.
-   2. THE FIGURE IS DRAWN HERE, not by js/circuit.js. A triangle and a star are the lesson;
+   2. THE FIGURE IS DRAWN HERE, not by js/core/. A triangle and a star are the lesson;
       an orthogonal grid render of them would teach the wrong shape.
 
    The lab is split by PHASE, one file each, all sharing a context object `X` built by

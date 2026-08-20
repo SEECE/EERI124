@@ -10,7 +10,7 @@
 
    Five decisions worth keeping:
 
-   1. EACH CIRCUIT IS SOLVED ONCE, by js/solve.js, before any choice is applied. Every choice
+   1. EACH CIRCUIT IS SOLVED ONCE, by js/solve/, before any choice is applied. Every choice
       is then a presentation layer over that one answer — signs, marks and wording. If a
       choice could change the solve, it would not be a convention.
    2. THERE ARE THREE CIRCUITS, AND THAT IS THE POINT. A convention is only ever tested by a

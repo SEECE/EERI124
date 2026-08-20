@@ -55,9 +55,9 @@
   ];
 
   /* The conventions the REST of the site uses, so the reset button is not an arbitrary
-     starting point: js/solve.js puts the reference at the first source's − terminal (node C on
-     the split circuit), js/techniques/node-voltage.js writes "Σ currents leaving = 0" and
-     js/techniques/mesh-current.js walks every mesh clockwise. */
+     starting point: js/solve/ puts the reference at the first source's − terminal (node C on
+     the split circuit), js/techniques/node-voltage/ writes "Σ currents leaving = 0" and
+     js/techniques/mesh-current/ walks every mesh clockwise. */
   var DEFAULTS = { level: 'split', mode: 'kcl', flow: 'positive', ref: 'C', zero: 'chosen',
     polarity: 'flow', kcl: 'leaving', loops: 'cw', kvlsign: 'drops', shared: 'signed' };
 
