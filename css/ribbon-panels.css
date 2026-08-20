@@ -1,0 +1,57 @@
+/* The ribbon's right-hand panel toggles: the two glyph buttons that collapse the rail and the
+   workbench, and how the group labels give way when the window narrows.
+   Part of the ribbon; see css/ribbon.css. */
+
+/* ── panel toggles (right) ── */
+.ribbon-tools { display: flex; gap: var(--sp-1); flex: none; }
+
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+.icon-btn:hover { color: var(--text); background: var(--tint); border-color: var(--line-hi); }
+.icon-btn[aria-pressed='true'] { color: var(--violet-200); border-color: var(--line-hi); }
+
+/* the glyph: a panel outline with one filled edge column — left for the rail, right for the
+   workbench. Drawn in CSS so no page has to carry an inline <svg> five times over. */
+.ptg {
+  width: 15px;
+  height: 12px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  position: relative;
+}
+.ptg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: currentColor;
+  transition: opacity var(--dur) var(--ease);
+}
+.icon-btn--rail .ptg::before { left: 0; }
+.icon-btn--workbench .ptg::before { right: 0; }
+.icon-btn[aria-pressed='false'] .ptg::before { opacity: 0.28; }
+
+@media (max-width: 1160px) {
+  .ribbon-title, .ribbon-sep { display: none; }
+}
+/* the nav cannot scroll (it would clip the menus), so the group labels shrink instead */
+@media (max-width: 560px) {
+  .nav-long { display: none; }
+  .nav-short { display: inline; }
+  .nav-top { padding: 6px 8px; }
+}
+@media (max-width: 620px) {
+  .ribbon-brand .ribbon-name { display: none; }
+}

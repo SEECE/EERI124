@@ -1,0 +1,29 @@
+/* The tutorial shell — the two Study Unit 3 deep dives (topics/delta-wye/,
+   topics/wheatstone-bridge/). See structure/TUTORIALS.md.
+
+   These pages are NOT solver pages. There is no generated circuit and no stepwise solve, so
+   the rail/stage/workbench grid does not fit them: there are no circuit controls to put in a
+   rail. They use TWO regions instead of three —
+
+     BOARD   the interactive drawing, plus the dials that drive it and the results it produces.
+             One purpose-drawn figure per page (a Δ next to a Y; a bridge with a meter), not a
+             render of the {nodes,edges} model — the shapes are the lesson.
+     LESSON  the guide, walked chapter by chapter. Fixed teaching text, not a derivation
+             generated from a random problem.
+
+   Same rules as every other region (structure/FRONTEND.md): grid rows, min-height 0, exactly
+   one descendant scrolls, no magic-number heights. */
+
+.lab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--lesson-w);
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  min-height: 0;
+}
+
+/* Split for size: the board's own controls are in css/tutorial-board.css, the guide and its
+   tables in css/tutorial-lesson.css, and what a hand-drawn figure is made of in
+   css/tutorial-figure.css. Load all four, in that order. */
+
+/* ── narrow: one column, and the LAB is the single scroller (the shell still never scrolls) ── */

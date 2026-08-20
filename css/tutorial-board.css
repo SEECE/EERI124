@@ -1,0 +1,139 @@
+/* Tutorial pages — the board: the paper sheet the figure is drawn on, and every control that
+   drives it — the segmented switches, the dials, the conventions page's choice rows and the
+   results that come back. Part of the tutorial shell; see css/tutorial-lab.css. */
+
+/* ── board ── */
+.board { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--sp-3); padding: var(--sp-3); }
+
+.board-head { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
+.board-head .eyebrow { margin-right: auto; }
+
+/* the paper sheet the figure is drawn on — the one light surface on a dark page, exactly as
+   the solver pages' stage is. The six --ink/--accent/--surface names are the same contract. */
+.figure {
+  background: var(--paper);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2);
+  min-height: 0;
+  display: grid;
+}
+.figure svg { width: 100%; height: 100%; min-height: 0; -webkit-user-select: none; user-select: none; }
+
+.board-foot { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--sp-3); }
+/* A foot that can outgrow the board owns the board's scrolling and is capped in vh, per
+   structure/FRONTEND.md rule 4 — the conventions page's biggest circuit writes four node
+   equations and eight element powers into it, which as a plain `auto` row ate the whole
+   figure track and left the circuit a sliver. Opt-in, so the other three feet are untouched. */
+.board-foot.scroller { max-height: 34vh; min-height: 0; }
+.board-col { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+.board-col > .eyebrow { color: var(--text-faint); }
+.board-col--out > .eyebrow { color: var(--aqua-300); }
+
+/* ── segmented control (direction, mode) ── */
+.seg { display: inline-flex; padding: 2px; gap: 2px; background: var(--panel-hi); border: 1px solid var(--line); border-radius: var(--radius-sm); }
+.seg > button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  padding: 5px 11px;
+  color: var(--text-dim);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.seg > button:hover { color: var(--text); }
+.seg > button[aria-pressed='true'] { color: #fff; background: var(--violet-600); }
+/* a law the circuit on show cannot be written in (KVL on a circuit with no meshes yet) */
+.seg > button:disabled { opacity: 0.35; cursor: not-allowed; }
+.seg > button:disabled:hover { color: var(--text-dim); }
+
+/* ── a dial: label · slider · number · unit, one per editable resistor ── */
+.dial { display: grid; grid-template-columns: 3.6em minmax(60px, 1fr) 5.2em; align-items: center; gap: var(--sp-2); }
+.dial-name { font-size: 12.5px; font-weight: 650; color: var(--violet-200); font-family: var(--font-math); }
+.dial-name sub { font-size: 0.72em; }
+.dial input[type='range'] { width: 100%; min-width: 0; accent-color: var(--violet-500); cursor: pointer; }
+.dial input[type='number'] { font-size: 12px; padding: 4px 6px; text-align: right; }
+
+/* ── a choice row: the conventions page's "dial". Its knobs are not numbers but agreements,
+   so the control is a name and a .seg of the ways you are allowed to write the same thing
+   down — plus, on most rows, one way you are NOT. The wrong option is styled here rather
+   than hidden, because seeing it named is the point of the page. ── */
+.choice { display: grid; grid-template-columns: 7.4em minmax(0, 1fr); align-items: center; gap: var(--sp-2); }
+.choice + .choice { margin-top: 5px; }
+.choice-name { font-size: 11.5px; font-weight: 650; color: var(--violet-200); }
+.choice .seg { flex-wrap: wrap; }
+.choice .seg > button { padding: 3px 8px; font-size: 11px; }
+.choice .seg > button[data-wrong] { color: var(--danger); }
+.choice .seg > button[data-wrong][aria-pressed='true'] { color: #2b0710; background: var(--danger); }
+
+/* ── a result: the formula with this figure's numbers in it, and the answer ── */
+.result {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xs);
+  padding: 5px var(--sp-2);
+}
+.result-name { font-family: var(--font-math); font-weight: 650; color: var(--violet-200); }
+.result-name sub { font-size: 0.72em; }
+.result-val { margin-left: auto; font-weight: 700; color: var(--aqua-300); font-variant-numeric: tabular-nums; }
+.result-note { font-size: 11px; color: var(--text-faint); font-family: var(--font); }
+.result.is-lit { border-color: var(--line-hi); background: var(--tint); }
+/* the arm the student is not allowed to turn (the bridge's hidden unknown) */
+.dial.is-locked .dial-name { color: var(--text-faint); }
+.dial.is-locked input { opacity: 0.4; }
+
+/* the standing verdict — balanced or not — pinned in the board head so it is never scrolled
+   away from. It is the one thing on a bridge page that must be readable at a glance. */
+.badge {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  border: 1px solid var(--line-hi);
+  white-space: nowrap;
+}
+.badge--ok { color: #062e2b; background: var(--aqua-300); border-color: var(--aqua-400); }
+.badge--off { color: var(--text-dim); background: var(--panel-hi); }
+.badge--bad { color: #2b0710; background: var(--danger); border-color: var(--danger); }
+
+/* A convention the maths cannot survive: the whole board turns, so the mistake is felt before
+   it is read. Only the conventions page raises this — everywhere else, every choice is legal. */
+.board.is-wrong { box-shadow: inset 0 0 0 1px var(--danger); }
+.board.is-wrong .figure { background: #fdf2f4; }
+.result.is-bad { border-color: var(--danger); }
+.result.is-bad .result-val { color: var(--danger); }
+.result-warn { font-size: 11.5px; line-height: 1.45; color: var(--danger); }
+
+/* the measure-an-unknown strip, shown only in that mode */
+.unknown { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.unknown-out { flex: 1 1 200px; min-width: 0; font-size: 12.5px; color: var(--text-dim); }
+.unknown-out b { color: var(--aqua-300); }
+
+/* stacked fraction, small enough to sit inline in a result row */
+.frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; line-height: 1.15; }
+.frac > span:first-child { border-bottom: 1px solid currentColor; padding: 0 4px 1px; }
+.frac > span:last-child { padding: 1px 4px 0; }
+
+/* practice mode: a computed value is a button until the student asks for it */
+.peek {
+  font: inherit;
+  font-weight: 700;
+  color: var(--violet-200);
+  background: var(--tint);
+  border: 1px dashed var(--line-hi);
+  border-radius: var(--radius-xs);
+  padding: 0 8px;
+  cursor: pointer;
+}
+.peek:hover { color: #fff; background: var(--violet-600); }
