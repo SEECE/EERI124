@@ -148,8 +148,8 @@
         vg + ' = ' + base + (sign > 0 ? ' + ' : ' − ') + CV.gain(p.e));
       var cset = {}; cset[g] = true;
       var Q = pinEquation(g, cset);
-      step('put the control variable in', 'And ' + CV.sym(p.e) + ' is a resistor’s ' +
-        (CV.kind(p.e) === 'i' ? 'current' : 'voltage') + ', from step 8.', Q.substituted);
+      step('put the control variable in', 'And ' + CV.sym(p.e) + ' is the ' +
+        (CV.kind(p.e) === 'i' ? 'current through ' : 'voltage across ') + CV.ctrlNoun(p.e) + ', from step 8.', Q.substituted);
       if (Q.constrained) step('use the constraint', constraintNote(Q), Q.constrained);
       if (Q.selfRef) step('collect ' + vg, 'That put ' + vg + ' on both sides — collect it on the left, then divide.', Q.collect);
       board[g] = si(V(g), 'V');

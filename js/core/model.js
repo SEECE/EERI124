@@ -11,10 +11,13 @@
      Dependent (controlled) sources carry a `control` field naming the edge they read:
        'E' VCVS  v = value·v_ctrl   (b is +)      'H' CCVS  v = value·i_ctrl   (b is +)
        'F' CCCS  i = value·i_ctrl   (a → b)       'G' VCCS  i = value·v_ctrl   (a → b)
-     The controlling edge is always a RESISTOR (that is what the lecture slides use, and it
-     keeps the control variable readable straight off Ohm's law). Its sense is fixed by the
-     control edge's own a/b: v_ctrl = v(ctrl.a) − v(ctrl.b), i_ctrl = current ctrl.a → ctrl.b.
-     See structure/GENERATORS.md. */
+     The controlling edge is a RESISTOR — that is what most of the lecture slides use, and it
+     keeps the control variable readable straight off Ohm's law — or, for a CURRENT read only,
+     an independent VOLTAGE SOURCE: LU4.2's Assessment Problem 4.4 hangs 20·iΔ off the current
+     the 10 V source supplies, and a branch current is a branch current whatever sits in it. A
+     voltage READ off a voltage source would just be that source's own value, so E/G stay tied
+     to resistors. Its sense is fixed by the control edge's own a/b: v_ctrl = v(ctrl.a) −
+     v(ctrl.b), i_ctrl = current ctrl.a → ctrl.b. See structure/GENERATORS.md. */
   var VALUED = { R: 'resistance', V: 'voltage', I: 'current' }; // types that need a positive value
   var DEP = { E: 'v', F: 'i', G: 'v', H: 'i' };  // dependent type → what its control variable is
   var DEP_OUT = { E: 'v', F: 'i', G: 'i', H: 'v' }; // …and what the source itself delivers
@@ -22,6 +25,47 @@
   function isSource(t) { return t === 'V' || t === 'I' || isDependent(t); }
   function depKind(t) { return DEP[t]; }            // what a controlled source READS  ('v'/'i')
   function depOut(t) { return DEP_OUT[t]; }         // what it DELIVERS                ('v'/'i')
+  /* May `ctrl` be the control edge of a dependent source of type `t`? A resistor always can;
+     a voltage source only for a current read (see the model note above). */
+  function canControl(ctrl, t) {
+    return ctrl.type === 'R' || (ctrl.type === 'V' && DEP[t] === 'i');
+  }
+
+  /* Wires make several drawn nodes ONE electrical node; this is that grouping, over raw ids,
+     so the model can reason about "what else is attached here" without the solver loaded. */
+  function nodeGroups(c) {
+    var p = {};
+    function find(x) {
+      if (p[x] === undefined) p[x] = x;
+      while (p[x] !== x) { p[x] = p[p[x]]; x = p[x]; }
+      return x;
+    }
+    c.nodes.forEach(function (n) { find(n.id); });
+    c.edges.forEach(function (e) { if (e.type === 'W') p[find(e.a)] = find(e.b); });
+    return find;
+  }
+
+  /* Which terminal of a VOLTAGE SOURCE the current through it can be read off, or null.
+     A resistor tells you its own current from Ohm's law; a source does not, so the only way to
+     write i through it in node voltages is KCL at one of its terminals — the source's current
+     IS the sum of the currents leaving that node through everything else. That works when
+     everything else there is a resistor (the slides' case): another voltage source at the same
+     node contributes a branch current that is itself unknown, and a current source at it would
+     make the sum need a term the node-voltage walk does not have. Returns the terminal id.
+     `b` is tried first, so the reading is written at the + terminal where there is a choice. */
+  function controlTerminal(c, ctrl) {
+    var find = nodeGroups(c);
+    function usable(t) {
+      var g = find(t), rs = 0, ok = true;
+      c.edges.forEach(function (e) {
+        if (e === ctrl || e.type === 'W') return;
+        if (find(e.a) !== g && find(e.b) !== g) return;
+        if (e.type === 'R') rs++; else ok = false;
+      });
+      return ok && rs > 0;
+    }
+    return usable(ctrl.b) ? ctrl.b : usable(ctrl.a) ? ctrl.a : null;
+  }
 
   function validate(c) {
     var ids = {};
@@ -44,7 +88,10 @@
       var ctrl = byId[e.control];
       if (!ctrl) throw new Error('edge ' + e.id + ' names a missing control edge ' + e.control);
       if (ctrl === e) throw new Error('edge ' + e.id + ' controls itself');
-      if (ctrl.type !== 'R') throw new Error('edge ' + e.id + ' must be controlled by a resistor, not ' + ctrl.type);
+      if (!canControl(ctrl, e.type)) throw new Error('edge ' + e.id + ' cannot be controlled by a ' + ctrl.type +
+        ' — a resistor, or (for a current read) a voltage source');
+      if (ctrl.type === 'V' && !controlTerminal(c, ctrl)) throw new Error('edge ' + e.id +
+        ' reads the current through ' + ctrl.id + ', but neither of its terminals has resistors alone on it');
     });
     return c;
   }
@@ -124,4 +171,7 @@
   C.isSource = isSource;
   C.depKind = depKind;
   C.depOut = depOut;
+  C.canControl = canControl;
+  C.controlTerminal = controlTerminal;
+  C.nodeGroups = nodeGroups;
 })();

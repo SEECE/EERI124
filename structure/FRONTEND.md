@@ -39,7 +39,8 @@ rather than *the page grows*.
   follows it.
 - **workbench** (`css/workbench.css`) — the method. **Four fixed grid rows**: head, scrolling
   derivation, board, nav. The board is a row, not a sticky element — that is why it can no
-  longer ride over the text.
+  longer ride over the text. The head carries the step counter, the title, and — only on a step
+  that offers one — the step's own **choice strip** (`#step-tabs`, `js/stepper.js`'s `tabs`).
 
 Rules for any new region or panel:
 
@@ -107,7 +108,8 @@ line, and the one `input[type=file]` inside is Open. See [FORMATS.md](FORMATS.md
 Class names the scripts emit or toggle are equally binding: `.edge` `.node` `.hl` `.show`
 `.node-label` `.ctrl-mark` `.pol-mark` `.flow-mark` `.dep-body` `.ground-symbol` (renderer,
 styled in `css/circuit.css`), `.eq-line` `.eq-peek` `.frac` `.kcl-status` `.eq-board`
-`.row-ready` `.step-badge` (step content, styled in `css/workbench.css`), `.nav-top` `.nav-group`
+`.row-ready` `.step-badge` `.step-tabs` `.tab-btn` `.tab-label` `.mtx` `.mtx-eq` `.mtx-op`
+(step content, styled in `css/workbench.css`), `.nav-top` `.nav-group`
 `.nav-menu` `.nav-item` `.nav-caret` `.nav-long` `.nav-short` (nav, styled in `css/ribbon.css`),
 `.palette-btn`
 `.grid-dot` `.grid-dot-bg` `.builder-edge` `.be-*` `.is-anchor` `.is-hover` `.is-ghost`
@@ -148,7 +150,7 @@ Split by scope, ≤200 lines each, loaded in this order:
 | `workspace.css` | the rail/stage/workbench grid, collapsing, drawers | topic pages |
 | `controls.css` | `.field` / `.ctl` / `.btn` — the rail's vocabulary | topic pages |
 | `circuit.css` | how the rendered SVG looks: highlights, reveals — names `.stage` **and** `.figure` | solver pages, and the philosophy tutorial |
-| `workbench.css` | the step panel: head, equations, tables, board, nav | solver pages |
+| `workbench.css` | the step panel. An `@import` index over `workbench-head` (head row, narration, the choice strips) · `-eq` (equation lines, fractions, matrices, the status/board tables) · `-nav` (the footer row) | solver pages |
 | `builder.css` | palette, properties, canvas chrome, everything drawn on the grid | builder page |
 | `tutorial.css` | the two-region lab shell: board, dials, results, lesson, tallies. An `@import` index over `tutorial-lab` · `-board` · `-lesson` · `-figure` · `-narrow`. Its SVG vocabulary is scoped to `.figure--drawn`, so it never fights the renderer on the philosophy page | tutorial pages |
 | `home.css` | hero, section labels, topic cards | home, about |

@@ -89,9 +89,20 @@ A controlled source carries its gain in `value` and names the edge it reads in `
 
 Rules, all enforced by `validate()`:
 
-- **The control edge is always a resistor.** That is what the lecture slides use, and it keeps
-  the control variable readable straight off Ohm's law — which is exactly what makes the whole
-  thing solvable without a new method (see SOLVER.md).
+- **The control edge is a resistor, or — for a CURRENT read — an independent voltage source.**
+  A resistor is what most of the lecture slides use, and it keeps the control variable readable
+  straight off Ohm's law. LU4.2's Assessment Problem 4.4 hangs `20·iΔ` off the current the 10 V
+  source supplies instead, and a branch current is a branch current whatever sits in the branch,
+  so `F`/`H` may name a `V`. A **voltage** read off a voltage source may not: it would just be
+  that source's own value, so `E`/`G` stay tied to resistors. `Circuit.canControl(ctrlEdge, type)`
+  is the rule. Either way the control variable is still linear in what the method is solving for,
+  which is what makes the whole thing work without a new method (see SOLVER.md).
+- **A voltage-source control needs a terminal KCL can read it at.** Mesh analysis solves for
+  branch currents, so it needs nothing; the node-voltage WALK has to reach that current through
+  KCL at one of the source's terminals, and that only works when everything else on that terminal
+  is a resistor. `Circuit.controlTerminal(circuit, ctrlEdge)` returns the terminal (preferring
+  `b`, the `+`) or `null`, and `validate()` refuses a circuit where it is `null`. The builder
+  checks the same thing before it will place the source.
 - The sense comes from the **control edge's own `a`/`b`**: `v_ctrl = v(a) − v(b)`,
   `i_ctrl = ` current `a` → `b`.
 - A gain may be **negative** (the slides' `−30·iΔ`); it may not be zero or non-finite. The

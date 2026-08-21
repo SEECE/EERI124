@@ -3,8 +3,14 @@
    it renders one view at a time and highlights the circuit via Circuit.highlight. Plain
    script, one global `Stepper`. No ES modules (file://).
 
-   A step: { n, title, body(html), eq?[html lines], todo?, hl?, draw?, subs?[substep] }.
+   A step: { n, title, body(html), eq?[html lines], todo?, hl?, draw?, subs?[substep], tabs? }.
    A substep: { title?, body?(html), eq?[html], hl?, draw? } — a drill-down inside a step.
+
+   `tabs` is a step-level CHOICE: { key, value, label, options:[{value,label}] }. It renders a
+   small strip under the title and hands a pick back to the page through `o.onTab(key, value)`.
+   The stepper does not act on it — it cannot: a different choice is a different step list, and
+   only the page knows how to build one. See js/solver-page.js, which re-runs the technique with
+   the new option and puts the reader back on the view they were looking at.
 
    `draw` is a circuit model to put on the canvas IN PLACE of the page's own circuit, for a
    technique whose steps change the network itself (equivalent resistance redraws what is left
@@ -91,9 +97,44 @@
       if (o.next) o.next.disabled = i >= steps.length - 1;
       if (o.subPrev) o.subPrev.disabled = i <= 0 && sub <= 0;
       if (o.subNext) o.subNext.disabled = i >= steps.length - 1 && sub >= n;
+      renderTabs(s);
     }
 
-    function go(k) { i = Math.max(0, Math.min(steps.length - 1, k)); sub = 0; render(); }
+    /* The step's own choice strip, rebuilt per view — a step without `tabs` hides it entirely,
+       so the strip only ever appears where there is something to choose. */
+    function renderTabs(s) {
+      if (!o.tabs) return;
+      var t = s && s.tabs;
+      o.tabs.hidden = !t;
+      o.tabs.innerHTML = '';
+      if (!t) return;
+      if (t.label) {
+        var lab = document.createElement('span');
+        lab.className = 'tab-label';
+        lab.textContent = t.label;
+        o.tabs.appendChild(lab);
+      }
+      t.options.forEach(function (opt) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'tab-btn' + (opt.value === t.value ? ' active' : '');
+        b.setAttribute('aria-pressed', opt.value === t.value ? 'true' : 'false');
+        b.textContent = opt.label;
+        b.addEventListener('click', function () {
+          if (opt.value !== t.value && o.onTab) o.onTab(t.key, opt.value);
+        });
+        o.tabs.appendChild(b);
+      });
+    }
+
+    /* go(k) lands on a step's overview; go(k, s) lands on one of its substeps — which is what a
+       tab pick needs, so switching how the system is solved does not throw the reader back to
+       the top of a twenty-substep walk. */
+    function go(k, s) {
+      i = Math.max(0, Math.min(steps.length - 1, k));
+      sub = Math.max(0, Math.min(subsOf(steps[i]).length, s || 0));
+      render();
+    }
     function goSub(k) { sub = Math.max(0, Math.min(subsOf(steps[i]).length, k)); render(); }
 
     // sub Prev/Next roll over into the neighbouring main step, so the detail

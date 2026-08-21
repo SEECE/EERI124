@@ -63,7 +63,7 @@
   // ---- dependent sources: the control field, and what dependify() may and may not do ----
   var isDep = Circuit.isDependent;
 
-  check('dependent generators name a resistor as their control', function () {
+  check('dependent generators name a legal control edge', function () {
     Circuit.list({ tags: ['dependent-source'] }).forEach(function (g) {
       for (var i = 0; i < 30; i++) {
         var c = g.generate(), byId = {};
@@ -72,7 +72,11 @@
         assert(deps.length > 0, g.name + ' produced no dependent source');
         deps.forEach(function (e) {
           assert(byId[e.control], g.name + ': control ' + e.control + ' is not an edge');
-          assert(byId[e.control].type === 'R', g.name + ': control is a ' + byId[e.control].type + ', not a resistor');
+          // a resistor always, or an independent voltage source when the source reads a CURRENT
+          // (LU4.2's Assessment Problem 4.4) — and then only where KCL can reach that current
+          var ce = byId[e.control];
+          assert(Circuit.canControl(ce, e.type), g.name + ': control is a ' + ce.type + ', illegal for a ' + e.type);
+          if (ce.type !== 'R') assert(Circuit.controlTerminal(c, ce), g.name + ': no terminal to read ' + ce.id + '’s current at');
           assert(byId[e.control] !== e, g.name + ': source controls itself');
           assert(e.value !== 0 && isFinite(e.value), g.name + ': zero or non-finite gain');
         });
@@ -94,6 +98,29 @@
         assert(Circuit.solvable(c), 'dependify produced an unsolvable circuit from ' + g.name);
       }
     });
+  });
+
+  // The slides' Assessment Problem 4.4 shape: the controlled source reads the current the
+  // INDEPENDENT VOLTAGE SOURCE supplies, not a resistor's. Both techniques must still solve it,
+  // and the KCL walk needs a terminal with resistors alone on it to read that current at.
+  check('a dependent source may read a voltage source’s current', function () {
+    var g = Circuit.get('Dependent source on a source’s current');
+    for (var i = 0; i < 20; i++) {
+      var c = g.generate(), byId = {};
+      c.edges.forEach(function (e) { byId[e.id] = e; });
+      var dep = c.edges.filter(function (e) { return isDep(e.type); })[0];
+      assert(dep, 'no dependent source');
+      assert(byId[dep.control].type === 'V', 'control should be the voltage source');
+      assert(Circuit.depKind(dep.type) === 'i', 'a voltage source may only be read for its current');
+      assert(Circuit.solvable(c), 'unsolvable');
+    }
+    // and the model refuses a VOLTAGE read off a voltage source — that is just its own value
+    var bad = { nodes: [{ id: 'n0' }, { id: 'n1' }],
+      edges: [{ id: 'e0', type: 'V', a: 'n0', b: 'n1', value: 10 },
+        { id: 'e1', type: 'E', a: 'n1', b: 'n0', value: 2, control: 'e0' }] };
+    var threw = false;
+    try { Circuit.validate(bad); } catch (err) { threw = true; }
+    assert(threw, 'a VCVS reading a voltage source should not validate');
   });
 
   check('controls() names each variable once', function () {
@@ -142,7 +169,10 @@
       var elements = c.edges.filter(function (e) { return e.type !== 'W'; });
       assert(bipoles.length === elements.length, g.name + ': ' + bipoles.length + ' bipoles for ' + elements.length + ' elements');
       (tex.match(/to\[[^\n]*/g) || []).forEach(function (line) {
-        assert(/to\[[A-Za-z]+=\{\$.*\$\}\]/.test(line), g.name + ': unbraced bipole label — ' + line);
+        // pgfkeys splits an option list on commas and every unit carries a \, — so the label
+        // VALUE has to be braced. The key is `l` or `l_` depending on which way the path was
+        // drawn (see tikz.js picture()), and the bipole type comes before it: to[R, l={$…$}]
+        assert(/to\[[^\]]*\bl_?=\{\$.*\$\}\]/.test(line), g.name + ': unbraced bipole label — ' + line);
       });
     });
   });

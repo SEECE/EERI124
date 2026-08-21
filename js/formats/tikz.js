@@ -76,14 +76,16 @@
   }
 
   /* One marker per (control edge, kind), same as the on-page renderer: a current arrow beside
-     the control resistor running its own a → b sense, or a +…− across it for a voltage read.
-     A control edge is always a plain resistor, so it is always drawn a → b (never flipped),
-     and its own value label always lands on the fixed screen side `picture()` picks for that
-     edge — east for a vertical resistor, south for a horizontal one, regardless of which way
-     a → b happens to point. The marker sits on the opposite FIXED side (west / north) for the
-     same reason: picking it from a → b's own direction, like the value label very nearly was,
-     would put the two on top of each other whenever a → b happened to point the "wrong" way —
-     exactly the collision reported against this circuit's R10. */
+     the control element running its own a → b sense, or a +…− across it for a voltage read.
+     The arrow is placed from `at[e.a]` → `at[e.b]`, the model's own sense, which stays right
+     even for a VOLTAGE SOURCE read for its current — `picture()` draws that bipole b → a to
+     satisfy circuitikz's polarity, but that is the drawing order, not the reading. Its value
+     label always lands on the fixed screen side `picture()` picks for that edge — east for a
+     vertical element, south for a horizontal one, regardless of which way a → b happens to
+     point. The marker sits on the opposite FIXED side (west / north) for the same reason:
+     picking it from a → b's own direction, like the value label very nearly was, would put the
+     two on top of each other whenever a → b happened to point the "wrong" way — exactly the
+     collision reported against this circuit's R10. */
   function markers(ctl, at) {
     var out = [];
     ctl.marks.forEach(function (mk) {

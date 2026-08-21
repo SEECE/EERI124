@@ -27,6 +27,14 @@
         s.parentNode.replaceChild(document.createTextNode((tag === 'sub' ? '_' : '^') + s.textContent), s);
       });
     });
+    // a matrix is a table: textContent would run its digits together, so flatten each grid to
+    // the row/column form an LLM (and a student pasting it on) can actually read
+    Array.prototype.forEach.call(d.querySelectorAll('.mtx'), function (m) {
+      var rows = Array.prototype.map.call(m.querySelectorAll('tr'), function (tr) {
+        return Array.prototype.map.call(tr.querySelectorAll('td'), function (td) { return td.textContent.trim(); }).join(', ');
+      });
+      m.parentNode.replaceChild(document.createTextNode(' [' + rows.join('; ') + '] '), m);
+    });
     return d.textContent.replace(/\s+/g, ' ').trim();
   }
   function lines(list, indent) {
@@ -49,9 +57,11 @@
       if (e.type === 'V') { out.push('- ' + si(e.value, 'V') + ' voltage source between ' + L(e.a) + ' and ' + L(e.b) + ', + at ' + L(e.b)); return; }
       if (e.type === 'I') { out.push('- ' + si(e.value, 'A') + ' current source, current flows ' + L(e.a) + ' → ' + L(e.b)); return; }
       var kind = DEP[e.type], ctrl = by[e.control];
+      // the control edge is a resistor, or — for a current read — the voltage source itself
+      var what = ctrl.type === 'R' ? si(ctrl.value, 'Ω') + ' resistor' : si(ctrl.value, 'V') + ' voltage source';
       out.push('- dependent ' + kind[0] + ' between ' + L(e.a) + ' and ' + L(e.b) +
-        ', worth ' + e.value + ' × the ' + kind[1] + ' the ' + si(ctrl.value, 'Ω') +
-        ' resistor (measured ' + L(ctrl.a) + ' → ' + L(ctrl.b) + ')');
+        ', worth ' + e.value + ' × the ' + kind[1] + ' the ' + what +
+        ' (measured ' + L(ctrl.a) + ' → ' + L(ctrl.b) + ')');
     });
     if (wires) out.push('- ' + wires + ' plain wire' + (wires === 1 ? '' : 's') + ', already folded into the letters above');
     return out.join('\n');
@@ -68,6 +78,15 @@
       'I am part-way through a worked solution and I want help with ONE step only.',
       '',
       'METHOD: ' + ctx.technique,
+    ];
+    // the solve step offers a route (js/techniques/system.js) — say which one I picked, or
+    // Midnjoy explains the substitution round to a student staring at a determinant
+    if (s.tabs) {
+      out.push('SOLVING THE SYSTEM BY: ' + (ctx.solveBy === 'cramer'
+        ? 'Cramer’s rule — the matrix and its determinants, not step-by-step substitution'
+        : 'long algebra — substituting the equations into one another, not matrices'));
+    }
+    out = out.concat([
       'CIRCUIT (' + ctx.topology + '). ' + SVG_HINT,
       describe(c),
       '',
@@ -75,7 +94,7 @@
       '',
       'WHAT THE STEP SAYS:',
       (v.todo ? '(the site marks this step "nothing to do" for this circuit) ' : '') + text(v.body),
-    ];
+    ]);
     var eq = lines(v.eq && v.eq.length ? v.eq : v.peek, '  ');
     if (eq.length) out = out.concat(['', 'WHAT IT SHOWS ON SCREEN:'], eq);
     out = out.concat([

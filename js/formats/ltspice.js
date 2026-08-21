@@ -85,10 +85,15 @@
     return id + ' ' + expr(e, p);
   }
 
-  // the four controlled sources, as behavioural sources reading the resistor they are tied to
+  /* The four controlled sources, as behavioural sources reading the element they are tied to.
+     Sense: the model means i_ctrl = the current a → b. For a resistor that is exactly what
+     SPICE's I(R) reports, since `device` writes its terminals a b. A VOLTAGE SOURCE is written
+     n+ n− = b a, and SPICE's I(V) is the current from n+ to n− inside the source — b → a, the
+     opposite of the model's — so a current read off one is negated. */
   function expr(e, p) {
     var a = p.net[e.a], b = p.net[e.b], g = num(e.value), ctrl = p.by[e.control];
-    var cV = 'V(' + p.net[ctrl.a] + ',' + p.net[ctrl.b] + ')', cI = 'I(' + p.nm[e.control] + ')';
+    var cV = 'V(' + p.net[ctrl.a] + ',' + p.net[ctrl.b] + ')';
+    var cI = (ctrl.type === 'R' ? '' : '-') + 'I(' + p.nm[e.control] + ')';
     if (e.type === 'E') return b + ' ' + a + ' V=' + g + '*' + cV;   // VCVS
     if (e.type === 'H') return b + ' ' + a + ' V=' + g + '*' + cI;   // CCVS
     if (e.type === 'G') return a + ' ' + b + ' I=' + g + '*' + cV;   // VCCS

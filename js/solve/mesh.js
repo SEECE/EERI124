@@ -31,9 +31,11 @@
     F.faceList.forEach(function (_, idx) { if (idx !== F.outer) { meshOf[idx] = meshes.length; meshes.push(idx); } });
     var m = meshes.length;
 
-    // A dependent source's control variable as mesh-current coefficients: the control edge is a
-    // resistor, and a resistor's current is i_fa − i_fb over the faces its half-edges bound
-    // (the same a→b convention edgeCurrent uses below); its voltage is that times R.
+    // A dependent source's control variable as mesh-current coefficients. ANY edge's current is
+    // i_fa − i_fb over the faces its half-edges bound (the same a→b convention edgeCurrent uses
+    // below), so a control that reads the current through a voltage source is no different here
+    // from one that reads a resistor's — mesh analysis solves for branch currents already, and
+    // the source needs no KCL detour. A voltage read is that same difference times R.
     function ctrlVec(dep) {
       var ctrl = byId[dep.control], idx = c.edges.indexOf(ctrl);
       var k = S.DEP_KIND[dep.type] === 'v' ? ctrl.value : 1;

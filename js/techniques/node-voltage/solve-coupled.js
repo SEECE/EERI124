@@ -83,8 +83,8 @@
                 (u.supernode ? ' Neither does the pair ' + unitName(u) + ': that source’s current crosses any enclosure round them rather than cancelling inside it, so the gain equation and the bridge’s constraint are their two equations.' : ''),
             });
             stepG('the source equation', 'Its + terminal decides the sign.', Pq.write);
-            stepG('put the control variable in', CV.sym(Pq.e) + ' is a resistor’s ' +
-              (CV.kind(Pq.e) === 'i' ? 'current' : 'voltage') + ', from step 8.', Pq.substituted);
+            stepG('put the control variable in', CV.sym(Pq.e) + ' is the ' +
+              (CV.kind(Pq.e) === 'i' ? 'current through ' : 'voltage across ') + CV.ctrlNoun(Pq.e) + ', from step 8.', Pq.substituted);
             if (Pq.constrained) stepG('use the constraint', constraintNote(Pq), Pq.constrained);
             if (Pq.degenerate) {                            // nothing to divide by — see solveFor
               board[g] = si(V(g), 'V');

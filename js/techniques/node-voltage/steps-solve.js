@@ -42,6 +42,12 @@
       eq: order.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
       hl: { nodes: circuit.nodes.map(function (n) { return n.id; }), volts: voltsAtStart },
       subs: solveSubs,
+      // The fork, offered only when there IS a simultaneous block — with every node opening up
+      // one at a time there is no matrix to build and nothing to choose between. The page owns
+      // the reaction (js/solver-page.js): it re-runs the technique with the new opts.solveBy
+      // and puts the student back on the view they were reading.
+      tabs: X.hasSystem ? { key: 'solveBy', value: X.solveBy, label: 'Solve the system by',
+        options: [{ value: 'algebra', label: 'Long algebra' }, { value: 'cramer', label: 'Cramer’s rule' }] } : null,
     });
   };
 })(window.Solve);

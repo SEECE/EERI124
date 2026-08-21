@@ -17,7 +17,9 @@
      the reference it reduces to the old grounded-source solve.
 
      A **dependent** source reads a resistor, so its control variable is itself a combination of
-     node voltages (v_ctrl = v_a − v_b, i_ctrl = (v_a − v_b)/R). That makes every controlled
+     node voltages (v_ctrl = v_a − v_b, i_ctrl = (v_a − v_b)/R) — or it reads the current through
+     a VOLTAGE SOURCE, which is already one of the branch-current unknowns j below and so needs
+     no expansion at all. Either way it is linear in what is being solved for. That makes every controlled
      source linear in the same unknowns: E/H add the same branch-current row as V but with the
      gain·control terms moved to the left, and F/G stamp gain·control into the two KCL rows they
      touch instead of into the right-hand side. No iteration, no special case.
@@ -50,11 +52,16 @@
     var A = [], rhs = [], i;
     for (i = 0; i < D; i++) { A.push(new Array(D).fill(0)); rhs.push(0); }
 
-    // A dependent source's control variable as a row of node-voltage coefficients: the control
-    // edge is always a resistor, so v_ctrl = v_a − v_b and i_ctrl = (v_a − v_b)/R are both this
-    // same difference, scaled. `add(row, k)` folds k·(that variable) into any row.
+    // A dependent source's control variable as a row of coefficients over the SAME unknowns.
+    // A resistor control gives v_ctrl = v_a − v_b and i_ctrl = (v_a − v_b)/R — both that one
+    // difference, scaled. A control that reads the current through a VOLTAGE SOURCE needs no
+    // expansion at all here: that current is already an unknown of this system (the source's
+    // own branch-current column, a→b, the same sense the model reads it in), so the term is a
+    // single 1 in that column. `ctrlAdd(row, dep, k)` folds k·(that variable) into any row.
+    var bidx = {}; bsrc.forEach(function (s, k) { bidx[s.id] = nV + k; });
     function ctrlAdd(row, dep, k) {
       var ctrl = byId[dep.control];
+      if (ctrl.type !== 'R') { row[bidx[ctrl.id]] += k; return; }
       var s = k * (DEP_KIND[dep.type] === 'i' ? 1 / ctrl.value : 1);
       var p = en.of[ctrl.a], q = en.of[ctrl.b];
       if (p !== ref) row[vidx[p]] += s;
@@ -102,7 +109,9 @@
     // the control variables, and the current each dependent current source ended up pushing
     var ctrl = {}, depI = {};
     deps.forEach(function (s) {
-      var ce = byId[s.control], dv = v[en.of[ce.a]] - v[en.of[ce.b]];
+      var ce = byId[s.control];
+      if (ce.type !== 'R') { ctrl[s.id] = iSrc[ce.id]; return; }   // a voltage source's own branch current
+      var dv = v[en.of[ce.a]] - v[en.of[ce.b]];
       ctrl[s.id] = DEP_KIND[s.type] === 'i' ? dv / ce.value : dv;
     });
     ideps.forEach(function (s) { depI[s.id] = s.value * ctrl[s.id]; });

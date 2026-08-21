@@ -15,7 +15,11 @@
   var LABEL = { select: 'Select', W: 'Wire', R: 'Resistor', V: 'Voltage source', I: 'Current source',
     DEP: 'Dependent source', E: 'VCVS', F: 'CCCS', G: 'VCCS', H: 'CCVS' };
   var KEY = { select: 'S', W: 'W', R: 'R', V: 'V', I: 'I', DEP: 'D' };
-  var UNIT = { R: 'Ω', V: 'V', I: 'A', E: 'multiplier', F: 'multiplier', G: 'Ω', H: 'Ω' };
+  // A dependent source's value is a GAIN, whatever its dimension happens to be (μ and β are
+  // plain numbers, r is in ohms, and g is written as a division by an ohm-like number) —
+  // labelling two of the four 'Ω' read as though the field wanted a resistor. DESC below
+  // still says what the number means for each type.
+  var UNIT = { R: 'Ω', V: 'V', I: 'A', E: 'gain', F: 'gain', G: 'gain', H: 'gain' };
   var DEFAULT_SHOWN = { R: 220, V: 12, I: 0.05, E: 2, F: 2, G: 500, H: 220 };
   var DESC = {
     select: 'Click an element to edit its value, flip it or delete it.',
@@ -24,8 +28,8 @@
     V: 'Independent voltage source — the second dot you click is the + terminal.',
     I: 'Independent current source — current flows from the first dot to the second.',
     E: 'VCVS — volts are this many times the voltage across the control resistor.',
-    H: 'CCVS — volts are this many ohms times the current through the control resistor.',
-    F: 'CCCS — amps are this many times the current through the control resistor.',
+    H: 'CCVS — volts are this many ohms times the current through the control element.',
+    F: 'CCCS — amps are this many times the current through the control element.',
     G: 'VCCS — amps are the control resistor’s voltage divided by this many ohms.',
   };
   var DEP_TYPE = { v: { v: 'E', i: 'G' }, i: { v: 'H', i: 'F' } };
@@ -57,18 +61,31 @@
       if (tool !== 'select' && allowed().indexOf(tool) < 0) o.onTool(allowed()[0]);
     }
 
+    /* What this source may read: every resistor, and — for a current read — every independent
+       voltage source too (the slides' Assessment Problem 4.4). The direction dropdown orients
+       the control element, since its own a/b IS the reference the reading is taken in. A
+       VOLTAGE SOURCE is the exception: its a/b is its polarity, not a free choice, so its
+       current is read in its own − → + sense and there is nothing to pick. */
     function fillControls(keepCtrl, keepDir) {
-      var rs = model.resistors(), nm = o.names();
+      var cands = model.controlEdges(target()), nm = o.names();
       E.ctrl.innerHTML = '';
-      rs.forEach(function (r) {
+      cands.forEach(function (r) {
         var op = document.createElement('option');
-        op.value = r.id; op.textContent = nm[r.id] + ' (' + r.value + ' Ω)';
+        op.value = r.id;
+        op.textContent = nm[r.id] + ' (' + r.value + (r.type === 'R' ? ' Ω)' : ' V)');
         E.ctrl.appendChild(op);
       });
-      if (rs.some(function (r) { return r.id === keepCtrl; })) E.ctrl.value = keepCtrl;
+      if (cands.some(function (r) { return r.id === keepCtrl; })) E.ctrl.value = keepCtrl;
       var r = model.edgeById(E.ctrl.value);
       E.ctrlDir.innerHTML = '';
       if (!r) return;
+      if (r.type !== 'R') {
+        var only = document.createElement('option');
+        only.value = r.a; only.textContent = 'from its − terminal';
+        E.ctrlDir.appendChild(only);
+        E.ctrlDir.value = r.a;
+        return;
+      }
       var readsV = (target() === 'E' || target() === 'G');
       [[r.a, r.b], [r.b, r.a]].forEach(function (pair) {
         var op = document.createElement('option');

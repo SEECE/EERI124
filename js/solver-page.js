@@ -89,8 +89,22 @@
     }
     refreshTopology();
 
+    /* Options a STEP offers the reader — right now just step 9/8's "solve the system by long
+       algebra or by Cramer's rule". The technique declares the choice on the step (`tabs`), the
+       stepper renders it, and the reaction lands here, because a different choice is a different
+       step list and only this file knows how to build one. The reader is put back on the view
+       they were reading rather than at the top of the step. */
+    var stepOpts = { solveBy: 'algebra' };
+
     var stepper = Stepper({
       svg: svg,
+      tabs: document.getElementById('step-tabs'),
+      onTab: function (key, value) {
+        stepOpts[key] = value;
+        var at = stepper.current();
+        stepper.load(buildSteps(), circuit);
+        if (at) stepper.go(at.index, at.sub);
+      },
       count: document.getElementById('step-count'),
       subcount: document.getElementById('step-subcount'),
       title: document.getElementById('step-title'),
@@ -109,8 +123,8 @@
         // { kcl: 'inout' } override (the self-check uses it to prove both phrasings land on
         // the same board), but this page never offers the choice: step 4's Σ in = Σ out button
         // is disabled, shown only so a student recognises it as the same equation.
-        case 'kcl': return NodeVoltage(circuit);
-        case 'kvl': return MeshCurrent(circuit);
+        case 'kcl': return NodeVoltage(circuit, stepOpts);
+        case 'kvl': return MeshCurrent(circuit, stepOpts);
         case 'req-source': return EquivResistance(circuit);
         default: return [{ n: 0, title: techSel.options[techSel.selectedIndex].text, body: 'Coming soon.' }];
       }
@@ -161,7 +175,8 @@
         stepper: stepper,
         circuit: function () { return circuit; },
         context: function () {
-          return { technique: techSel.options[techSel.selectedIndex].text, topology: topoSel.value };
+          return { technique: techSel.options[techSel.selectedIndex].text, topology: topoSel.value,
+            solveBy: stepOpts.solveBy };
         },
       });
     }
