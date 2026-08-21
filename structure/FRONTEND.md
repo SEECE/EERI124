@@ -78,7 +78,7 @@ one step: a prompt carrying the finished derivation just hands back the answer.
   student clicks or reads in the UI.
 - **paper** (light) — the sheet the circuit is drawn on.
 
-`js/circuit.js` and `js/builder.js` write six token names straight into the SVG as presentation
+`js/core/render/` and `js/builder.js` write six token names straight into the SVG as presentation
 attributes:
 
     --surface   --ink   --ink-soft   --accent   --accent-hover   --accent-deep
@@ -113,6 +113,29 @@ styled in `css/circuit.css`), `.eq-line` `.eq-peek` `.frac` `.kcl-status` `.eq-b
 `.grid-dot` `.grid-dot-bg` `.builder-edge` `.be-*` `.is-anchor` `.is-hover` `.is-ghost`
 `.is-selected` (builder, styled in `css/builder.css`).
 
+
+## How a page loads its scripts
+
+A page never lists script files. It carries one tag —
+
+```html
+<script src="../../js/deps.js" data-load="solver"></script>
+```
+
+— and `js/deps.js` expands that bundle name into the files, appending them with `async = false`
+so they run in order. Because they are appended rather than parsed, a page's own init call has
+to wait for them:
+
+```html
+<script>
+  window.addEventListener('load', function () { SolverPage({ … }); });
+</script>
+```
+
+`js/ui/nav.js` stays a plain tag at the end of `<body>` (it needs nothing from the bundle).
+Splitting a script is therefore an edit to the bundle map and to nothing else — no page markup
+changes — which is what keeps every file under 200 lines cheap to do.
+
 ## The stylesheets
 
 Split by scope, ≤200 lines each, loaded in this order:
@@ -121,19 +144,22 @@ Split by scope, ≤200 lines each, loaded in this order:
 |---|---|---|
 | `tokens.css` | the two palettes, spacing, shape, motion, region widths | every page |
 | `base.css` | reset, the two shells, `.panel`, `.scroller`, `.eyebrow`, skip link, footer | every page |
-| `ribbon.css` | the top ribbon: brand, page title, topic nav, panel toggles | every page |
+| `ribbon.css` | the top ribbon: brand, page title, topic nav, panel toggles. An `@import` index over `ribbon-shell` · `-nav` · `-panels` | every page |
 | `workspace.css` | the rail/stage/workbench grid, collapsing, drawers | topic pages |
 | `controls.css` | `.field` / `.ctl` / `.btn` — the rail's vocabulary | topic pages |
 | `circuit.css` | how the rendered SVG looks: highlights, reveals — names `.stage` **and** `.figure` | solver pages, and the philosophy tutorial |
 | `workbench.css` | the step panel: head, equations, tables, board, nav | solver pages |
 | `builder.css` | palette, properties, canvas chrome, everything drawn on the grid | builder page |
-| `tutorial.css` | the two-region lab shell: board, dials, results, lesson, tallies. Its SVG vocabulary is scoped to `.figure--drawn`, so it never fights the renderer on the philosophy page | tutorial pages |
+| `tutorial.css` | the two-region lab shell: board, dials, results, lesson, tallies. An `@import` index over `tutorial-lab` · `-board` · `-lesson` · `-figure` · `-narrow`. Its SVG vocabulary is scoped to `.figure--drawn`, so it never fights the renderer on the philosophy page | tutorial pages |
 | `home.css` | hero, section labels, topic cards | home, about |
 | `about.css` | acknowledgement cards, colophon facts | about |
 
 Adding a page = copy the nearest existing one and load the same set. New styling goes in the
 file that owns that scope; if it fits none of them, add a file rather than growing one past
-200 lines. **A new topic page wanting its own stylesheet is usually a sign it is not using the
+200 lines. When a stylesheet does outgrow it, the file pages link to becomes an `@import` index
+carrying **no rules of its own** — an `@import` can only precede the importing file's own rules,
+so a part could not otherwise override the index (which is what the narrow-screen fallbacks
+do). **A new topic page wanting its own stylesheet is usually a sign it is not using the
 shell it was given** — check that first. `tutorial.css` is the one earned exception: the two §3
 deep dives are not solver pages at all (no generated circuit, so no rail), and they say so with
 a shell of their own. See [TUTORIALS.md](TUTORIALS.md).
@@ -179,8 +205,13 @@ home and about.
 
 ## Verifying
 
-There is no headless browser here, so **layout changes need real-browser QA** — say so when you
-hand the work over. What *can* be checked without one:
+**Layout changes still need real-browser QA** — jsdom computes no layout, so say so when you
+hand the work over. What *can* be checked without a browser:
+
+- a page can be mounted whole under jsdom (`JSDOM.fromFile(page, { runScripts: 'dangerously',
+  resources: 'usable' })`) — the scripts run in order, the labs build, and the three self-check
+  pages report their PASS/FAIL lines into `#out`. jsdom has no `matchMedia`, so `js/ui/shell.js`
+  throws there; that is the harness, not the page;
 
 - every id/href/asset a page names resolves, and every control has a label;
 - `Circuit.render` + `Circuit.highlight` run under a small `document` shim

@@ -1,7 +1,7 @@
 /* SVG primitives for the tutorial pages' hand-drawn figures. Plain script, one global `Draw`.
    No ES modules (the site must open over file://).
 
-   This is NOT js/circuit.js's renderer and does not replace it. That renderer draws the
+   This is NOT js/core/'s renderer and does not replace it. That renderer draws the
    {nodes, edges} model on an orthogonal grid, which is exactly right for a generated circuit
    and exactly wrong for a Δ triangle, a Y, or a bridge drawn as a diamond — the SHAPE is what
    the two deep dives are teaching, so they draw it themselves. See structure/TUTORIALS.md.

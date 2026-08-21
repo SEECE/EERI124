@@ -113,29 +113,13 @@
     <button type="button" class="scrim" aria-label="Close the open panel"></button>
   </div>
 
-  <script src="../../js/circuit.js"></script>
-  <script src="../../js/generators/random-grid.js"></script>
-  <script src="../../js/generators/basic.js"></script>
-  <script src="../../js/generators/bridge-ladder.js"></script>
-  <script src="../../js/generators/grid.js"></script>
-  <script src="../../js/generators/multi-source.js"></script>
-  <script src="../../js/solve.js"></script>
-  <script src="../../js/techniques/kit.js"></script>
-  <script src="../../js/techniques/controls.js"></script>
-  <script src="../../js/techniques/node-voltage.js"></script>
-  <script src="../../js/techniques/mesh-current.js"></script>
-  <script src="../../js/techniques/equivalent-resistance.js"></script>
-  <script src="../../js/stepper.js"></script>
-  <script src="../../js/formats/native.js"></script>
-  <script src="../../js/formats/ltspice.js"></script>
-  <script src="../../js/formats/tikz.js"></script>
-  <script src="../../js/ui/filemenu.js"></script>
-  <script src="../../js/ui/step-prompt.js"></script>
-  <script src="../../js/solver-page.js"></script>
-  <script src="../../js/ui/shell.js"></script>
+  <script src="../../js/deps.js" data-load="solver"></script>
   <script>
-    // this topic covers independent voltage sources + resistors only
-    SolverPage({ filter: { elements: ['R', 'V', 'W'] }, elements: ['R', 'V', 'W'] });
+    // deps.js loads this page's scripts in order; `load` is when every one of them is in
+    window.addEventListener('load', function () {
+      // this topic covers independent voltage sources + resistors only
+      SolverPage({ filter: { elements: ['R', 'V', 'W'] }, elements: ['R', 'V', 'W'] });
+    });
   </script>
   <script src="../../js/ui/nav.js"></script>
 </body>

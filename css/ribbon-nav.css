@@ -1,0 +1,95 @@
+/* The ribbon's topic nav and its drop-downs (js/ui/nav.js builds them from one site map).
+   Part of the ribbon; see css/ribbon.css. */
+
+/* ── topic nav (js/ui/nav.js builds it from one site map) ──
+   Grouped into dropdowns rather than one flat row: a link per page had outgrown the ribbon.
+   NOTE there is deliberately no `overflow-x` here any more — a scroll container clips an
+   absolutely positioned menu, so the groups shorten their labels instead (.nav-short). */
+.ribbon-nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nav-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--text-dim);
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+.nav-top:hover { color: var(--text); background: var(--tint); }
+/* the page you are on, and the group that holds it */
+.nav-top[aria-current='page'],
+.nav-top[data-here='true'] {
+  color: var(--violet-200);
+  background: var(--tint);
+  border-color: var(--line-hi);
+}
+
+.nav-caret {
+  width: 0;
+  height: 0;
+  border: 3.5px solid transparent;
+  border-top-color: currentColor;
+  margin-top: 3px;
+  transition: transform var(--dur) var(--ease);
+}
+[aria-expanded='true'] > .nav-caret { transform: rotate(180deg); }
+
+/* ── the drop-down ── */
+.nav-group { position: relative; }
+
+.nav-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  min-width: 264px;
+  max-width: min(320px, calc(100vw - 24px));
+  padding: var(--sp-1);
+  background: var(--panel);
+  border: 1px solid var(--line-hi);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+/* Bridge the gap between the button and the panel. An absolutely positioned menu does not
+   extend its parent's box, so without this the pointer leaves .nav-group on the way down,
+   mouseleave fires, and the menu you were reaching for shuts under the cursor. */
+.nav-menu::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 10px;
+}
+.nav-group[data-open='true'] .nav-menu { display: block; }
+
+.nav-item {
+  display: block;
+  padding: 7px 9px;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  transition: color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.nav-item:hover { color: var(--text); background: var(--tint); }
+.nav-item[aria-current='page'] { color: var(--violet-200); background: var(--tint); }
+.nav-item-label { display: block; font-size: 12.5px; font-weight: 600; }
+.nav-item small { display: block; margin-top: 1px; font-size: 10.5px; font-weight: 400; color: var(--text-faint); }
+.nav-item + .nav-item { margin-top: 1px; }
+
+.nav-short { display: none; }

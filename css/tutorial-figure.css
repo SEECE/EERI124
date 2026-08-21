@@ -1,0 +1,53 @@
+/* Tutorial pages — what a HAND-DRAWN figure is made of: the paper palette's ink, the resistor
+   and wire strokes, the tags, and the extra marks the conventions page adds. Part of the
+   tutorial shell; see css/tutorial-lab.css. */
+
+/* ── what a HAND-DRAWN figure is made of (paper palette; see structure/FRONTEND.md) ──
+   Scoped to .figure--drawn, not .figure: the philosophy tutorial renders the real model into
+   its .figure with js/circuit.js, and these rules would out-specify the presentation
+   attributes that renderer writes — recolouring every value label and node letter on it. */
+.figure--drawn .wire { stroke: var(--ink); stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.figure--drawn .res { stroke: var(--ink); stroke-width: 2.2; fill: none; stroke-linejoin: round; }
+.figure--drawn .term { fill: var(--ink); }
+.figure--drawn .hub { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.figure--drawn text { font-family: var(--font); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 3.5px; stroke-linejoin: round; }
+.figure--drawn .t-term { font-size: 15px; font-weight: 700; }
+.figure--drawn .t-tag { font-size: 12.5px; font-weight: 600; }
+.figure--drawn .t-cap { font-size: 12px; font-weight: 600; fill: var(--ink-faint); }
+.figure--drawn .t-sub { font-size: 0.72em; }
+/* a derived quantity — the side of the figure the student is solving FOR */
+.figure--drawn .is-out { fill: var(--accent-deep); }
+/* the detector needle: the one moving part on the site, and the whole point of the bridge
+   page — a null is something you watch happen, not a number you are told */
+.figure--drawn .needle { stroke: var(--accent-deep); stroke-width: 2.6; stroke-linecap: round; }
+@media (prefers-reduced-motion: no-preference) {
+  .figure--drawn .needle { transition: none; }
+}
+
+/* ── the conventions page's extra marks ──
+   A source body, the ± pair the passive sign convention puts on an element, the reference
+   marker, and the probes. `.mark` is the ± itself: it is a CHOICE, so it is drawn in the
+   accent to separate it from the circuit, which is not. */
+.figure--drawn .src { fill: var(--surface); stroke: var(--ink); stroke-width: 2.2; }
+.figure--drawn .mark { font-size: 15px; font-weight: 800; fill: var(--accent-deep); }
+.figure--drawn .ref { stroke: var(--ink); stroke-width: 2.4; fill: none; stroke-linecap: round; }
+.figure--drawn .probe-black { stroke: var(--ink); stroke-width: 3.2; fill: none; stroke-linecap: round; }
+/* where the charge actually goes — an overlay, never a set of numbers (js/tutorial/conventions.js) */
+.figure--drawn .flow.drift { opacity: 0.28; stroke: var(--ink-soft); fill: var(--ink-soft); }
+/* a mark the maths cannot survive — a sign that contradicts another sign on the same figure */
+.figure--drawn .is-bad { stroke: #b4293c; }
+.figure--drawn text.is-bad, .figure--drawn .flow.is-bad { fill: #b4293c; stroke: none; }
+.figure--drawn .flow.is-bad line { stroke: #b4293c; }
+
+/* the chapter's subject, and everything the chapter is not about */
+.figure--drawn .is-lit { stroke: var(--accent-hover); stroke-width: 3.4; }
+.figure--drawn text.is-lit { stroke: var(--surface); fill: var(--accent-hover); }
+.figure--drawn .is-dim { opacity: 0.26; }
+.figure--drawn .flow { stroke: var(--accent); fill: var(--accent); }
+/* a mesh loop arrow (conventions page, KVL mode). Deeper than a branch arrow because a loop is
+   a bookkeeping device drawn over the circuit, not a marking on one element. */
+.figure--drawn .loop { stroke: var(--accent-deep); fill: var(--accent-deep); stroke-width: 2.2; stroke-linecap: round; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .figure--drawn .wire, .figure--drawn .res, .figure--drawn text { transition: opacity var(--dur) var(--ease); }
+}

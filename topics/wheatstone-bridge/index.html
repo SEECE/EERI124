@@ -86,17 +86,17 @@
     </aside>
   </main>
 
-  <script src="../../js/solve.js"></script>
-  <script src="../../js/tutorial/draw.js"></script>
-  <script src="../../js/tutorial/lesson.js"></script>
-  <script src="../../js/tutorial/wheatstone.js"></script>
+  <script src="../../js/deps.js" data-load="tutorial-wheatstone"></script>
   <script>
-    // js/solve.js is doing real work here, not just formatting: every reading on this page is
-    // the shared engine solving a four-node model of the bridge by modified nodal analysis —
-    // the same solve the solver pages run. The two-divider formulas the guide derives are
-    // shown BESIDE that answer, never instead of it, which is what makes chapter 7's trap
-    // visible: load the bridge with a real detector and the two stop agreeing.
-    WheatstoneLab();
+    // deps.js loads this page's scripts in order; `load` is when every one of them is in
+    window.addEventListener('load', function () {
+      // js/solve/ is doing real work here, not just formatting: every reading on this page is
+      // the shared engine solving a four-node model of the bridge by modified nodal analysis —
+      // the same solve the solver pages run. The two-divider formulas the guide derives are
+      // shown BESIDE that answer, never instead of it, which is what makes chapter 7's trap
+      // visible: load the bridge with a real detector and the two stop agreeing.
+      WheatstoneLab();
+    });
   </script>
   <script src="../../js/ui/nav.js"></script>
 </body>

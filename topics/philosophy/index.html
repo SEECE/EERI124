@@ -74,17 +74,17 @@
     </aside>
   </main>
 
-  <script src="../../js/circuit.js"></script>
-  <script src="../../js/solve.js"></script>
-  <script src="../../js/tutorial/lesson.js"></script>
-  <script src="../../js/tutorial/philosophy.js"></script>
+  <script src="../../js/deps.js" data-load="tutorial-philosophy"></script>
   <script>
-    // The one tutorial page that uses the REAL renderer rather than js/tutorial/draw.js: these
-    // are ordinary circuits, which is exactly what js/circuit.js draws well, and reusing it
-    // gets the node letters and mesh loop-arrows for free — which are the two things this
-    // page needs the student to count. js/solve.js supplies the node lettering and the planar
-    // face extraction; the equation counts are worked out from the model, never written down.
-    PhilosophyLab();
+    // deps.js loads this page's scripts in order; `load` is when every one of them is in
+    window.addEventListener('load', function () {
+      // The one tutorial page that uses the REAL renderer rather than js/tutorial/draw.js: these
+      // are ordinary circuits, which is exactly what js/core/ draws well, and reusing it
+      // gets the node letters and mesh loop-arrows for free — which are the two things this
+      // page needs the student to count. js/solve/ supplies the node lettering and the planar
+      // face extraction; the equation counts are worked out from the model, never written down.
+      PhilosophyLab();
+    });
   </script>
   <script src="../../js/ui/nav.js"></script>
 </body>

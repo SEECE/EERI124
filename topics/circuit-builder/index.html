@@ -130,28 +130,21 @@
     <button type="button" class="scrim" aria-label="Close the open panel"></button>
   </div>
 
-  <script src="../../js/circuit.js"></script>
-  <script src="../../js/formats/native.js"></script>
-  <script src="../../js/formats/ltspice.js"></script>
-  <script src="../../js/formats/tikz.js"></script>
-  <script src="../../js/ui/filemenu.js"></script>
-  <script src="../../js/builder/model.js"></script>
-  <script src="../../js/builder/view.js"></script>
-  <script src="../../js/builder/editor.js"></script>
-  <script src="../../js/builder/panel.js"></script>
-  <script src="../../js/builder.js"></script>
-  <script src="../../js/ui/shell.js"></script>
+  <script src="../../js/deps.js" data-load="builder"></script>
   <script>
-    CircuitBuilder({
-      canvas: 'canvas', status: 'builder-status',
-      level: 'level', palette: 'palette',
-      propTitle: 'prop-title', typeDesc: 'type-desc',
-      depToggles: 'dep-toggles',
-      valueRow: 'value-row', valueInput: 'value-input', unit: 'value-unit',
-      controlRow: 'control-row', controlSelect: 'control-select', controlDir: 'control-dir',
-      propActions: 'prop-actions', flip: 'flip', delete: 'delete',
-      undo: 'undo', redo: 'redo', clear: 'clear',
-      zoomIn: 'zoom-in', zoomOut: 'zoom-out', zoomFit: 'zoom-fit',
+    // deps.js loads this page's scripts in order; `load` is when every one of them is in
+    window.addEventListener('load', function () {
+      CircuitBuilder({
+        canvas: 'canvas', status: 'builder-status',
+        level: 'level', palette: 'palette',
+        propTitle: 'prop-title', typeDesc: 'type-desc',
+        depToggles: 'dep-toggles',
+        valueRow: 'value-row', valueInput: 'value-input', unit: 'value-unit',
+        controlRow: 'control-row', controlSelect: 'control-select', controlDir: 'control-dir',
+        propActions: 'prop-actions', flip: 'flip', delete: 'delete',
+        undo: 'undo', redo: 'redo', clear: 'clear',
+        zoomIn: 'zoom-in', zoomOut: 'zoom-out', zoomFit: 'zoom-fit',
+      });
     });
   </script>
   <script src="../../js/ui/nav.js"></script>

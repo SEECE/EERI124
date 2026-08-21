@@ -83,7 +83,7 @@ is `+`; a current source pushes `a → b` inside itself, which is exactly SPICE'
 
 ### Ground
 
-Both writers ground **the same node `js/solve.js` does** — the first voltage source's `−`
+Both writers ground **the same node `js/solve/` does** — the first voltage source's `−`
 terminal, or, in a current-source-only circuit, the node the first one draws from. Keep it that
 way: it is what makes LTspice's node voltages read the same as the ones the workbench derived,
 which is the entire point of exporting.
@@ -91,7 +91,7 @@ which is the entire point of exporting.
 ## LaTeX — circuitikz
 
 A **circuitikz** picture, not raw TikZ: circuitikz already draws a resistor, and hand-drawing
-the zigzags here would be a second renderer to keep in step with `js/circuit.js`.
+the zigzags here would be a second renderer to keep in step with `js/core/`.
 
 The File menu's "Copy LaTeX Diagram" writes no file — `js/ui/filemenu.js` puts
 `Tikz.document()`'s text straight on the clipboard (`navigator.clipboard.writeText`), because
@@ -159,7 +159,7 @@ so rather than throwing a parse error.
 No headless SPICE here, so the writers are checked **against the solver**:
 
 - the netlist is parsed back out of its own text into a `{nodes, edges}` model and re-solved with
-  `js/solve.js`; every resistor's voltage drop must match the original. That is the check that
+  `js/solve/`; every resistor's voltage drop must match the original. That is the check that
   catches a flipped terminal, a bad net mapping or a wrong dependent-source expression;
 - every `SYMBOL`'s two pin coordinates must coincide with a `WIRE` endpoint — a pin that touches
   no wire is a floating node in LTspice.

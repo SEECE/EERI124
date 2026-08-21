@@ -1,12 +1,12 @@
 # Circuit generators — structure and how to extend it
 
 How circuit generation is organised, and the rules to follow when adding anything that
-produces a circuit. **Read this before touching `js/circuit.js` or `js/generators/`.**
+produces a circuit. **Read this before touching `js/core/` or `js/generators/`.**
 
 ## Why it is split
 
 One generator function per topology, each registering itself with a shared core. The
-alternative — a single `templates` object in `circuit.js` — was fine for eight resistive
+alternative — a single `templates` object in `js/core/` — was fine for eight resistive
 templates and stops being fine the moment the mesh/node/Thévenin pages need current
 sources and the four dependent sources. Those pages want *different subsets* of
 generators, not the same list with `if` statements in it.
@@ -15,13 +15,14 @@ generators, not the same list with `if` statements in it.
 
 | Layer | Files | Owns |
 |---|---|---|
-| **Core** | `js/circuit.js` | data model, `validate`/`isConnected`, `build()`, value pickers, the generator **registry**, the SVG renderer |
+| **Core** | `js/core/` | data model (`model.js`), value pickers (`values.js`), candidate quality (`quality.js`), the rewrites (`transform.js`), the generator **registry** (`registry.js`), the SVG renderer (`js/core/render/`) — all one `Circuit` global |
 | **Generators** | `js/generators/*.js` | one topology family per file; each file calls `Circuit.register()` at load time |
-| **Pages** | `topics/<slug>/index.html` | pick which generator files to `<script src>`, then filter the registry to what the topic covers |
+| **Pages** | `topics/<slug>/index.html` | name a bundle in `js/deps.js`, then filter the registry to what the topic covers |
 
 No ES modules anywhere — the site must open by double-clicking `index.html` over
 `file://`. That is why generators self-register instead of being imported, and why the
-"master file" is the registry inside `circuit.js` plus the page's list of `<script>` tags.
+"master file" is the registry inside `js/core/registry.js` plus the `generators` bundle in
+`js/deps.js`.
 
 ## The data model (locked — the solver will consume it)
 
@@ -60,7 +61,7 @@ Element type codes:
 | `G` | VCCS — `i = value·v_ctrl`, flows `a` → `b` | done |
 | `H` | CCVS — `v = value·i_ctrl`, `b` is **+** | done |
 
-Adding a type means: a `VALUED` entry in `circuit.js` if it carries a value, a render
+Adding a type means: a `VALUED` entry in `js/core/model.js` if it carries a value, a render
 branch, and — for dependent sources — a `control` field naming the edge it depends on.
 **Do not** invent a parallel shape for a new element; extend the edge object.
 
@@ -136,7 +137,7 @@ Rules:
    Note that **no tutorial page has a generator**. `topics/wheatstone-bridge/` and
    `topics/delta-wye/` draw one fixed figure each and let the student dial its values, so there
    is nothing for the registry to hold. `topics/philosophy/` does hold five real circuits, but
-   they live in `js/tutorial/philosophy.js` and are deliberately **not** registered: they are
+   they live in `js/tutorial/philosophy/` and are deliberately **not** registered: they are
    teaching specimens, each built to make one point about equation counts, and a solver page
    filtering the registry by element type would pick them up and start setting them as
    problems. See [TUTORIALS.md](TUTORIALS.md) before adding a generator "for" any of the three.
@@ -180,37 +181,41 @@ Rules:
 ## Consuming generators from a page
 
 ```html
-<script src="../../js/circuit.js"></script>
-<script src="../../js/generators/random-grid.js"></script>
-<script src="../../js/generators/basic.js"></script>
+<script src="../../js/deps.js" data-load="solver"></script>
 <script>
-  // this topic covers independent voltage sources + resistors only
-  Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) { /* build <option> */ });
-  Circuit.render(Circuit.get(name).generate(), svg);
+  window.addEventListener('load', function () {
+    // this topic covers independent voltage sources + resistors only
+    Circuit.list({ elements: ['R', 'V', 'W'] }).forEach(function (g) { /* build <option> */ });
+    Circuit.render(Circuit.get(name).generate(), svg);
+  });
 </script>
 ```
+
+A page never lists script files: it names a bundle and `js/deps.js` expands it (see CLAUDE.md).
+Every solver page therefore loads every generator, and the `elements` filter below — not the
+file list — is what decides which ones it may offer.
 
 - `Circuit.list(filter)` — `{ elements: [...] }` keeps generators whose declared elements
   are **all** allowed; `{ tags: [...] }` keeps those carrying **every** listed tag. No
   filter = everything registered.
 - `Circuit.get(name).generate()` — build one circuit.
-- The page decides its scope twice: which files it loads, and the `elements` filter. The
-  filter is the safety net — a generator loaded by accident still cannot appear on a page
-  that does not teach its elements.
+- The `elements` filter is the whole scope decision, and it is enforced rather than trusted:
+  a generator whose declared elements are not all allowed cannot appear on the page, however
+  it got loaded.
 - **Never** call a generator function by importing it directly or reaching into internals.
   Name → registry → generate.
 
 ## The self-check
 
-`js/circuit.test.html` — open in a browser, every line must read `PASS`. It runs **every**
-registered generator 50× and asserts: valid model, connected, has a source, no zero-value
-element, nothing shorted by wires, and no element type outside the generator's declared
-`elements`. A new generator file is only done when its `<script>` tag is in
-`circuit.test.html` too.
+`js/circuit.test.html` — open in a browser, every line must read `PASS`. Its checks live in
+`js/tests/circuit-model.js`. It runs **every** registered generator 50× and asserts: valid
+model, connected, has a source, no zero-value element, nothing shorted by wires, and no element
+type outside the generator's declared `elements`. A new generator file is only done when it is
+in the `generators` bundle in `js/deps.js`.
 
 ## Planned direction (not built yet)
 
-- Solver (`js/solve.js`) consumes `{nodes, edges}` and is generator-agnostic. Keep
+- Solver (`js/solve/`) consumes `{nodes, edges}` and is generator-agnostic. Keep
   generation free of any solving concern — no precomputed answers stored on the circuit.
   (`Circuit.solvable()` is the one exception, and it is a *rejection* test, not an answer: it
   throws the candidate away, it never stores anything on it.)

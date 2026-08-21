@@ -117,48 +117,31 @@
     <button type="button" class="scrim" aria-label="Close the open panel"></button>
   </div>
 
-  <script src="../../js/circuit.js"></script>
-  <script src="../../js/generators/dependent.js"></script>
-  <script src="../../js/generators/current-source.js"></script>
-  <script src="../../js/generators/random-grid.js"></script>
-  <script src="../../js/generators/basic.js"></script>
-  <script src="../../js/generators/bridge-ladder.js"></script>
-  <script src="../../js/generators/grid.js"></script>
-  <script src="../../js/generators/multi-source.js"></script>
-  <script src="../../js/solve.js"></script>
-  <script src="../../js/techniques/kit.js"></script>
-  <script src="../../js/techniques/controls.js"></script>
-  <script src="../../js/techniques/node-voltage.js"></script>
-  <script src="../../js/techniques/mesh-current.js"></script>
-  <script src="../../js/stepper.js"></script>
-  <script src="../../js/formats/native.js"></script>
-  <script src="../../js/formats/ltspice.js"></script>
-  <script src="../../js/formats/tikz.js"></script>
-  <script src="../../js/ui/filemenu.js"></script>
-  <script src="../../js/ui/step-prompt.js"></script>
-  <script src="../../js/solver-page.js"></script>
-  <script src="../../js/ui/shell.js"></script>
+  <script src="../../js/deps.js" data-load="solver"></script>
   <script>
-    // This topic adds the four controlled sources; KCL and KVL only, as on the current-sources
-    // page (equivalent resistance needs a source to deactivate, and deactivating a controlled
-    // one is a Thévenin-era idea). Two circuit sets, the same shape the §4 current-sources page
-    // uses: this topic's own circuits, and every other topology run through dependify() so §3's
-    // and §4's shapes get drilled with controlled sources too.
-    SolverPage({
-      elements: ['R', 'V', 'I', 'W', 'E', 'F', 'G', 'H'],
-      sets: [
-        { value: 'dependent', label: 'Dependent-source circuits', filter: { tags: ['dependent-source'] } },
-        {
-          value: 'all', label: 'All topologies', filter: { elements: ['R', 'V', 'I', 'W'] },
-          // Wheatstone bridge opts out — its arms are the exact teaching point, flagged by its
-          // B/D node labels (see circuit.js's currentify() comment). dependify() hands the
-          // circuit back untouched when it cannot place one safely, so the page never breaks.
-          transform: function (c) {
-            var protectedWiring = c.nodes.some(function (n) { return n.label; });
-            return protectedWiring ? c : Circuit.dependify(c);
+    // deps.js loads this page's scripts in order; `load` is when every one of them is in
+    window.addEventListener('load', function () {
+      // This topic adds the four controlled sources; KCL and KVL only, as on the current-sources
+      // page (equivalent resistance needs a source to deactivate, and deactivating a controlled
+      // one is a Thévenin-era idea). Two circuit sets, the same shape the §4 current-sources page
+      // uses: this topic's own circuits, and every other topology run through dependify() so §3's
+      // and §4's shapes get drilled with controlled sources too.
+      SolverPage({
+        elements: ['R', 'V', 'I', 'W', 'E', 'F', 'G', 'H'],
+        sets: [
+          { value: 'dependent', label: 'Dependent-source circuits', filter: { tags: ['dependent-source'] } },
+          {
+            value: 'all', label: 'All topologies', filter: { elements: ['R', 'V', 'I', 'W'] },
+            // Wheatstone bridge opts out — its arms are the exact teaching point, flagged by its
+            // B/D node labels (see circuit.js's currentify() comment). dependify() hands the
+            // circuit back untouched when it cannot place one safely, so the page never breaks.
+            transform: function (c) {
+              var protectedWiring = c.nodes.some(function (n) { return n.label; });
+              return protectedWiring ? c : Circuit.dependify(c);
+            },
           },
-        },
-      ],
+        ],
+      });
     });
   </script>
   <script src="../../js/ui/nav.js"></script>

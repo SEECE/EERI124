@@ -1,0 +1,54 @@
+/* The ribbon's own frame: the bar, the brand and the page title. Part of the ribbon; the
+   file pages link to is css/ribbon.css. */
+
+.ribbon {
+  position: relative;
+  z-index: 30;
+  min-height: var(--ribbon-h);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: 0 clamp(12px, 2.5vw, 22px);
+  background: rgba(14, 9, 32, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border-bottom: 1px solid var(--line);
+}
+
+/* ── brand ── */
+.ribbon-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  flex: none;
+}
+.ribbon-mark {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: linear-gradient(140deg, var(--violet-400), var(--violet-700) 55%, var(--aqua-400));
+  box-shadow: var(--glow);
+  flex: none;
+}
+.ribbon-brand:hover .ribbon-mark { filter: brightness(1.12); }
+
+.ribbon-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--line-hi);
+  flex: none;
+}
+
+.ribbon-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
