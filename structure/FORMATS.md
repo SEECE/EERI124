@@ -77,9 +77,16 @@ LTspice's `e`/`f`/`g`/`h` symbols:
 
 A B-source reads its control with an expression, so there are no 4-pin symbols to place, no
 control wires to route, and — for the current-controlled pair — no 0 V sense source to insert in
-series with the control resistor. The model's own conventions carry straight over: a resistor is
+series with the control element. The model's own conventions carry straight over: a resistor is
 emitted `a b`, so `I(Rn)` is the current `a → b` the technique narrates; a voltage source's `b`
 is `+`; a current source pushes `a → b` inside itself, which is exactly SPICE's `n+ → n−`.
+
+**One sign does NOT carry over.** A current read may name an independent **voltage source**
+rather than a resistor (GENERATORS.md — the slides' Assessment Problem 4.4). A voltage source is
+emitted `n+ n− = b a`, and SPICE's `I(V)` is the current from `n+` to `n−` *inside* the source —
+`b → a`, the opposite of the model's `a → b`. So that one is written **`-I(Vn)`**:
+
+    H (CCVS)  B1 b a V=gain*-I(Vn)          F (CCCS)  B1 a b I=gain*-I(Vn)
 
 ### Ground
 
@@ -129,9 +136,9 @@ Four things are settled and should not be re-derived by guessing:
   That was read off a test render, not off the manual.
 
 A dependent source's value is labelled with `Circuit.controls()`'s own iφ/vΔ notation (spelled
-`\varphi`/`\Delta` in math), not the control resistor's instance name — the same symbol the
+`\varphi`/`\Delta` in math), not the control element's instance name — the same symbol the
 on-page marker and the workbench's constraint equation use. `markers()` draws that marker: a
-`-latex` arrow along the control resistor's own a→b sense for a current read, or +…− across it
+`-latex` arrow along the control element's own a→b sense for a current read, or +…− across it
 for a voltage read, on the FIXED far side from the resistor's own value label — west for a
 vertical resistor, north for a horizontal one, always, regardless of which way its own a → b
 happens to point (a control edge is always a plain resistor, so it is never terminal-flipped).

@@ -52,13 +52,31 @@ controlled sources all solve and are all narrated.
 
 ## Dependent sources — why they need no new method
 
-A controlled source reads a **resistor** (GENERATORS.md), so its control variable is itself a
-combination of the quantities the method is already solving for:
+A controlled source reads a **resistor**, or — for a current read — an independent **voltage
+source** (GENERATORS.md). Either way its control variable is a combination of the quantities the
+method is already solving for:
 
     v_ctrl = v_x − v_y            i_ctrl = (v_x − v_y) / R          (node voltages, KCL)
     i_ctrl = i_fa − i_fb          v_ctrl = R·(i_fa − i_fb)          (mesh currents, KVL)
 
-Everything follows from that one fact:
+**Reading a source's current** costs the two methods very differently, and that difference is
+the lesson the case carries:
+
+- **KVL pays nothing.** Every edge's current is `i_fa − i_fb` over the faces its half-edges
+  bound, whatever element sits in it. `ctrlVec` was already written that way.
+- **KCL pays a detour.** A source has no Ohm's law, so the walk reaches its current through KCL
+  at one of its terminals: everything the source pushes into that node has to leave it again
+  through the resistors there, so the source's current *is* that sum. `NV.ctrlBranches` builds
+  it (and `Circuit.controlTerminal` guarantees the terminal is usable). The consequence is that
+  a control variable is a **list** of branches rather than one difference over one resistance,
+  which is why `ControlVars.expandGain(e, terms)` takes a term list and why `NV.ctrlDenoms`
+  exists — "multiply through by everything underneath" has to clear all of them. The resistor
+  case is a one-element list and comes out exactly as it always did.
+- **The ENGINE pays nothing either way.** `nodeVoltages` already carries a branch-current
+  unknown per voltage source, so the control term is a single 1 in that column — the KCL detour
+  above is presentation, for the student's walk, not arithmetic.
+
+Everything else follows from that one fact:
 
 - **Engine.** `nodeVoltages` gives `E`/`H` the same branch-current row as `V` with the
   gain·control terms moved to the left, and stamps `F`/`G` into the two KCL rows they touch
@@ -76,7 +94,7 @@ Everything follows from that one fact:
   labels, the marker keys and the little `Lin` linear-form type both techniques use; it is
   key-agnostic because KCL keys by electrical node and KVL keys by mesh.
 - **The drawing keeps up.** A controlled source is a diamond, and the control variable is drawn
-  on the resistor it is read from (an arrow for a current, a `+ … −` pair for a voltage), hidden
+  on the element it is read from (an arrow for a current, a `+ … −` pair for a voltage), hidden
   at render and revealed by `highlight({ marks: [...] })` at the step that names it — the same
   mechanism as the node letters.
 
@@ -100,7 +118,8 @@ so, rather than dividing by zero.
 | Layer | Files | Owns |
 |---|---|---|
 | **Kit** | `js/techniques/kit.js` | `StepKit` — the presentation and small-algebra layer both techniques share: fraction/subscript fragments, the status and board tables, number formatting that never prints `-12` or `− -5`, and the `{ c, t }` expression objects (`cleanT`, `resolveSelf`, `snap`, `settle`, `fmtExpr`) their solve steps substitute into one another. Knows nothing about circuits. |
-| **Controls** | `js/techniques/controls.js` | `ControlVars` — everything a step list says about a dependent source (type names, symbol, gain label, sign-aware term text, marker key) plus `Lin`, the key-agnostic linear form. |
+| **Controls** | `js/techniques/controls.js` | `ControlVars` — everything a step list says about a dependent source (type names, symbol, gain label, sign-aware term text, what the control is read off, marker key) plus `Lin`, the key-agnostic linear form. |
+| **System** | `js/techniques/system.js` | `LinSystem` — the simultaneous block, written down properly: standard form, the matrix, and Cramer's rule. Both techniques call it at the point their solve step forks (see below). |
 | **Engine** | `js/solve/` | one file per job behind the `Solve` global: `format.js` (`si`), `linear.js` (`linsolve`, Gaussian elim), `nodes.js` (`electricalNodes`, `letterNodes`), `nodal.js` (`nodeVoltages` — **MNA**, any number of sources), `faces.js` + `mesh.js` (KVL), `branches.js` (`branches`, `powerCheck`). Generator-agnostic; **stores no solving state on the circuit**. |
 | **Techniques** | `js/techniques/<name>/` | one FOLDER per technique, split by phase over a shared context object `X` — `context.js` builds it, `index.js` is the phase order and the only file that touches `window`, and the step builders and the solving narration get a file each; `circuit → ordered step list`. `node-voltage` (KCL, owns the equation-assembly / propagation engine — states the convention in step 4, sets up equations in step 7, hand-works the solve in step 9), `mesh-current` (KVL), `equivalent-resistance` (reduction moves + the Y→Δ transform, each move a
 step with its own why/rule/numbers details and a redrawn network on the board). Each self-registers a global (`window.NodeVoltage`, …). |
@@ -127,6 +146,14 @@ A technique returns an array of steps:
 ```
 
 - `todo: true` → a muted **"Nothing to do"** badge.
+- `tabs` (optional) → a **choice the STEP offers the reader**:
+  `{ key, value, label, options: [{ value, label }] }`. The stepper renders a strip under the
+  title and hands a pick to the page through `o.onTab(key, value)`; it deliberately does **not**
+  act on it, because a different choice is a different step list and only `js/solver-page.js`
+  knows how to build one — it sets the option, re-runs the technique, and puts the reader back on
+  the view they were reading (`stepper.go(index, sub)`). The one in use is the solve step's
+  algebra-vs-Cramer choice, and a step only carries `tabs` when there is actually a simultaneous
+  block to choose a route through.
 - `hl` → highlighted elements. The renderer wraps each edge in `<g class="edge" data-eid>` and tags
   each node circle `data-nid`; `Circuit.highlight(svg, hl)` toggles a `.hl` class (styled in
   `css/circuit.css`, which beats the renderer's presentation attributes). `hl.marks` reveals a
@@ -287,9 +314,39 @@ at this stage know only V = IR). Everything is worked by *clearing fractions*, n
     its own entry — a depLink pair costs the system **two** unknowns and two equations, not one —
     and the shared `eliminate` substitution round (used for the coupled block and for a lone
     controlled-bridge supernode solved on its own in `P.open`) resolves them exactly like any other
-    coupled node. Nothing in step 9 is handed to a matrix or calculator any more.
+    coupled node.
 
 This ordering is pedagogy — the displayed values always come from `nodeVoltages`.
+
+### The fork: long algebra or Cramer's rule
+
+Wherever a **simultaneous block** survives — KCL step 9's coupled pool, KVL step 8's — both
+techniques hand it to `LinSystem.views` (`js/techniques/system.js`) before anything is solved,
+and it pushes the same two substeps in either mode:
+
+| substep | what it is for |
+|---|---|
+| **standard form** | Every unknown on the LEFT, in one fixed column order, the number alone on the right — and an explicit `0·v_c` written out wherever an equation does not mention a column. That zero is the whole point: a matrix row has an entry per column whether the equation mentions it or not, and leaving them implicit is how a matrix gets built one column short. |
+| **as a matrix** | The same numbers as `A·x = b` (`StepKit.matrix`). |
+
+Then `cfg.method` decides:
+
+- **`algebra`** (the default) — the substitution round that was always there, every line shown.
+- **`cramer`** — ONE substep: `Δ`, one `Δₖ` per column with `b` substituted in, and `xₖ = Δₖ/Δ`.
+  Deliberately one, because that is what it is in practice: the matrix goes into a calculator.
+  The point of offering it is that a student sees the same system solved both ways.
+
+The rows are the equations the walk **actually derived** — each already divided through by its own
+unknown's coefficient, so the diagonal reads 1. That is a legitimate standard form and the one
+that cannot drift from the answers, since it is read straight off the `expr` pool; it is *not* the
+textbook's matrix for the same circuit (theirs is the pre-division one) and the solution is the
+same either way. Numbers print through `StepKit.sig` at four significant figures rather than
+three decimals — a milliamp system has determinants around `1e-4`, and the reader is meant to
+divide two of them on a calculator.
+
+The choice reaches the reader as the solve step's `tabs` (see [The step model](#the-step-model))
+and reaches the technique as `opts.solveBy`. It also rides into the Ask-Midnjoy prompt, so the
+answer explains the route on screen.
 
 ## KVL — mesh-current
 
