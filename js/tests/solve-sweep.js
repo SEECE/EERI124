@@ -37,14 +37,14 @@
     check('KVL steps ' + g.name + ' ×10', function () {
       for (var i = 0; i < 10; i++) {
         var c = g.generate(), mc = Solve.meshCurrents(c), steps = MeshCurrent(c);
+        var rings = mc.groups.filter(function (grp) { return grp.meshes.length > 1; }).length;
         assert(steps.length === 10, '10 PPT steps expected, got ' + steps.length);
         steps.forEach(function (s, k) {
           [s].concat(s.subs || []).forEach(function (view) {
             var loops = view.hl && view.hl.loops;
             if (k === 0) assert(!loops, 'step 1 draws loops too early');
-            // steps 5-8 draw a supermesh as ONE loop over its meshes, so there the count is
-            // the number of groups; everywhere else it is one arrow per mesh
-            else assert(loops && loops.length === (s.n >= 5 && s.n <= 8 ? mc.groups.length : mc.meshes.length),
+            // one arrow per mesh throughout; steps 5-8 add one faint ring per supermesh on top
+            else assert(loops && loops.length === mc.meshes.length + (s.n >= 5 && s.n <= 8 ? rings : 0),
               'step ' + s.n + ' dropped the mesh loops');
           });
         });

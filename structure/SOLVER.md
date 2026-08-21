@@ -376,10 +376,12 @@ expression-substitution round begins.
 The technique is **deliberately the mirror image of KCL** — same substep rhythm, same live board,
 same algebra — so a student who learned one reads the other for free:
 
-- **Steps 5–8 draw a supermesh as ONE loop** around both its meshes (the slides' picture), then
-  steps 9–10 go back to one arrow per mesh. `Circuit.highlight` fits the loop arc to the bounding
-  box of the node ids it is given, so passing both meshes' nodes is all it takes; the technique
-  swaps the loop set it stamps (`curLoops`) at those two points.
+- **Steps 5–8 ring a supermesh** — every mesh keeps its own arrow and label the whole way
+  through, and the meshes a shared current source welds are enclosed by a faint accent-coloured
+  outline for those four steps only. A loop entry carrying `ring: true` draws that outline
+  instead of an arrow; `Circuit.highlight` fits it to the bounding box of the node ids it is
+  given, so passing both meshes' nodes is all it takes. The technique swaps the loop set it
+  stamps (`curLoops`) at step 5 and back at the end of step 8.
 - **The loop-arrows are drawn in step 2 and never removed.** Every `hl` from step 2 on (steps *and*
   substeps) goes through the local `H()` helper, which re-attaches `loops:`. `Circuit.highlight`
   wipes `.mesh-loop` on every call, so a spec that omits `loops` erases them — never build an `hl`

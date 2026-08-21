@@ -89,13 +89,12 @@
     }).sort(function (a, b) { return mc.order.indexOf(a.lead) - mc.order.indexOf(b.lead); });
 
     function gname(grp) { return grp.meshes.map(function (f) { return name[f]; }).join(' + '); }
-    // one arrow per group: a supermesh gets a single loop spanning both meshes' nodes
-    var groupLoops = G.map(function (grp) {
-      return grp.super
-        ? { nodes: grp.meshes.reduce(function (a, f) { return a.concat(faceNodeIds(f)); }, []),
-          label: grp.meshes.map(function (f) { return plainName[f]; }).join('+'), merged: true }
-        : { nodes: faceNodeIds(grp.lead), label: plainName[grp.lead] };
-    });
+    // every mesh keeps its own arrow; a supermesh adds a faint ring around the pair it welds,
+    // drawn first so the arrows sit on top of it
+    var groupLoops = G.filter(function (grp) { return grp.super; }).map(function (grp) {
+      return { nodes: grp.meshes.reduce(function (a, f) { return a.concat(faceNodeIds(f)); }, []),
+        ring: true };
+    }).concat(mc.order.map(function (f) { return { nodes: faceNodeIds(f), label: plainName[f] }; }));
     // a boundary current source fixes its mesh: i_f − 0 = I one way round, 0 − i_f = I the other.
     // Only an INDEPENDENT one hands over the value; a controlled one still needs its constraint.
     function fixedSign(f) {

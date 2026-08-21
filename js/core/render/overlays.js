@@ -6,6 +6,7 @@
   var C = window.Circuit = window.Circuit || {};
   var P = C.paint = C.paint || {};
   var el = P.el;
+  var RING = 22;                      // how far the supermesh outline sits outside its nodes
 
   function clear(svg, sel) {
     Array.prototype.forEach.call(svg.querySelectorAll(sel), function (g) {
@@ -17,12 +18,13 @@
     return c ? { c: c, x: +c.getAttribute('cx'), y: +c.getAttribute('cy') } : null;
   }
 
-  /* Clockwise mesh loop-arrows (KVL). loops:[{nodes:[ids], label, merged}] — the arc is an
+  /* Clockwise mesh loop-arrows (KVL). loops:[{nodes:[ids], label, ring}] — the arc is an
      ELLIPSE fitted to the bounding box of the given nodes, read from the rendered node circles
-     so this stays in the svg's user space. Fitting the box (rather than a circle on the
-     centroid) is what lets a supermesh pass the nodes of BOTH its meshes and get one wide loop
-     around the pair, exactly as the lecture slides draw it; `merged` lifts that loop's label off
-     the shared branch it would otherwise sit on. */
+     so this stays in the svg's user space.
+
+     A `ring` entry draws no arrow: it is the faint outline enclosing a supermesh, given the
+     nodes of BOTH its meshes. Each mesh keeps its own arrow and its own label; the ring only
+     says "these two are walked as one loop". */
   P.loops = function (svg, loops) {
     clear(svg, '.mesh-loop');
     loops.forEach(function (loop) {
@@ -33,9 +35,18 @@
         bx0 = Math.min(bx0, p.x); bx1 = Math.max(bx1, p.x);
         by0 = Math.min(by0, p.y); by1 = Math.max(by1, p.y);
       });
+      var g = el('g', { 'class': 'mesh-loop' }, svg);
+      // ponytail: the ring is the bounding box of the pair, rounded — exact for the adjacent
+      // rectangular meshes the generators make. Trace the union's real boundary half-edges if a
+      // topology ever welds two meshes into an L.
+      if (loop.ring) {
+        el('rect', { x: bx0 - RING, y: by0 - RING,
+          width: (bx1 - bx0) + 2 * RING, height: (by1 - by0) + 2 * RING, rx: 16,
+          fill: 'none', stroke: 'var(--accent)', 'stroke-width': 3, 'stroke-opacity': 0.35 }, g);
+        return;
+      }
       var cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
       var rx = Math.max(16, (bx1 - bx0) * 0.32), ry = Math.max(16, (by1 - by0) * 0.32);
-      var g = el('g', { 'class': 'mesh-loop' }, svg);
       // ~320° arc, gap at the top, swept clockwise (SVG sweep-flag 1 with y down)
       var sa = -70 * Math.PI / 180, ea = 250 * Math.PI / 180;
       var sx = cx + rx * Math.cos(sa), sy = cy + ry * Math.sin(sa);
@@ -54,10 +65,8 @@
         (ex + ah * Math.cos(c1)) + ',' + (ey + ah * Math.sin(c1)) + ' ' +
         (ex + ah * Math.cos(c2)) + ',' + (ey + ah * Math.sin(c2)),
         fill: 'var(--accent-hover)' }, g);
-      // a merged (supermesh) loop is centred on the branch its two meshes share — lift the
-      // label off that element instead of printing it on top of the source symbol
       if (loop.label) {
-        el('text', { x: cx, y: cy - (loop.merged ? ry * 0.55 : 0), 'text-anchor': 'middle',
+        el('text', { x: cx, y: cy, 'text-anchor': 'middle',
           'dominant-baseline': 'central', fill: 'var(--accent-hover)', 'font-size': 15,
           'font-weight': 700, 'paint-order': 'stroke', stroke: 'var(--surface)', 'stroke-width': 4 }, g)
           .textContent = loop.label;
