@@ -50,31 +50,54 @@
 
     function adjacent(A, B) { return Math.abs(A.r - B.r) + Math.abs(A.c - B.c) === 1; }
 
+    /* Which elements this dependent-source type may read (see Circuit.canControl): any
+       resistor, and — for a CURRENT read — any independent voltage source, which is the
+       slides' Assessment Problem 4.4. */
+    function controlEdges(type) {
+      return st.edges.filter(function (e) { return window.Circuit.canControl(e, type); });
+    }
+
     /* spec = { type, value?, control?, controlFrom? }. controlFrom names which end of the
-       control resistor the quantity is read from; the resistor's own a/b IS that reference
-       (v = v_a − v_b, i flows a → b), so picking it means orienting the resistor. */
+       control element the quantity is read from; the element's own a/b IS that reference
+       (v = v_a − v_b, i flows a → b), so picking it means orienting the element. A VOLTAGE
+       SOURCE is never re-oriented that way — its a/b is its polarity, not a free choice — so
+       its current is read in its own − → + sense and there is nothing to pick. */
     function place(A, B, spec) {
       if (!adjacent(A, B)) throw new Error('elements span one grid step, and never diagonally');
       if (edgeBetween(A, B)) throw new Error('there is already an element there');
       var dep = window.Circuit.isDependent(spec.type);
-      if (dep && !spec.control) throw new Error('place a resistor first — a dependent source has to read one');
+      if (dep && !spec.control) throw new Error('place a resistor first (or, for a current read, a voltage source) — a dependent source has to read one');
+      var ctrl = dep ? edgeById(spec.control) : null;
+      // reading a source's current only works where KCL can get at it — checked before anything
+      // is written, so a refused placement leaves the grid exactly as it was
+      if (ctrl && ctrl.type !== 'R' && !readableAfter(ctrl, A, B, spec.type)) {
+        throw new Error('the current through ' + spec.control + ' can only be read where one of its ends has resistors alone on it');
+      }
       snapshot();
       var e = { id: 'e' + (st.nextE++), type: spec.type, a: ensureNode(A), b: ensureNode(B) };
       if (spec.type !== 'W') e.value = spec.value;
       if (dep) {
         e.control = spec.control;
-        var ctrl = edgeById(spec.control);
-        if (ctrl && spec.controlFrom === ctrl.b) { var t = ctrl.a; ctrl.a = ctrl.b; ctrl.b = t; }
+        ctrl = edgeById(spec.control);
+        if (ctrl && ctrl.type === 'R' && spec.controlFrom === ctrl.b) { var t = ctrl.a; ctrl.a = ctrl.b; ctrl.b = t; }
       }
       st.edges.push(e);
       return e;
+    }
+    // would the source still have a readable terminal once an element spanned A–B? Answered on
+    // a throwaway copy, with the pending element in place, so the answer is the real one.
+    function readableAfter(ctrl, A, B, type) {
+      var a = idAt(A) || 'pendingA', b = idAt(B) || 'pendingB';
+      var probe = { nodes: st.nodes.concat([{ id: a }, { id: b }]),
+        edges: st.edges.concat([{ id: '__probe', type: type, a: a, b: b }]) };
+      return !!window.Circuit.controlTerminal(probe, ctrl);
     }
 
     function removeEdge(id) {
       var e = edgeById(id);
       if (!e) return;
       if (st.edges.some(function (x) { return x.control === id; })) {
-        throw new Error('a dependent source reads this resistor — remove that source first');
+        throw new Error('a dependent source reads this element — remove that source first');
       }
       snapshot();
       var ends = [e.a, e.b];
@@ -157,6 +180,7 @@
       },
       idAt: idAt, edgeById: edgeById, edgeBetween: edgeBetween, adjacent: adjacent,
       resistors: function () { return st.edges.filter(function (e) { return e.type === 'R'; }); },
+      controlEdges: controlEdges,
       isEmpty: function () { return !st.edges.length; },
       place: place, removeEdge: removeEdge, setValue: setValue, flip: flip,
       clear: clear, load: load, bounds: bounds,
