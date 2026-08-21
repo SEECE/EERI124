@@ -169,7 +169,10 @@
       var elements = c.edges.filter(function (e) { return e.type !== 'W'; });
       assert(bipoles.length === elements.length, g.name + ': ' + bipoles.length + ' bipoles for ' + elements.length + ' elements');
       (tex.match(/to\[[^\n]*/g) || []).forEach(function (line) {
-        assert(/to\[[A-Za-z]+=\{\$.*\$\}\]/.test(line), g.name + ': unbraced bipole label — ' + line);
+        // pgfkeys splits an option list on commas and every unit carries a \, — so the label
+        // VALUE has to be braced. The key is `l` or `l_` depending on which way the path was
+        // drawn (see tikz.js picture()), and the bipole type comes before it: to[R, l={$…$}]
+        assert(/to\[[^\]]*\bl_?=\{\$.*\$\}\]/.test(line), g.name + ': unbraced bipole label — ' + line);
       });
     });
   });
