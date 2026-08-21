@@ -1,7 +1,7 @@
 /* The top ribbon — one row, fixed height, on every page: brand · page title · topic nav ·
    panel toggles. It replaces the old nav + per-page hero card: folding the page title into
    the ribbon gives the circuit back ~90px of vertical space, which is most of why the old
-   layout could not fit a workspace on a laptop screen. */
+   layout could not fit a workspace on a laptop screen.
 
    Kept as an index rather than one long stylesheet so each part stays readable on its own:
      ribbon-shell.css    the bar itself, the brand and the page title
