@@ -174,12 +174,13 @@
         var ce = CV.ctrlEdge(e), fs = meshesOf(ce);
         return {
           title: 'constraint for ' + CV.sym(e), board: boardHtml(),
-          body: '<b>' + CV.sym(e) + '</b> is the ' + (CV.kind(e) === 'i' ? 'current through' : 'voltage across') + ' the ' +
-            si(ce.value, 'Ω') + ' resistor, and ' + (fs.length === 2
-              ? 'that resistor is shared by meshes <b>' + name[fs[0]] + '</b> and <b>' + name[fs[1]] + '</b>, so its current is the difference of the two loop currents'
+          body: '<b>' + CV.sym(e) + '</b> is the ' + (CV.kind(e) === 'i' ? 'current through' : 'voltage across') + ' ' +
+            CV.ctrlNoun(e) + ', and ' + (fs.length === 2
+              ? 'that branch is shared by meshes <b>' + name[fs[0]] + '</b> and <b>' + name[fs[1]] + '</b>, so its current is the difference of the two loop currents'
               : fs.length === 1 ? 'only mesh <b>' + name[fs[0]] + '</b> runs through it, so its current <i>is</i> that loop current'
                 : 'no mesh loop crosses it, so it carries no current') +
             (CV.kind(e) === 'i' ? '.' : ' — times its resistance, by Ohm’s law.') +
+            (CV.ctrlIsSource(e) ? ' A source needs no Ohm’s law here: KVL solves for branch currents already, so the current through it is read off the loops like any other branch.' : '') +
             ' Write it that way and the ' + CV.short(e) + ' stops being a symbol.',
           eq: [CV.sym(e) + ' = ' + ctrlAsMeshes(e), CV.short(e) + ' value = ' + CV.gain(e) + ' = ' +
             si(depValue(e), CV.out(e) === 'v' ? 'V' : 'A')],

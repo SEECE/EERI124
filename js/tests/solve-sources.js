@@ -41,6 +41,49 @@
     assert(Solve.powerCheck(Solve.branches(c, Solve.nodeVoltages(c))).ok, 'power imbalance');
   });
 
+  /* ---- LU4.2 Assessment Problem 4.4: the control edge is a VOLTAGE SOURCE ----
+     20·iΔ across the right rail, where iΔ is the current the 10 V source supplies. The slide
+     works it by hand to vo = 24 V and iΔ = −3.2 A, and both techniques have to land there:
+     nodal reaches iΔ through the source's own branch-current unknown, mesh straight off the
+     loops. Hand-built, not generated — a case with a known answer must not depend on what a
+     generator felt like emitting.
+     Laid out the way the slide draws it, corners and all — the mesh solve reads its faces off
+     the geometry, so a flattened sketch of the same netlist has no loops to walk.
+       n0 ──── 30 Ω ──── n1
+       │                  │
+       n2 ─10 Ω─ n3 ─20 Ω─ n4      n3 is vo
+       │         │         │
+      10 V     40 Ω     20·iΔ
+       │         │         │
+       n5 ────── n6 ────── n7      the bottom rail is the reference */
+  check('dependent source reading a voltage source’s current (AP 4.4)', function () {
+    var c = {
+      nodes: [[0, 0], [4, 0], [0, 1], [2, 1], [4, 1], [0, 3], [2, 3], [4, 3]]
+        .map(function (p, i) { return { id: 'n' + i, x: p[0], y: p[1] }; }),
+      edges: [
+        { id: 'V1', type: 'V', a: 'n5', b: 'n2', value: 10 },      // + at the top
+        { id: 'R10', type: 'R', a: 'n2', b: 'n3', value: 10 },
+        { id: 'R20', type: 'R', a: 'n3', b: 'n4', value: 20 },
+        { id: 'R40', type: 'R', a: 'n3', b: 'n6', value: 40 },
+        { id: 'R30', type: 'R', a: 'n0', b: 'n1', value: 30 },
+        { id: 'H1', type: 'H', a: 'n4', b: 'n7', value: 20, control: 'V1' },
+        { id: 'W0', type: 'W', a: 'n0', b: 'n2' }, { id: 'W1', type: 'W', a: 'n1', b: 'n4' },
+        { id: 'W2', type: 'W', a: 'n5', b: 'n6' }, { id: 'W3', type: 'W', a: 'n6', b: 'n7' },
+      ],
+    };
+    Circuit.validate(c);
+    var sol = Solve.nodeVoltages(c);
+    assert(near(v(sol, 3), 24, 1e-6), 'vo = ' + v(sol, 3) + ' ≠ 24 V');
+    assert(near(sol.ctrl.H1, -3.2, 1e-6), 'iΔ = ' + sol.ctrl.H1 + ' ≠ −3.2 A');
+    assert(Solve.powerCheck(Solve.branches(c, sol)).ok, 'power imbalance');
+    // the KCL walk needs a terminal it can read that current at: the + node, resistors only
+    assert(Circuit.controlTerminal(c, c.edges[0]) === 'n2', 'should read iΔ at the + terminal');
+    // and the same answer off the mesh solve, which needs no KCL detour at all
+    var mc = Solve.meshCurrents(c);
+    assert(near(mc.edgeCurrent.R40 * 40, 24, 1e-6), 'mesh vo = ' + mc.edgeCurrent.R40 * 40);
+    assert(near(mc.edgeCurrent.V1, -3.2, 1e-6), 'mesh iΔ = ' + mc.edgeCurrent.V1);
+  });
+
   // ---- two current sources on ONE mesh ----
   // KVL round that loop is one equation in two unknown source voltages, so the mesh method's
   // step 9 cannot pin either. The circuit is still a circuit and energy is still conserved,

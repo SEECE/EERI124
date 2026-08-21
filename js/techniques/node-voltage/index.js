@@ -14,8 +14,9 @@
    The nine PPT steps. Step 6 (supernode) is real content when a source bridges two
    non-reference nodes — ANY voltage source, independent or dependent, which is the slides'
    own rule. Step 8 (constraints) is the dependent sources' step: each controlled source is
-   carrying a symbol (iφ, vΔ), and because its control edge is a resistor, Ohm's law rewrites
-   that symbol in node voltages — after which the system is ordinary. A controlled voltage
+   carrying a symbol (iφ, vΔ), and that symbol is rewritten in node voltages — Ohm's law when
+   the control edge is a resistor, KCL at one terminal when it is the current through a voltage
+   source (the slides' Assessment Problem 4.4) — after which the system is ordinary. A controlled voltage
    source straight onto an already-known node PINS its other node: no KCL can be written
    there (the source's branch current is an unknown of its own), so the gain equation is that
    node's equation. See js/techniques/controls.js.

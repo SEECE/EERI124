@@ -98,4 +98,31 @@
     });
   }, { elements: DEP_ELEMENTS, tags: ['dependent-source', 'supermesh', 'mesh'] });
 
+  /* The control edge is a VOLTAGE SOURCE, not a resistor — LU4.2's Assessment Problem 4.4.
+     iΔ is the current the 10 V source supplies, and the controlled source on the right rail is
+     a multiple of it. The teaching point is that a branch current is a branch current whatever
+     sits in the branch: KVL reads it straight off the loops, and KCL has to go the long way
+     round — the source has no Ohm's law, so its current comes from KCL at its + terminal
+     (iΔ = i₁₀ + i₃₀ on the slide), which is why this one lands on a 2×2 system and the slide
+     reaches for Cramer's rule. `flavour: false`: the arrangement IS the lesson, and shorting
+     the top resistor away would leave the + terminal with a source on it and no reading.
+       n0 ──── 30Ω ──── n1
+       │                 │
+       n2 ─10Ω─ n3 ─20Ω─ n4
+       │        │        │
+       V       40Ω     F/H
+       │        │        │
+       n5 ───── n6 ───── n7 */
+  C.register('Dependent source on a source’s current', function () {
+    return C.attempt(function () {
+      return C.build(
+        [[0, 0], [4, 0], [0, 1], [2, 1], [4, 1], [0, 3], [2, 3], [4, 3]],
+        [['V', 5, 2], ['R', 2, 3], ['R', 3, 4], ['R', 3, 6], ['R', 0, 1],
+          [C.pick(['F', 'H']), 7, 4, undefined, 0],
+          ['W', 0, 2], ['W', 1, 4], ['W', 5, 6], ['W', 6, 7]],
+        { flavour: false }
+      );
+    });
+  }, { elements: DEP_ELEMENTS, tags: ['dependent-source', 'mesh'] });
+
 })(window.Circuit);

@@ -11,6 +11,7 @@
 
   NV.algebra = function (X) {
     var CV = X.CV, L = X.L, Lin = X.Lin, P = X.P, V = X.V,
+      ctrlBranches = X.ctrlBranches, ctrlDenoms = X.ctrlDenoms,
       depIAt = X.depIAt, letter = X.letter, m = X.m, of = X.of, ref = X.ref,
       unitTerms = X.unitTerms;
     function sysTable(items, header) { return K.list(items.map(L), header || 'Unknowns still to find'); }
@@ -42,8 +43,9 @@
       unitTerms(u).forEach(function (t) { ds.push(t.R); });
       u.groups.forEach(function (g) {
         depIAt(g).forEach(function (e) {
-          var d = CV.denom(e);
-          if (d && !seen[d.key]) { seen[d.key] = 1; ds.push(d.value); }
+          ctrlDenoms(e).forEach(function (d) {
+            if (!seen[d.key]) { seen[d.key] = 1; ds.push(d.value); }
+          });
         });
       });
       return ds;
@@ -105,12 +107,19 @@
       });
       return E;
     }
-    // (v_x − v_y), known ends already numbers; `folded` ⇒ a supernode member is written
-    // through its lead, the same as everywhere else in the equation
-    function ctrlPair(e, cset, folded) {
-      var ce = CV.ctrlEdge(e), a = of[ce.a], b = of[ce.b];
+    /* What the control variable EXPANDS to, as the term list CV.expandGain takes:
+       [{ num: '(v_x − v_y)', R: ohms|null }] — one entry for a resistor read, one per branch
+       when the current comes from a KCL sum at a voltage source's terminal (ctrlBranches).
+       Known ends are already numbers; `folded` ⇒ a supernode member is written through its
+       lead, the same as everywhere else in the equation. */
+    function pairTxt(a, b, cset, folded) {
       return diff(letterFor(a, cset) ? vTxt(a, folded) : round(V(a)),
         letterFor(b, cset) ? vTxt(b, folded) : round(V(b)));
+    }
+    function ctrlTerms(e, cset, folded) {
+      var bs = ctrlBranches(e);
+      if (!bs) { var ce = CV.ctrlEdge(e); return [{ num: pairTxt(of[ce.a], of[ce.b], cset, folded), R: null }]; }
+      return bs.map(function (b) { return { num: pairTxt(b.p, b.q, cset, folded), R: b.R }; });
     }
     // render v = volts + ratio·v… ; valueFn plugs known numbers for the back-substitution
     function fmtExpr(e, valueFn) {
@@ -149,7 +158,7 @@
 
     X.sysTable = sysTable; X.coef = coef; X.gcd = gcd; X.clearMult = clearMult;
     X.denoms = denoms; X.memberOffset = memberOffset; X.letterFor = letterFor; X.vTxt = vTxt;
-    X.foldedIn = foldedIn; X.constraintNote = constraintNote; X.foldMembers = foldMembers; X.ctrlPair = ctrlPair;
+    X.foldedIn = foldedIn; X.constraintNote = constraintNote; X.foldMembers = foldMembers; X.ctrlTerms = ctrlTerms;
     X.fmtExpr = fmtExpr; X.solveFor = solveFor;
   };
 })(window.Solve);

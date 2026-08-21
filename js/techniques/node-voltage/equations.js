@@ -11,7 +11,7 @@
 
   NV.equations = function (X) {
     var CV = X.CV, L = X.L, Lin = X.Lin, P = X.P, V = X.V,
-      clearMult = X.clearMult, coef = X.coef, ctrlLin = X.ctrlLin, ctrlPair = X.ctrlPair, denoms = X.denoms,
+      clearMult = X.clearMult, coef = X.coef, ctrlLin = X.ctrlLin, ctrlTerms = X.ctrlTerms, denoms = X.denoms,
       depIAt = X.depIAt, fmtExpr = X.fmtExpr, foldMembers = X.foldMembers, foldedIn = X.foldedIn, isDepV = X.isDepV,
       isrcAt = X.isrcAt, kclLine = X.kclLine, leaveSign = X.leaveSign, letter = X.letter, letterFor = X.letterFor,
       memberOffset = X.memberOffset, of = X.of, other = X.other, qLin = X.qLin, solveFor = X.solveFor,
@@ -32,9 +32,9 @@
         e: e, from: p.from, expr: R.expr, degenerate: R.degenerate, folded: folded, pair: true, vg: vg,
         selfRef: Math.abs(R.Cg - 1) > 1e-9, Cg: R.Cg, rhsTxt: R.rhsTxt,
         write: vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.gain(e),
-        substituted: vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlPair(e, cset, false)),
+        substituted: vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlTerms(e, cset, false)),
         constrained: folded.length
-          ? vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlPair(e, cset, true)) : null,
+          ? vg + ' = ' + baseTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlTerms(e, cset, true)) : null,
         collect: coef(R.Cg, vg) + ' = ' + R.rhsTxt,
         ratio: vg + ' = ' + fmtExpr(R.expr),
       };
@@ -73,9 +73,13 @@
         var out = '';
         eachInj(function (e, g) { var k = round(M * leaveSign(e, g) * e.value); if (k) out += signed(k); });
         eachDep(function (e, g) {
-          var c = round(M * CV.scale(e) * Math.abs(e.value));
+          // one bracket per branch the control variable expands to (one for a resistor read,
+          // several when it is a voltage source's current) — each division cancels against M
           var minus = (leaveSign(e, g) < 0) !== (e.value < 0);
-          out += (minus ? ' − ' : ' + ') + (c === 1 ? '' : c + '·') + '(' + ctrlPair(e, cset, true) + ')';
+          ctrlTerms(e, cset, true).forEach(function (t) {
+            var c = round(M * Math.abs(e.value) / (t.R || 1));
+            out += (minus ? ' − ' : ' + ') + (c === 1 ? '' : c + '·') + '(' + t.num + ')';
+          });
         });
         return out;
       }
@@ -121,7 +125,7 @@
           .concat(u.groups.reduce(function (a, g) { return a.concat(isrcAt(g).map(function (e) { return { s: leaveSign(e, g), t: round(e.value) }; })); }, []))
           .concat(u.groups.reduce(function (a, g) { return a.concat(depIAt(g).map(function (e) {
             var p = CV.gainParts(e);
-            return { s: (leaveSign(e, g) < 0) !== p.neg ? -1 : 1, t: CV.expandGain(e, ctrlPair(e, cset, false)) };
+            return { s: (leaveSign(e, g) < 0) !== p.neg ? -1 : 1, t: CV.expandGain(e, ctrlTerms(e, cset, false)) };
           })); }, []))) : null,
         // the constraint used: every member's letter replaced by (v_lead ± δ)
         constrained: folded.length ? sum(true) : null,
@@ -158,7 +162,7 @@
       return {
         e: e, from: from, expr: R.expr, degenerate: R.degenerate, vg: vg,
         write: vg + ' = ' + fromTxt + (sign > 0 ? ' + ' : ' − ') + srcVolts(e),
-        substituted: isDepV(e) ? vg + ' = ' + fromTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlPair(e, cset, false)) : null,
+        substituted: isDepV(e) ? vg + ' = ' + fromTxt + (sign > 0 ? ' + ' : ' − ') + CV.expandGain(e, ctrlTerms(e, cset, false)) : null,
       };
     }
 

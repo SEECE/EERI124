@@ -3,7 +3,7 @@
    `ControlVars`. No ES modules, same as the rest.
 
    The single fact this module exists to carry: a controlled source's value is not a number, but
-   it is not mysterious either — its control edge is a resistor, so
+   it is not mysterious either — usually its control edge is a resistor, so
 
        v_ctrl = v_x − v_y            i_ctrl = (v_x − v_y) / R
 
@@ -12,6 +12,13 @@
    step 7 replaces that symbol with the combination above, and from there the algebra is the
    algebra the student already did. `Lin` is the little linear-form type that carries the
    combination — key-agnostic, because KCL keys by electrical node and KVL keys by mesh.
+
+   A control edge may also be an independent VOLTAGE SOURCE, read for its current (the slides'
+   Assessment Problem 4.4). Nothing above changes — the control variable is still linear in the
+   method's own unknowns — but the combination is no longer ONE difference over one resistance:
+   KVL already carries a branch current as a difference of mesh currents, and KCL has to reach
+   it through the sum of the currents leaving one of the source's terminals. So the expansion
+   is a LIST of terms, not a pair, and `expandGain` takes that list.
 
    Naming, the gain labels and the drawing's marker keys all come from Circuit.controls(), so the
    symbol on the circuit and the symbol in the equation are always the same one.
@@ -69,8 +76,10 @@
 
     function entry(e) { return CT.of[e.id]; }
     function ctrlEdge(e) { return byId[e.control]; }
-    // i_ctrl is the control resistor's current, so it carries a 1/R; v_ctrl is its voltage as-is
+    // i_ctrl is the control RESISTOR's current, so it carries a 1/R; v_ctrl is its voltage
+    // as-is. A control edge that is a voltage source has no single scale — see expandGain.
     function scale(e) { return KIND[e.type] === 'i' ? 1 / ctrlEdge(e).value : 1; }
+    function ctrlIsSource(e) { return ctrlEdge(e).type !== 'R'; }
     // the gain label split from its sign, so a term can be written "− 3·iφ" when the orientation
     // flips it, instead of the unreadable "+ −3·iφ"
     function gainParts(e) {
@@ -80,7 +89,13 @@
 
     return {
       all: all, volt: all.filter(isDepV), current: all.filter(isDepI), any: all.length > 0,
-      entry: entry, ctrlEdge: ctrlEdge, scale: scale, gainParts: gainParts,
+      entry: entry, ctrlEdge: ctrlEdge, scale: scale, gainParts: gainParts, ctrlIsSource: ctrlIsSource,
+      // what the control variable is read off, in words — the step text names it the same way
+      // wherever it comes up, and a voltage source is not "a resistor"
+      ctrlNoun: function (e) {
+        var c = ctrlEdge(e), si = window.Solve.si;
+        return c.type === 'R' ? 'the ' + si(c.value, 'Ω') + ' resistor' : 'the ' + si(c.value, 'V') + ' source';
+      },
       kind: function (e) { return KIND[e.type]; },
       out: function (e) { return OUT[e.type]; },
       short: function (e) { return SHORT[OUT[e.type]]; },
@@ -92,26 +107,30 @@
         var p = gainParts(e);
         return ((sign < 0) !== p.neg ? ' − ' : ' + ') + p.mag;
       },
-      // The denominator this source's expanded term is written over, so the technique's
-      // "multiply through by everything underneath" really does clear every fraction: a
-      // current control divides by its resistor, a transconductance written as ÷D by D.
-      denom: function (e) {
-        if (KIND[e.type] === 'i') return { key: 'R' + e.control, value: ctrlEdge(e).value };
+      // The divisor a VOLTAGE-reading source's expanded term is written over (a transconductance
+      // written as ÷D), or null. What a CURRENT read divides by depends on how the technique
+      // reaches the current, so that one belongs to the technique — see NV.ctrlDenoms.
+      gainDivisor: function (e) {
         var d = 1 / Math.abs(e.value);
-        if (d >= 1 && Math.abs(Math.round(d) - d) < 1e-9) return { key: 'D' + Math.round(d), value: Math.round(d) };
+        if (KIND[e.type] === 'v' && d >= 1 && Math.abs(Math.round(d) - d) < 1e-9) {
+          return { key: 'D' + Math.round(d), value: Math.round(d) };
+        }
         return null;
       },
-      // the gain with its symbol replaced by what the symbol actually is — `pair` is the control
-      // resistor's "(v_x − v_y)". Unsigned: the caller owns the sign, as it does for `term`.
-      // Mirrors the label's own shape, so a transconductance stays a division rather than
-      // turning into siemens the moment it is expanded.
-      expandGain: function (e, pair) {
-        var K = window.StepKit, v = Math.abs(e.value), ce = ctrlEdge(e);
-        if (KIND[e.type] === 'i') {                     // reads a current: the pair over its R
-          var f = K.frac(pair, ce.value);
+      // the gain with its symbol replaced by what the symbol actually is. `terms` is what the
+      // technique expanded the control variable into: [{ num: '(v_x − v_y)', R: ohms|null }],
+      // one entry for a resistor's current (num over R) or for a voltage read (R null), several
+      // when the current comes from a KCL sum at a voltage source's terminal. Unsigned: the
+      // caller owns the sign, as it does for `term`. Mirrors the label's own shape, so a
+      // transconductance stays a division rather than turning into siemens when expanded.
+      expandGain: function (e, terms) {
+        var K = window.StepKit, v = Math.abs(e.value);
+        if (KIND[e.type] === 'i') {                     // reads a current: each branch over its R
+          var f = terms.map(function (t) { return t.R ? K.frac(t.num, t.R) : t.num; }).join(' + ');
+          if (terms.length > 1) f = '(' + f + ')';
           return v === 1 ? f : K.round(v) + '·' + f;
         }
-        var d = 1 / v;                                  // reads a voltage: keep 1/D as ÷D
+        var pair = terms[0].num, d = 1 / v;             // reads a voltage: keep 1/D as ÷D
         if (d >= 1 && Math.abs(Math.round(d) - d) < 1e-9) return K.frac(pair, Math.round(d));
         return (v === 1 ? '' : K.round(v) + '·') + '(' + pair + ')';
       },

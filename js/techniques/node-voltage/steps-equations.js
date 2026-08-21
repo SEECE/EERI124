@@ -11,7 +11,8 @@
 
   NV.stepsEquations = function (X) {
     var CONV = X.CONV, CV = X.CV, L = X.L, P = X.P, V = X.V,
-      WB = X.WB, board = X.board, boardHtml = X.boardHtml, constraintFor = X.constraintFor, ctrlNodes = X.ctrlNodes,
+      WB = X.WB, board = X.board, boardHtml = X.boardHtml, circuit = X.circuit, constraintFor = X.constraintFor,
+      ctrlBranches = X.ctrlBranches, ctrlNodes = X.ctrlNodes,
       depIAt = X.depIAt, isDepV = X.isDepV, isrcAt = X.isrcAt, leaveSign = X.leaveSign, letter = X.letter,
       nodeIdsOf = X.nodeIdsOf, of = X.of, order = X.order, other = X.other, plan = X.plan,
       resAt = X.resAt, sol = X.sol, sources = X.sources, srcVolts = X.srcVolts, steps = X.steps,
@@ -101,18 +102,29 @@
     }
 
     // Step 8 — constraints. This is the dependent sources' step: each one is still holding a
-    // symbol (iφ, vΔ), and every symbol is a resistor's current or voltage, which Ohm's law
-    // writes in node voltages. Once they are written the system is ordinary again.
-    // Reading a control variable as node voltages, e.g. iφ = (v_a − v_b)/220.
+    // symbol (iφ, vΔ), and every symbol is a current or a voltage the method can already write
+    // in node voltages. Once they are written the system is ordinary again.
+    // Reading a control variable as node voltages, e.g. iφ = (v_a − v_b)/220 — or, for a current
+    // read off a VOLTAGE SOURCE, the KCL sum at the terminal ctrlBranches picked.
+    function nodeTxt(g) { return P.fixed[g] ? round(V(g)) : vsub(L(g)); }
     function ctrlAsNodes(e) {
-      var ce = CV.ctrlEdge(e), a = of[ce.a], b = of[ce.b];
-      var pair = diff(P.fixed[a] ? round(V(a)) : vsub(L(a)), P.fixed[b] ? round(V(b)) : vsub(L(b)));
-      return CV.kind(e) === 'i' ? frac(pair, ce.value) : pair;
+      var bs = ctrlBranches(e);
+      if (!bs) { var ce = CV.ctrlEdge(e); return diff(nodeTxt(of[ce.a]), nodeTxt(of[ce.b])); }
+      return bs.map(function (b) { return frac(diff(nodeTxt(b.p), nodeTxt(b.q)), b.R); }).join(' + ');
+    }
+    // why that line is what it is — Ohm's law for a resistor, KCL for a source's current
+    function ctrlWhy(e) {
+      var ce = CV.ctrlEdge(e);
+      if (CV.kind(e) === 'v') return ', and a resistor’s voltage is just the difference of the two node voltages';
+      if (ce.type === 'R') return ', and Ohm’s law says a resistor’s current is the voltage across it over its resistance';
+      var g = of[window.Circuit.controlTerminal(circuit, ce)];
+      return '. A source has no Ohm’s law of its own — but KCL at node <b>' + L(g) +
+        '</b> does the job: everything the source pushes into that node has to leave it again through the resistors there, so the source’s current <i>is</i> the sum of those branch currents';
     }
     steps.push(WB({
       n: 8, title: 'Constraint equations', todo: !CV.any,
       body: CV.any
-        ? 'Every controlled source is still written as a symbol. Each symbol is a current or a voltage <i>on a resistor</i>, so Ohm’s law turns it into node voltages — and that is the last thing standing between us and an ordinary set of equations. ' +
+        ? 'Every controlled source is still written as a symbol. Each symbol is a current or a voltage the method can already reach — Ohm’s law on a resistor, or KCL at a terminal when it is the current through a source — so each turns into node voltages, and that is the last thing standing between us and an ordinary set of equations. ' +
           CV.all.length + ' constraint' + (CV.all.length === 1 ? '' : 's') + ' here' +
           (P.pins.length ? ', including the one that <i>is</i> node ' + P.pins.map(function (p) { return L(p.to); }).join(', ') + '’s equation' : '') + '.'
         : 'Constraints express dependent-source control variables. This network has none.',
@@ -126,10 +138,8 @@
           : ' Substituting it is the first move of the algebra in step 9.';
         return {
           title: 'constraint for ' + CV.sym(e), board: boardHtml(),
-          body: '<b>' + CV.sym(e) + '</b> is the ' + (CV.kind(e) === 'i' ? 'current through' : 'voltage across') + ' the ' +
-            si(ce.value, 'Ω') + ' resistor between nodes <b>' + L(a) + '</b> and <b>' + L(b) + '</b>' +
-            (CV.kind(e) === 'i' ? ', and Ohm’s law says a resistor’s current is the voltage across it over its resistance'
-              : ', and a resistor’s voltage is just the difference of the two node voltages') +
+          body: '<b>' + CV.sym(e) + '</b> is the ' + (CV.kind(e) === 'i' ? 'current through' : 'voltage across') + ' ' +
+            CV.ctrlNoun(e) + ' between nodes <b>' + L(a) + '</b> and <b>' + L(b) + '</b>' + ctrlWhy(e) +
             '. Write it that way and the ' + CV.short(e) + ' stops being a symbol.' + role,
           eq: [CV.sym(e) + ' = ' + ctrlAsNodes(e), CV.short(e) + ' value = ' + CV.gain(e) + ' = ' +
             si(e.value * (sol.ctrl ? sol.ctrl[e.id] : 0), CV.out(e) === 'v' ? 'V' : 'A')],

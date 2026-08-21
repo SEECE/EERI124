@@ -67,10 +67,42 @@
     function vSrcAt(g) {                                          // every voltage-type source at g
       return circuit.edges.filter(function (e) { return (e.type === 'V' || isDepV(e)) && (of[e.a] === g || of[e.b] === g); });
     }
+    /* ---- what a control variable is MADE OF, in node-voltage terms ----
+       A list of branches, each `s·(v_p − v_q)/R` and each already written the way round that
+       makes its sign +1, so a printed sum never opens with a minus:
+
+         a resistor's CURRENT   → its own branch, (v_a − v_b)/R;
+         a resistor's VOLTAGE   → not a branch list at all (one node difference, no R) → null;
+         a voltage source's CURRENT → the source has no Ohm's law of its own, so KCL at one of
+           its terminals supplies one: the current it carries IS the sum of the currents leaving
+           that terminal through everything else attached there. Circuit.controlTerminal() picks
+           the terminal and guarantees everything else on it is a resistor, so the sum is a sum
+           of Ohm's-law branches and nothing more. This is exactly what LU4.2's Assessment
+           Problem 4.4 does by hand (iΔ = i₁₀ + i₃₀). */
+    function ctrlBranches(e) {
+      var ce = CV.ctrlEdge(e);
+      if (CV.kind(e) !== 'i') return null;
+      if (ce.type === 'R') return [{ p: of[ce.a], q: of[ce.b], R: ce.value }];
+      var t = window.Circuit.controlTerminal(circuit, ce), g = of[t];
+      var out = t === ce.b;                     // read at the + terminal: what leaves g IS i_ctrl
+      return resAt(g).map(function (r) {
+        var o = other(r, g);
+        return out ? { p: g, q: o, R: r.value } : { p: o, q: g, R: r.value };
+      });
+    }
+    // the same list, as the resistances the "multiply through by everything underneath" move
+    // has to clear. A voltage read divides by nothing (or, for a transconductance, by its D).
+    function ctrlDenoms(e) {
+      var bs = ctrlBranches(e), seen = {}, out = [];
+      if (!bs) { var d = CV.gainDivisor(e); return d ? [d] : []; }
+      bs.forEach(function (b) { if (!seen[b.R]) { seen[b.R] = 1; out.push({ key: 'R' + b.R, value: b.R }); } });
+      return out;
+    }
     // the control variable of one dependent source, written in node voltages
     function ctrlLin(e) {
-      var ce = CV.ctrlEdge(e), s = CV.scale(e), L = Lin.of(0);
-      Lin.bump(L, of[ce.a], s); Lin.bump(L, of[ce.b], -s);
+      var ce = CV.ctrlEdge(e), bs = ctrlBranches(e), L = Lin.of(0);
+      if (!bs) { Lin.bump(L, of[ce.a], 1); Lin.bump(L, of[ce.b], -1); }
+      else bs.forEach(function (b) { Lin.bump(L, b.p, 1 / b.R); Lin.bump(L, b.q, -1 / b.R); });
       return Lin.trim(L, ref);
     }
     // net current LEAVING g through every current-type source, independent and controlled
@@ -107,6 +139,7 @@
     X.srcAt = srcAt; X.other = other; X.isrcAt = isrcAt; X.leaveSign = leaveSign;
     X.CV = CV; X.Lin = Lin; X.isDepV = isDepV; X.isDepI = isDepI;
     X.depIAt = depIAt; X.vSrcAt = vSrcAt; X.ctrlLin = ctrlLin; X.qLin = qLin;
+    X.ctrlBranches = ctrlBranches; X.ctrlDenoms = ctrlDenoms;
     X.qOf = qOf; X.ctrlNodes = ctrlNodes; X.srcVolts = srcVolts; X.constraintFor = constraintFor;
     return X;
   };

@@ -91,8 +91,8 @@
           : 'It is a current source pushing ' + CV.gain(e) + ' amps out of node <b>' + L(b) + '</b>';
         return {
           title: CV.short(e) + ' ' + CV.gain(e),
-          body: 'This diamond is a <b>' + CV.long(e) + '</b>. Call the ' + reads + ' the ' + si(ce.value, 'Ω') +
-            ' resistor <b>' + CV.sym(e) + '</b> — that is the quantity it reads, marked on the drawing from the start. ' +
+          body: 'This diamond is a <b>' + CV.long(e) + '</b>. Call the ' + reads + ' ' + CV.ctrlNoun(e) +
+            ' <b>' + CV.sym(e) + '</b> — that is the quantity it reads, marked on the drawing from the start. ' +
             delivers + '. Neither number is known yet, because ' + CV.sym(e) +
             ' is not known yet — but ' + CV.sym(e) + ' is made of node voltages like everything else here, and step 8 writes it as such.',
           eq: [(CV.out(e) === 'v' ? vsub(L(b)) + ' − ' + vsub(L(a)) : 'i (from ' + L(a) + ' to ' + L(b) + ')') + ' = ' + CV.gain(e)],
