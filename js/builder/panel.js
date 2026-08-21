@@ -15,7 +15,11 @@
   var LABEL = { select: 'Select', W: 'Wire', R: 'Resistor', V: 'Voltage source', I: 'Current source',
     DEP: 'Dependent source', E: 'VCVS', F: 'CCCS', G: 'VCCS', H: 'CCVS' };
   var KEY = { select: 'S', W: 'W', R: 'R', V: 'V', I: 'I', DEP: 'D' };
-  var UNIT = { R: 'Ω', V: 'V', I: 'A', E: 'multiplier', F: 'multiplier', G: 'Ω', H: 'Ω' };
+  // A dependent source's value is a GAIN, whatever its dimension happens to be (μ and β are
+  // plain numbers, r is in ohms, and g is written as a division by an ohm-like number) —
+  // labelling two of the four 'Ω' read as though the field wanted a resistor. DESC below
+  // still says what the number means for each type.
+  var UNIT = { R: 'Ω', V: 'V', I: 'A', E: 'gain', F: 'gain', G: 'gain', H: 'gain' };
   var DEFAULT_SHOWN = { R: 220, V: 12, I: 0.05, E: 2, F: 2, G: 500, H: 220 };
   var DESC = {
     select: 'Click an element to edit its value, flip it or delete it.',
