@@ -376,12 +376,16 @@ expression-substitution round begins.
 The technique is **deliberately the mirror image of KCL** — same substep rhythm, same live board,
 same algebra — so a student who learned one reads the other for free:
 
-- **Steps 5–8 ring a supermesh** — every mesh keeps its own arrow and label the whole way
-  through, and the meshes a shared current source welds are enclosed by a faint accent-coloured
-  outline for those four steps only. A loop entry carrying `ring: true` draws that outline
-  instead of an arrow; `Circuit.highlight` fits it to the bounding box of the node ids it is
-  given, so passing both meshes' nodes is all it takes. The technique swaps the loop set it
-  stamps (`curLoops`) at step 5 and back at the end of step 8.
+- **Steps 5–8 trace a supermesh** — every mesh keeps its own arrow and label the whole way
+  through, and for those four steps the meshes a shared current source welds also carry a wide
+  translucent band along their shared **perimeter**: round the outside of the pair and across
+  whatever branch splits them, never over the source that welds them. That is the walk step 6
+  writes, so the picture and the equation are the same loop. `groups.js` computes the perimeter
+  by running a member face's half-edges and hopping into the neighbour whenever the next one is
+  shared; the node ids come out in walk order and go to `Circuit.highlight` as a loop entry
+  carrying `ring: true`, which strokes them as a path (`svg.insertBefore`, so it sits UNDER the
+  wires) instead of drawing an arrow. The technique swaps the loop set it stamps (`curLoops`) at
+  step 5 and back at the end of step 8.
 - **The loop-arrows are drawn in step 2 and never removed.** Every `hl` from step 2 on (steps *and*
   substeps) goes through the local `H()` helper, which re-attaches `loops:`. `Circuit.highlight`
   wipes `.mesh-loop` on every call, so a spec that omits `loops` erases them — never build an `hl`

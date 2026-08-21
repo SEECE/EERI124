@@ -89,11 +89,37 @@
     }).sort(function (a, b) { return mc.order.indexOf(a.lead) - mc.order.indexOf(b.lead); });
 
     function gname(grp) { return grp.meshes.map(function (f) { return name[f]; }).join(' + '); }
-    // every mesh keeps its own arrow; a supermesh adds a faint ring around the pair it welds,
-    // drawn first so the arrows sit on top of it
+    // The PERIMETER of a supermesh, as node ids in walk order: run round a member face, and
+    // where a half-edge is shared with another member (the branch the current source welds the
+    // pair on) hop across it into that face and carry on. What comes back is the outline of the
+    // union — the loop step 6 actually walks, never crossing the shared branch. The drawing
+    // traces exactly this, so the picture and the equation are the same walk.
+    function ringNodes(members) {
+      var inside = {}, nextIn = {};
+      members.forEach(function (f) { inside[f] = true; });
+      members.forEach(function (f) {
+        var L = F.faceList[f];
+        L.forEach(function (h, i) { nextIn[h] = L[(i + 1) % L.length]; });
+      });
+      function onRim(h) { return !inside[F.faceOf[h ^ 1]]; }
+      var start = null;
+      members.forEach(function (f) {
+        F.faceList[f].forEach(function (h) { if (start === null && onRim(h)) start = h; });
+      });
+      if (start === null) return [];
+      var out = [], h = start, guard = 0;
+      do {
+        out.push(F.H[h].tail);
+        h = nextIn[h];
+        var hop = 0;
+        while (!onRim(h) && hop++ < 64) h = nextIn[h ^ 1];    // shared branch: into the other mesh
+      } while (h !== start && guard++ < 256);
+      return guard >= 256 ? [] : out;                          // never draw a walk that ran away
+    }
+    // every mesh keeps its own arrow; a supermesh adds the band tracing its perimeter, listed
+    // first so the arrows are drawn over it
     var groupLoops = G.filter(function (grp) { return grp.super; }).map(function (grp) {
-      return { nodes: grp.meshes.reduce(function (a, f) { return a.concat(faceNodeIds(f)); }, []),
-        ring: true };
+      return { nodes: ringNodes(grp.meshes), ring: true };
     }).concat(mc.order.map(function (f) { return { nodes: faceNodeIds(f), label: plainName[f] }; }));
     // a boundary current source fixes its mesh: i_f − 0 = I one way round, 0 − i_f = I the other.
     // Only an INDEPENDENT one hands over the value; a controlled one still needs its constraint.

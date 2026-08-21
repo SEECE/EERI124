@@ -6,7 +6,7 @@
   var C = window.Circuit = window.Circuit || {};
   var P = C.paint = C.paint || {};
   var el = P.el;
-  var RING = 22;                      // how far the supermesh outline sits outside its nodes
+  var RING = 12;                      // width of the highlighter band tracing a supermesh
 
   function clear(svg, sel) {
     Array.prototype.forEach.call(svg.querySelectorAll(sel), function (g) {
@@ -22,29 +22,29 @@
      ELLIPSE fitted to the bounding box of the given nodes, read from the rendered node circles
      so this stays in the svg's user space.
 
-     A `ring` entry draws no arrow: it is the faint outline enclosing a supermesh, given the
-     nodes of BOTH its meshes. Each mesh keeps its own arrow and its own label; the ring only
-     says "these two are walked as one loop". */
+     A `ring` entry draws no arrow: its nodes are the PERIMETER of a supermesh, in walk order,
+     and it is stroked as a wide translucent band along that path — the loop KVL actually takes,
+     round the outside of both meshes and across whatever branch splits them. The band goes in
+     UNDER the drawing (first child) so wires, symbols and values stay crisp on top of it. Each
+     mesh keeps its own arrow and label; the band only says which loop is walked as one. */
   P.loops = function (svg, loops) {
     clear(svg, '.mesh-loop');
     loops.forEach(function (loop) {
       var pts = (loop.nodes || []).map(function (nid) { return nodeAt(svg, nid); }).filter(Boolean);
       if (pts.length < 3) return;
+      var g = el('g', { 'class': 'mesh-loop' }, svg);
+      if (loop.ring) {
+        el('path', { d: pts.map(function (p, i) { return (i ? 'L' : 'M') + p.x + ' ' + p.y; }).join(' ') + ' Z',
+          fill: 'none', stroke: 'var(--accent)', 'stroke-opacity': 0.45, 'stroke-width': RING,
+          'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, g);
+        svg.insertBefore(g, svg.firstChild);
+        return;
+      }
       var bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
       pts.forEach(function (p) {
         bx0 = Math.min(bx0, p.x); bx1 = Math.max(bx1, p.x);
         by0 = Math.min(by0, p.y); by1 = Math.max(by1, p.y);
       });
-      var g = el('g', { 'class': 'mesh-loop' }, svg);
-      // ponytail: the ring is the bounding box of the pair, rounded — exact for the adjacent
-      // rectangular meshes the generators make. Trace the union's real boundary half-edges if a
-      // topology ever welds two meshes into an L.
-      if (loop.ring) {
-        el('rect', { x: bx0 - RING, y: by0 - RING,
-          width: (bx1 - bx0) + 2 * RING, height: (by1 - by0) + 2 * RING, rx: 16,
-          fill: 'none', stroke: 'var(--accent)', 'stroke-width': 3, 'stroke-opacity': 0.35 }, g);
-        return;
-      }
       var cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
       var rx = Math.max(16, (bx1 - bx0) * 0.32), ry = Math.max(16, (by1 - by0) * 0.32);
       // ~320° arc, gap at the top, swept clockwise (SVG sweep-flag 1 with y down)

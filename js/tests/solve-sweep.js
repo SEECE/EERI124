@@ -48,6 +48,20 @@
               'step ' + s.n + ' dropped the mesh loops');
           });
         });
+        // a supermesh's band traces the perimeter of the union: a closed walk whose every
+        // consecutive pair is a real branch, and which never crosses the welding source
+        var welds = mc.groups.reduce(function (a, grp) {
+          return a.concat(grp.meshes.length > 1 ? grp.srcs.map(function (x) { return x.e.id; }) : []);
+        }, []);
+        (steps[4].hl.loops || []).filter(function (l) { return l.ring; }).forEach(function (l) {
+          assert(l.nodes.length >= 4, 'supermesh band has only ' + l.nodes.length + ' nodes');
+          l.nodes.forEach(function (nid, j) {
+            var nxt = l.nodes[(j + 1) % l.nodes.length];
+            var br = c.edges.filter(function (e) { return (e.a === nid && e.b === nxt) || (e.b === nid && e.a === nxt); })[0];
+            assert(br, 'supermesh band jumps from ' + nid + ' to ' + nxt + ' with no branch between them');
+            assert(welds.indexOf(br.id) < 0, 'supermesh band walks over the source welding it');
+          });
+        });
         assert(!/undefined|NaN/.test(JSON.stringify(steps)), 'step text has undefined/NaN');
         // step 4 must meet every shared resistor twice and show it both ways round (3 eq lines)
         var shared = c.edges.filter(function (e, k) {

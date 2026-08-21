@@ -49,9 +49,9 @@
     // Once the loops are drawn (step 2) they stay for the rest of the method — every hl spec
     // from there on goes through H() so nothing ever removes them. `curLoops` is what H()
     // stamps at the moment a view is built: one arrow per mesh throughout, plus — from the
-    // supermesh step (5) through the solve (8) — a faint ring enclosing the meshes a shared
-    // current source welds together. The two arrows stay: the pair is walked as one loop, but
-    // each mesh still has its own current, and step 7's constraint is about exactly that.
+    // supermesh step (5) through the solve (8) — a band tracing the perimeter of the meshes a
+    // shared current source welds together. The two arrows stay: the pair is walked as one
+    // loop, but each mesh still has its own current, and step 7's constraint says exactly that.
     // the loops and polarity marks a view carries live on X: later phases reassign them
     X.curLoops = loops;
     // Polarity marks work the same way: once step 4 marks a resistor + … −, the mark STAYS for
