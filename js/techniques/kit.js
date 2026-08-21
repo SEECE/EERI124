@@ -22,6 +22,17 @@
   // "a − b" that flips to "a + b" when b is a negative number, instead of the confusing "− -5"
   function diff(base, val) { return (typeof val === 'number' && val < 0) ? base + ' + ' + (-val) : base + ' − ' + val; }
   function prod(a) { return a.reduce(function (x, y) { return x * y; }, 1); }
+  /* Significant figures rather than decimal places, with the same typographic minus. `round`'s
+     three decimals are right for a node voltage and wrong for a determinant: a 3×3 of milliamp
+     rows has a Δ near 1e-2 and Δ_k near 1e-4, and printing those to three decimals gives a
+     student two numbers whose quotient is nothing like the answer above them. Anything a reader
+     is meant to divide on a calculator goes through here. */
+  function sig(x, n) {
+    if (!isFinite(x)) return String(x);
+    if (Math.abs(x) < 1e-12) return '0';
+    var a = Math.abs(x), r = Number(a.toPrecision(n || 4));
+    return (x < 0 ? '−' : '') + (r < 1e-4 || r >= 1e6 ? r.toExponential(3) : String(r));
+  }
 
   /* ---------- html fragments ---------- */
   function sub(symbol, name) { return symbol + '<sub>' + name + '</sub>'; }
@@ -44,6 +55,23 @@
     return '<div class="kcl-status-wrap"><table class="kcl-status eq-board"><thead><tr><th>' + headLeft +
       '</th><th>' + headRight + '</th></tr></thead><tbody>' + body + '</tbody></table></div>';
   }
+
+  /* A·x = b, laid out as three bracketed grids. Written as tables rather than a grid of divs
+     because a matrix IS tabular data, and a table gets the column widths right for free; the
+     brackets are drawn in workbench.css off `.mtx`, so nothing here has to guess a height.
+     Cells carry no units — a matrix of numbers is the whole point of the view. */
+  function matrix(A, xs, b) {
+    function grid(rows) {
+      return '<table class="mtx"><tbody>' + rows.map(function (r) {
+        return '<tr>' + r.map(function (c) { return '<td>' + c + '</td>'; }).join('') + '</tr>';
+      }).join('') + '</tbody></table>';
+    }
+    return '<span class="mtx-eq">' + grid(A.map(function (r) { return r.map(function (c) { return sig(c); }); })) +
+      grid(xs.map(function (x) { return [x]; })) + '<span class="mtx-op">=</span>' +
+      grid(b.map(function (v) { return [sig(v)]; })) + '</span>';
+  }
+  var SUBD = '₀₁₂₃₄₅₆₇₈₉';
+  function subDigits(n) { return String(n).split('').map(function (d) { return SUBD[+d]; }).join(''); }
 
   /* ---------- expressions: { c, t } ----------
      cleanT drops ratios that rounded away to nothing; resolveSelf handles the case where a
@@ -97,9 +125,9 @@
   }
 
   window.StepKit = {
-    round: round, num: num, signed: signed, diff: diff, prod: prod,
+    round: round, num: num, sig: sig, signed: signed, diff: diff, prod: prod,
     sub: sub, frac: frac, extend: extend,
-    list: list, board: board,
+    list: list, board: board, matrix: matrix, subDigits: subDigits,
     cleanT: cleanT, resolveSelf: resolveSelf, snap: snap, settle: settle, fmtExpr: fmtExpr,
   };
 })();

@@ -13,6 +13,7 @@
     var H = X.H, board = X.board, boardCell = X.boardCell, boardHtml = X.boardHtml, cleanT = X.cleanT,
       expr = X.expr, faceEdgeIds = X.faceEdgeIds, faceNodeIds = X.faceNodeIds, fmtExpr = X.fmtExpr, groupOf = X.groupOf,
       m = X.m, mc = X.mc, name = X.name, nonWireIds = X.nonWireIds, resolveSelf = X.resolveSelf,
+      solveBy = X.solveBy,
       snap = X.snap, solveSubs = X.solveSubs, sysTable = X.sysTable, value = X.value;
     // --- a mesh already fixed by a current source is a number: put it into every line that
     // mentions it before anything else (the PPT's 40·(i₂−i₁) with i₁ = 30 A) ---
@@ -45,9 +46,26 @@
     if (pool.length > 1) {
       solveSubs.push({
         title: 'a linked system',
-        body: 'Each mesh is now written as amps plus a ratio of its neighbours. Substitute those expressions into one another — a mesh’s own symbol collects and divides out — until one falls out as a number, then work back.' + sysTable(pool), board: boardHtml(),
+        body: 'Each mesh is now written as amps plus a ratio of its neighbours. There are two ways on from here, and the tab above picks between them: substitute the expressions into one another one at a time, or put the system in a matrix and let Cramer’s rule do the lot. Either way it has to be written down properly first.' + sysTable(pool), board: boardHtml(),
         hl: H({ edges: nonWireIds }),
       });
+      X.hasSystem = true;
+      // the standard form and the matrix, then — in 'cramer' mode — the determinants instead of
+      // the substitution round below (js/techniques/system.js)
+      window.LinSystem.views(pool.slice(), expr, {
+        name: function (f) { return name[f]; }, unit: 'A', value: function (f) { return value[f]; },
+        what: 'mesh current', method: X.solveBy, board: boardHtml, hl: H({ edges: nonWireIds }),
+      }).forEach(function (v) { solveSubs.push(v); });
+      if (X.solveBy === 'cramer') {
+        pool.forEach(function (f) { expr[f] = { c: value[f], t: {} }; board[f] = si(value[f], 'A'); });
+        solveSubs.push({
+          title: 'all ' + pool.length + ' from the one solve',
+          body: 'Every mesh current came out of that one determinant round — no substituting, no working back.',
+          board: boardHtml(), hl: H({ edges: nonWireIds }),
+          eq: pool.map(function (f) { return name[f] + ' = ' + si(value[f], 'A'); }),
+        });
+        pool = [];
+      }
     }
     var stored = [];
     while (pool.length > 1) {

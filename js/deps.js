@@ -36,7 +36,7 @@
       'solve/branches.js', 'solve/faces.js', 'solve/mesh.js',
     ],
     techniques: [
-      'techniques/kit.js', 'techniques/controls.js', 'node-voltage',
+      'techniques/kit.js', 'techniques/controls.js', 'techniques/system.js', 'node-voltage',
       'mesh-current', 'equivalent-resistance',
     ],
     'node-voltage': [

@@ -9,8 +9,11 @@
   var frac = K.frac, extend = K.extend, round = K.round, num = K.num;
   function isub(n) { return K.sub('i', n); }
 
-  MC.context = function (circuit) {
+  MC.context = function (circuit, opts) {
     var X = { circuit: circuit };
+    // step 8's fork, the same choice KCL's step 9 offers: the long substitution round, or
+    // the matrix and Cramer's rule (js/techniques/system.js). Default is the long way.
+    X.solveBy = (opts && opts.solveBy) === 'cramer' ? 'cramer' : 'algebra';
     var G = X.G, steps = X.steps, circuit = X.circuit;
     var mc = S.meshCurrents(circuit);
     var F = mc.F;

@@ -21,6 +21,8 @@
       eq: mc.order.map(function (f) { return name[f] + ' = ' + si(value[f], 'A'); }),
       hl: H({}),
       subs: solveSubs,
+      tabs: X.hasSystem ? { key: 'solveBy', value: X.solveBy, label: 'Solve the system by',
+        options: [{ value: 'algebra', label: 'Long algebra' }, { value: 'cramer', label: 'Cramer’s rule' }] } : null,
     }));
     X.curLoops = loops;      // back to one arrow per mesh: steps 9–10 are about branch currents
   };

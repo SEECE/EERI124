@@ -10,6 +10,7 @@
   function vsub(letter) { return K.sub('v', letter); }
 
   NV.solveEliminate = function (X) {
+    var LinSystem = window.LinSystem;
     var L = X.L, V = X.V, board = X.board, boardHtml = X.boardHtml, coef = X.coef,
       fmtExpr = X.fmtExpr, nodeIdsOf = X.nodeIdsOf, of = X.of, solveSubs = X.solveSubs, solvedNow = X.solvedNow,
       sysTable = X.sysTable, unitHl = X.unitHl, voltsFor = X.voltsFor;
@@ -19,6 +20,32 @@
     // block holds, since the algebra does not care which unit an entry came from. ----
     function eliminate(pool, expr, poolNodesFn) {
       var cleanT = K.cleanT, resolveSelf = K.resolveSelf, stored = [];
+      /* The fork (js/techniques/system.js). Both modes get the same two views first — the
+         equations rewritten into standard form, then the matrix — because that rewriting is
+         the part a student gets wrong, and it is the part the slides skip over. After it,
+         'cramer' stops: the determinants ARE the answer. 'algebra' walks the substitution
+         round below, which is what this file was written for. */
+      if (pool.length > 1) {
+        X.hasSystem = true;
+        var hl = extend({ nodes: poolNodesFn(pool).reduce(function (a, g) { return a.concat(nodeIdsOf(g)); }, []) },
+          { volts: voltsFor(Object.keys(solvedNow)) });
+        LinSystem.views(pool.slice(), expr, {
+          name: function (g) { return vsub(L(g)); }, unit: 'V', value: V, what: 'node voltage',
+          method: X.solveBy, board: boardHtml, hl: hl,
+        }).forEach(function (v) { solveSubs.push(v); });
+        if (X.solveBy === 'cramer') {
+          var known = {};
+          pool.forEach(function (g) { known[g] = V(g); board[g] = si(V(g), 'V'); });
+          solveSubs.push({
+            title: 'all ' + pool.length + ' from the one solve',
+            body: 'Every unknown in the block came out of that one determinant round — no substituting, no working back. Put them on the board and carry on.',
+            board: boardHtml(), hl: extend(hl, { volts: voltsFor(Object.keys(solvedNow).concat(Object.keys(known))) }),
+            eq: pool.map(function (g) { return vsub(L(g)) + ' = ' + si(V(g), 'V'); }),
+          });
+          pool.length = 0;
+          return known;
+        }
+      }
       while (pool.length > 1) {
         var p = pool[0];
         resolveSelf(expr[p], p); cleanT(expr[p]); K.settle(expr[p], V(p));

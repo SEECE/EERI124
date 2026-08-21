@@ -31,8 +31,8 @@
   'use strict';
   var MC = window.MC;
 
-  window.MeshCurrent = function (circuit) {
-    var X = MC.context(circuit);
+  window.MeshCurrent = function (circuit, opts) {
+    var X = MC.context(circuit, opts);
     MC.groups(X);
     MC.board(X);
     MC.stepsSetup(X);       // steps 1–3

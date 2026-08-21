@@ -13,6 +13,9 @@
     // step 4's choice. Anything other than 'inout' is the module's default phrasing, so a caller
     // that knows nothing about conventions (and a student who walks past step 4) gets Σ leaving.
     var conv = (opts && opts.kcl) === 'inout' ? 'inout' : 'leaving';
+    // step 9's fork: the long substitution round, or the matrix and Cramer's rule. Default is
+    // the long way — a page that never offers the choice gets the algebra it always got.
+    var solveBy = (opts && opts.solveBy) === 'cramer' ? 'cramer' : 'algebra';
     var CONV = conv === 'inout' ? 'Σ currents in = Σ currents out' : 'Σ currents leaving = 0';
     var ln = S.letterNodes(circuit);
     var of = ln.of, order = ln.groups, letter = ln.letter;
@@ -132,7 +135,7 @@
       return lhs + ' = ' + base + (e.value < 0 ? ' − ' + si(-e.value, 'V') : ' + ' + si(e.value, 'V'));
     }
 
-    X.conv = conv; X.CONV = CONV; X.ln = ln; X.of = of;
+    X.conv = conv; X.solveBy = solveBy; X.CONV = CONV; X.ln = ln; X.of = of;
     X.order = order; X.letter = letter; X.sol = sol; X.br = br;
     X.pc = pc; X.ref = ref; X.sources = sources; X.L = L;
     X.nodeIdsOf = nodeIdsOf; X.V = V; X.voltsFor = voltsFor; X.resAt = resAt;

@@ -39,6 +39,7 @@
   --danger: #fda4af;
   --tint: rgba(139, 92, 246, 0.12);       /* accent wash on chrome */
   --tint-aqua: rgba(34, 211, 238, 0.14);
+  --tint-violet: rgba(167, 139, 250, 0.16);   /* the chosen state of a step's choice strip */
 
   /* ── paper + the six names js/circuit.js reads ── */
   --paper: #fbfaff;

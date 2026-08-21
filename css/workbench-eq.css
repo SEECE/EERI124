@@ -1,0 +1,113 @@
+/* Workbench — everything a derivation is written in: the equation lines, the stacked
+   fractions, the A·x = b matrices and the two status tables (the shrinking "still to find"
+   list and the pinned running board). Part of workbench.css. */
+/* ── equations ── */
+.step-eq {
+  background: var(--panel-hi);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--violet-500);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3) var(--sp-3) var(--sp-3) var(--sp-4);
+  font-family: var(--font-math);
+  font-size: 16px;
+  font-style: italic;
+  color: var(--text);
+}
+/* wrap long equations rather than scrolling them sideways — every term stays visible. No
+   hanging indent: a line can start with a stacked fraction (an atomic inline-flex box) and a
+   negative text-indent would shove it out past the border. */
+.eq-line { padding: var(--sp-2) 0; overflow-wrap: anywhere; line-height: 1.75; }
+.eq-line + .eq-line { border-top: 1px solid var(--line); }
+.eq-line sub, .eq-line sup { font-size: 0.7em; font-style: normal; }
+.eq-line b { font-style: normal; color: var(--violet-200); }
+
+/* the step's result, folded away on a step whose substeps derive it */
+.eq-peek > summary {
+  cursor: pointer;
+  font-family: var(--font);
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--violet-300);
+  list-style: none;
+}
+.eq-peek > summary::-webkit-details-marker { display: none; }
+.eq-peek > summary::before { content: '▸ '; }
+.eq-peek[open] > summary::before { content: '▾ '; }
+.eq-peek[open] > summary { margin-bottom: var(--sp-1); }
+
+/* real stacked fraction for Ohm's-law terms instead of a bare slash; nowrap + its own margin
+   so it reads as one atomic symbol and never splits across the line wrap above */
+.frac {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin: 3px 0.3em;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+.frac .num { padding: 0 0.2em 2px; border-bottom: 1.5px solid currentColor; }
+.frac .den { padding: 2px 0.2em 0; }
+
+/* ── tables: the "still to find" list (in the body) and the running board (pinned) ── */
+.kcl-status-wrap { overflow-x: auto; overscroll-behavior-x: contain; }
+.kcl-status { width: 100%; border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.kcl-status th,
+.kcl-status td { padding: 4px 7px; text-align: left; border-bottom: 1px solid var(--line); }
+.kcl-status td { color: var(--text-dim); }
+.kcl-status th {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.kcl-status tr.row-ready td { color: var(--aqua-300); font-weight: 650; }
+.eq-board td:last-child { font-family: var(--font-math); font-style: italic; color: var(--text); }
+
+.step-board {
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--shell-2);
+  border-top: 1px solid var(--line);
+  max-height: 30vh;
+}
+.step-board .kcl-status thead th { position: sticky; top: 0; background: var(--shell-2); }
+
+/* on a short screen head + board + nav must still leave the derivation somewhere to live */
+@media (max-height: 640px) {
+  .step-board { max-height: 22vh; }
+}
+
+
+/* ---- A·x = b (StepKit.matrix) ----
+   Three tables side by side, each wearing its own bracket pair. The brackets are borders on the
+   table's ::before/::after so they stretch with however many rows there are — no height guessing,
+   which is what a background image or a scaled glyph would have needed. */
+.mtx-eq {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-variant-numeric: tabular-nums;
+  max-width: 100%;
+}
+.mtx {
+  position: relative;
+  border-collapse: collapse;
+  margin: 0 6px;
+}
+.mtx td { padding: 2px 7px; text-align: right; white-space: nowrap; }
+.mtx::before,
+.mtx::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  border: 1.5px solid var(--text-dim);
+}
+.mtx::before { left: -6px; border-right: 0; }
+.mtx::after { right: -6px; border-left: 0; }
+.mtx-op { padding: 0 2px; color: var(--text-dim); }
