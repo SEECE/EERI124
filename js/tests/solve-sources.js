@@ -164,4 +164,23 @@
     assert(near(mc.i[mc.meshOf[s.fa]] - mc.i[mc.meshOf[s.fb]], s.e.value * mc.ctrlVec(s.e).reduce(function (a, x, j) { return a + x * mc.i[j]; }, 0), 1e-9),
       'constraint i_fa − i_fb = gain·control not satisfied');
   });
+
+  // ---- step 10 must bill a controlled current source for its CURRENT, not its gain ----
+  // A controlled source's `value` is the gain; its current is gain·control. The power sum once
+  // used the gain, so a 0.1 S VCCS carrying 4 mA was billed for 100 mA and ΣPgen read ✗ on a
+  // circuit the node-voltage path balanced fine.
+  check('dependent current source power (mesh step 10)', function () {
+    var seen = 0;
+    Circuit.list().forEach(function (g) {
+      for (var k = 0; k < 8; k++) {
+        var c = Circuit.dependify(g.generate());
+        if (!c.edges.some(function (e) { return e.type === 'F' || e.type === 'G'; })) continue;
+        seen++;
+        assert(Solve.powerCheck(Solve.branches(c, Solve.nodeVoltages(c))).ok, g.name + ': node-voltage power imbalance');
+        var eq = MeshCurrent(c).filter(function (s) { return s.n === 10; })[0].eq.join(' ');
+        assert(/✓/.test(eq), g.name + ': mesh power check reads ✗: ' + eq);
+      }
+    });
+    assert(seen > 0, 'no dependent current source ever placed — the check tested nothing');
+  });
 })();

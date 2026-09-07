@@ -42,7 +42,10 @@
       T[f].dsrcs.forEach(function (d) { sum += d.sign * depValue(d.e); });
       T[f].parts.forEach(function (p) { sum += p.R * (value[f] - (p.g === null ? 0 : value[p.g])); });
       var dir = T[f].isrcs[0].dir;             // +1 when the clockwise walk crosses the source a→b
-      return { f: f, v: -sum, power: -sum * dir * s.e.value };   // power absorbed, negative ⇒ generating
+      // amps a→b: for a CONTROLLED source e.value is the GAIN, not a current — its current is
+      // gain·control, which the solved mesh currents now give as a number.
+      var amps = s.dep ? depValue(s.e) : s.e.value;
+      return { f: f, v: -sum, power: -sum * dir * amps };   // power absorbed, negative ⇒ generating
     }
 
     // power from mesh currents (independent of the node-voltage path). A voltage source delivers

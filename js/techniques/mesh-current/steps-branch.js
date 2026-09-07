@@ -54,8 +54,8 @@
           (r ? 'walk mesh ' + name[r.f] + ' with every mesh current now known, add up the other drops, and the source must supply the rest.'
             : 'this loop holds more than one current source, so read its voltage off the node voltages instead.');
         return {
-          title: si(s.e.value, 'A') + ' source', body: body, board: boardHtml(),
-          eq: ['i = ' + si(s.e.value, 'A')].concat(r ? ['v = ' + si(Math.abs(r.v), 'V')] : []),
+          title: s.dep ? CV.short(s.e) + ' ' + CV.gain(s.e) : si(s.e.value, 'A') + ' source', body: body, board: boardHtml(),
+          eq: ['i = ' + si(s.dep ? depValue(s.e) : s.e.value, 'A')].concat(r ? ['v = ' + si(Math.abs(r.v), 'V')] : []),
           hl: H({ edges: [s.e.id].concat(r ? faceEdgeIds(r.f) : []), nodes: r ? faceNodeIds(r.f) : [] }),
         };
       })).concat([WB({
