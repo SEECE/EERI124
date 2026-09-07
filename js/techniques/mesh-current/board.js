@@ -54,10 +54,14 @@
     var diss = 0;
     Redges.forEach(function (e) { diss += Math.pow(mc.edgeCurrent[e.id], 2) * e.value; });
     var gen = 0;
-    srcs.forEach(function (e) { gen += e.value * mc.edgeCurrent[e.id]; }); // a→b current out of + terminal (b)
+    // Bucket by SIGN, the way Solve.powerCheck (and so the KCL page) does: a source that comes
+    // out ABSORBING is dissipation, not negative generation. Netting it into Σgen instead still
+    // balances, but it makes the two techniques print different totals for the same circuit.
+    function bill(delivered) { if (delivered >= 0) gen += delivered; else diss += -delivered; }
+    srcs.forEach(function (e) { bill(e.value * mc.edgeCurrent[e.id]); }); // a→b current out of + terminal (b)
     // a controlled voltage source generates the same way; its volts are gain·control, which the
     // solved mesh currents now give as a number
-    CV.volt.forEach(function (e) { gen += depValue(e) * mc.edgeCurrent[e.id]; });
+    CV.volt.forEach(function (e) { bill(depValue(e) * mc.edgeCurrent[e.id]); });
     // A source the loop walk cannot decide (two current sources on one mesh) still carries
     // power. Take its share from the node voltages rather than dropping the term: skipping it
     // makes the balance read ✗ on a circuit where energy is in fact conserved.
@@ -69,7 +73,7 @@
       }
       return nodeP[e.id];
     }
-    mc.iSources.forEach(function (s) { var r = iSrcVoltage(s); gen += -(r ? r.power : nodePower(s.e)); });
+    mc.iSources.forEach(function (s) { var r = iSrcVoltage(s); bill(-(r ? r.power : nodePower(s.e))); });
     var pcOk = Math.abs(gen - diss) <= 1e-6 * (Math.abs(gen) + diss + 1);
 
     var steps = [];

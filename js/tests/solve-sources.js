@@ -165,6 +165,14 @@
       'constraint i_fa − i_fb = gain·control not satisfied');
   });
 
+  // read one of step 10's "ΣPdiss = 113 mW" totals back out as a number
+  var PRE = { G: 1e9, M: 1e6, k: 1e3, m: 1e-3, 'µ': 1e-6, n: 1e-9 };
+  function watts(eq, which) {
+    var m = eq.match(new RegExp(which + '</sub> = (\u2212?[0-9.]+) ([GMkmµn]?)W'));
+    assert(m, 'no ΣP_' + which + ' in "' + eq + '"');
+    return (m[1].charAt(0) === '\u2212' ? -1 : 1) * parseFloat(m[1].replace('\u2212', '')) * (PRE[m[2]] || 1);
+  }
+
   // ---- step 10 must bill a controlled current source for its CURRENT, not its gain ----
   // A controlled source's `value` is the gain; its current is gain·control. The power sum once
   // used the gain, so a 0.1 S VCCS carrying 4 mA was billed for 100 mA and ΣPgen read ✗ on a
@@ -176,9 +184,17 @@
         var c = Circuit.dependify(g.generate());
         if (!c.edges.some(function (e) { return e.type === 'F' || e.type === 'G'; })) continue;
         seen++;
-        assert(Solve.powerCheck(Solve.branches(c, Solve.nodeVoltages(c))).ok, g.name + ': node-voltage power imbalance');
+        var pc = Solve.powerCheck(Solve.branches(c, Solve.nodeVoltages(c)));
+        assert(pc.ok, g.name + ': node-voltage power imbalance');
         var eq = MeshCurrent(c).filter(function (s) { return s.n === 10; })[0].eq.join(' ');
         assert(/✓/.test(eq), g.name + ': mesh power check reads ✗: ' + eq);
+        // …and the two techniques must report the SAME totals: an absorbing source is
+        // dissipation on both pages, never negative generation on one of them. Compared with
+        // 1% slack because the step prints at 3 significant figures.
+        assert(near(watts(eq, 'diss'), pc.dissipated, 0.01 * pc.dissipated + 1e-9) &&
+          near(watts(eq, 'gen'), pc.generated, 0.01 * pc.generated + 1e-9),
+          g.name + ': mesh totals disagree with node-voltage — ' + eq +
+          ' vs ' + Solve.si(pc.dissipated, 'W') + ' / ' + Solve.si(pc.generated, 'W'));
       }
     });
     assert(seen > 0, 'no dependent current source ever placed — the check tested nothing');
