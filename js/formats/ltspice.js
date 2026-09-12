@@ -53,10 +53,18 @@
     if (!src) throw new Error('LTspice needs at least one independent source');
     var gnd = find(src.a);
 
-    var name = {}, next = 1, of = {};
+    // Letter the rest a, b, c … — the same lettering js/techniques/node-voltage/ shows on the
+    // board (js/solve/nodes.js's letterNodes), so a name in a control expression matches the
+    // node letter a student already knows. Kept local rather than calling Solve.letterNodes:
+    // the builder's File menu loads this file without the solve bundle.
+    var ALPH = 'abcdefghijklmnopqrstuvwxyz';
+    var name = {}, next = 0, of = {};
     circuit.nodes.forEach(function (n) {
       var root = find(n.id);
-      if (!(root in name)) name[root] = root === gnd ? '0' : 'N' + (next++);
+      if (!(root in name)) {
+        name[root] = root === gnd ? '0' : (ALPH[next] || ('n' + next));
+        if (root !== gnd) next++;
+      }
       of[n.id] = name[root];
     });
     return of;
