@@ -170,9 +170,11 @@
     circuit.nodes.forEach(function (n) { w = Math.max(w, at[n.id][0]); h = Math.max(h, at[n.id][1]); });
     var out = ['Version 4', 'SHEET 1 ' + Math.max(880, w + MARGIN) + ' ' + Math.max(680, h + MARGIN)];
     wires.forEach(function (l) { out.push('WIRE ' + l.map(Math.round).join(' ')); });
-    // the reference node LTspice measures everything against
-    var gndNode = circuit.nodes.filter(function (n) { return p.net[n.id] === '0'; })[0];
-    if (gndNode) out.push('FLAG ' + at[gndNode.id][0] + ' ' + at[gndNode.id][1] + ' 0');
+    // Every node gets a net-label FLAG, not just ground. Without one, LTspice's own netlister
+    // renames unlabelled nets when it flattens the schematic (N008, N005, …) — but a behavioural
+    // source's control expression is opaque text, so a hardcoded name like V(N6,N4) then points
+    // at a net that no longer exists under that name. Flagging every node keeps our names fixed.
+    circuit.nodes.forEach(function (n) { out.push('FLAG ' + at[n.id][0] + ' ' + at[n.id][1] + ' ' + p.net[n.id]); });
     syms.forEach(function (s) {
       out.push('SYMBOL ' + s.sym + ' ' + Math.round(s.x) + ' ' + Math.round(s.y) + ' ' + s.r);
       out.push('SYMATTR InstName ' + s.name);
